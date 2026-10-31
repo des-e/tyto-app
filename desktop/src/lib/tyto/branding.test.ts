@@ -30,8 +30,19 @@ describe('tyto tauri config', () => {
 
 	it('has Tyto name, version and identifier', () => {
 		expect(merged.productName).toBe('Tyto')
-		expect(merged.version).toBe('0.1.4')
+		expect(merged.version).toBe('0.1.5')
 		expect(merged.identifier).toBe('ru.eliseevdenis.tyto')
+	})
+
+	it('names the main binary tyto (tyto.exe, Contents/MacOS/tyto), not the crate name vibe', () => {
+		expect(merged.mainBinaryName).toBe('tyto')
+	})
+
+	it('the installer removes the old vibe.exe and repoints autostart at tyto.exe', () => {
+		const nsh = readFileSync(resolve(tauriDir, 'vc_redist.nsh'), 'utf-8')
+		expect(nsh).toContain('!insertmacro RemoveOldMainBinary "vibe.exe"')
+		expect(nsh).toContain('!macro NSIS_HOOK_POSTINSTALL')
+		expect(nsh).toContain('$INSTDIR\\tyto.exe')
 	})
 
 	it('uses its own updater endpoint and key', () => {

@@ -1,6 +1,7 @@
 {
 	"productName": "Tyto",
-	"version": "0.1.4",
+	"mainBinaryName": "tyto",
+	"version": "0.1.5",
 	"identifier": "ru.eliseevdenis.tyto",
 	"bundle": {
 		"targets": ["nsis", "dmg", "app"],

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-    Hardened runtime entitlements. Applied to the main `vibe` binary AND to the
+    Hardened runtime entitlements. Applied to the main `tyto` binary (mainBinaryName) AND to the
     `tyto-engine` / `ffmpeg` sidecars, which Tauri re-signs with the same entitlements
     (see tauri.macos.conf.json: hardenedRuntime = true).
 

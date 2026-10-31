@@ -48,7 +48,10 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Re-applying an existing registration upgrades installs created before the hidden launch
     // argument was added. `enable` overwrites the platform entry while preserving its enabled
-    // state; failures are non-fatal because they must not prevent a manual launch.
+    // state; failures are non-fatal because they must not prevent a manual launch. It also
+    // repoints the entry at the current exe: 0.1.0-0.1.4 registered vibe.exe (Windows Run key)
+    // and Contents/MacOS/vibe (LaunchAgent), renamed to tyto in 0.1.5 (mainBinaryName). The
+    // entry's name is the product name "Tyto", unchanged, so `is_enabled` still finds it.
     if app.autolaunch().is_enabled().unwrap_or(false) {
         app.autolaunch()
             .enable()
