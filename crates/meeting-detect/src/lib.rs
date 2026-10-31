@@ -103,20 +103,23 @@ pub fn visible_windows() -> Vec<WindowInfo> {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ProbeReport {
     pub mic_active: bool,
+    /// Whether the OS named the microphone owners. Meaningful only when `mic_active`: while the
+    /// microphone is idle macOS reports `false` and Windows / Linux `true`.
     pub owners_known: bool,
     /// `name | exe | bundle_id` of every microphone owner, known meeting app or not.
     pub mic_owners: Vec<String>,
+    /// Empty while the microphone is idle: the windows are only enumerated when it is in use.
     pub windows: Vec<WindowInfo>,
 }
 
-/// Read the microphone owners and the visible windows in one go.
+/// Read the microphone owners and, while the microphone is in use, the visible windows.
 pub fn probe() -> ProbeReport {
     let usage = mic::current_usage();
     ProbeReport {
         mic_active: usage.active,
         owners_known: usage.owners_known,
         mic_owners: usage.processes.iter().map(owner_line).collect(),
-        windows: visible_windows(),
+        windows: if usage.active { visible_windows() } else { Vec::new() },
     }
 }
 
@@ -182,11 +185,7 @@ fn poll(scan_titles: bool) -> DetectionSnapshot {
         };
     }
 
-    let processes = if usage.processes.is_empty() {
-        process::running_candidates()
-    } else {
-        usage.processes
-    };
+    let processes = candidates(usage.processes, cfg!(target_os = "macos"), process::running_candidates);
     let browser_present = processes
         .iter()
         .any(|info| process::source(info) == Some(ProcessKind::Browser));
@@ -194,6 +193,26 @@ fn poll(scan_titles: bool) -> DetectionSnapshot {
         state: classify_active(processes, scan_titles),
         mic_active: true,
         browser_present,
+    }
+}
+
+/// The processes a poll classifies: the microphone owners, or the running known apps instead.
+///
+/// No owners at all (older macOS) always falls back. On macOS the owners come from the CoreAudio
+/// process list, where a capture can sit in a service whose app the parent walk cannot reach, so
+/// unrecognised owners fall back as well: detection is never worse than before that list was
+/// used. Windows and Linux name the owner reliably, and an unrecognised owner there means "not a
+/// meeting", so the running Zoom or Teams must not be blamed for it.
+fn candidates(
+    owners: Vec<ProcessInfo>,
+    fallback_when_unrecognised: bool,
+    running: impl FnOnce() -> Vec<ProcessInfo>,
+) -> Vec<ProcessInfo> {
+    let recognised = owners.iter().any(|info| process::source(info).is_some());
+    if owners.is_empty() || (fallback_when_unrecognised && !recognised) {
+        running()
+    } else {
+        owners
     }
 }
 
@@ -452,6 +471,35 @@ mod tests {
         };
         let json = serde_json::to_string(&report).unwrap();
         assert!(json.contains("\"owners_known\":true") && json.contains("Встреча"));
+    }
+
+    #[test]
+    fn recognised_owners_are_classified_as_reported() {
+        let owners = vec![process("Google Chrome Helper"), process("zoom")];
+        let used = candidates(owners.clone(), true, || panic!("must not fall back"));
+        assert_eq!(used, owners);
+    }
+
+    #[test]
+    fn missing_owners_always_fall_back_to_running_apps() {
+        for fallback_when_unrecognised in [false, true] {
+            assert_eq!(
+                candidates(Vec::new(), fallback_when_unrecognised, || vec![process("zoom")]),
+                vec![process("zoom")]
+            );
+        }
+    }
+
+    #[test]
+    fn unrecognised_owners_fall_back_only_where_asked() {
+        let owners = vec![process("com.apple.WebKit.GPU")];
+        // macOS: an owner the parent walk could not attribute must not hide a running meeting app.
+        assert_eq!(
+            candidates(owners.clone(), true, || vec![process("ms-teams")]),
+            vec![process("ms-teams")]
+        );
+        // Windows / Linux: a named non-meeting owner is the answer, not a reason to blame Teams.
+        assert_eq!(candidates(owners.clone(), false, || vec![process("ms-teams")]), owners);
     }
 
     #[test]
