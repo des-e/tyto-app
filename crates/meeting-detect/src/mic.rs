@@ -784,7 +784,9 @@ Source Output #18
         assert!(owners_from_sessions(&[], 99).is_empty());
     }
 
-    fn ancestry(parents: &[(u32, &str, Option<u32>)]) -> impl FnMut(u32) -> Option<(crate::ProcessInfo, Option<u32>)> + '_ {
+    fn ancestry<'a>(
+        parents: &'a [(u32, &'a str, Option<u32>)],
+    ) -> impl FnMut(u32) -> Option<(crate::ProcessInfo, Option<u32>)> + 'a {
         move |pid| {
             parents
                 .iter()
