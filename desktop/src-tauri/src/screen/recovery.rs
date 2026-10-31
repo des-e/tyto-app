@@ -1,10 +1,20 @@
 //! Recovery of recordings left unfinished by a crash.
 //!
 //! Save order (Task 7 follows it): write `finalizing_to` into the manifest →
-//! ffmpeg writes `final.partial.<ext>` inside the working folder → rename it to
-//! `finalizing_to` → remove the working folder. A crash anywhere in that chain
-//! leaves either a working folder to finalize again, or a finished file plus a
-//! stale working folder: then recovery only removes the folder (no duplicate).
+//! ffmpeg writes `final.partial.<ext>` inside the working folder →
+//! `record_final_bytes` (its size into the manifest) → rename it to
+//! `finalizing_to` → drop the `SessionLock` → `remove_working_dir`. A crash
+//! anywhere in that chain leaves either a working folder to finalize again, or a
+//! finished file of exactly `final_bytes` plus a stale working folder: then
+//! recovery only removes the folder (no duplicate). A different file at that
+//! path (same name chosen later) is not ours: the recording is finalized again
+//! under a new free name.
+//!
+//! Live sessions: every entry point takes `active`, the working folders of the
+//! session that is recording or saving right now (the primary guard, from the
+//! recorder state). As a second guard the recorder holds `SessionLock` (an OS
+//! file lock on `recording.lock`) for the whole session, so a folder in use by
+//! any process is skipped too; a crashed process releases its lock.
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
@@ -49,9 +59,68 @@ pub enum RecoveryAction {
 
 const SOURCES: [AudioSource; 2] = [AudioSource::Mic, AudioSource::System];
 
+pub const LOCK: &str = "recording.lock";
+
+/// Exclusive OS lock on `<session>/recording.lock`, held by the recorder from
+/// the start of a session until its folder is removed (drop it right before
+/// `remove_working_dir`). Released by the OS when the process dies.
+#[derive(Debug)]
+pub struct SessionLock {
+    _file: File,
+}
+
+impl SessionLock {
+    pub fn acquire(dir: &Path) -> Result<SessionLock> {
+        let path = dir.join(LOCK);
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .with_context(|| format!("open {}", path.display()))?;
+        match file.try_lock() {
+            Ok(()) => Ok(SessionLock { _file: file }),
+            Err(std::fs::TryLockError::WouldBlock) => bail!("{} is in use", dir.display()),
+            Err(std::fs::TryLockError::Error(e)) => Err(e).with_context(|| format!("lock {}", path.display())),
+        }
+    }
+}
+
+/// Someone holds the session lock right now (a lock file nobody holds is a crash leftover).
+fn is_locked(dir: &Path) -> bool {
+    let Ok(file) = OpenOptions::new().read(true).write(true).open(dir.join(LOCK)) else {
+        return false;
+    };
+    matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock))
+}
+
+fn same_dir(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// The folder belongs to a live session: listed in `active` or locked.
+pub fn is_in_use(dir: &Path, active: &[PathBuf]) -> bool {
+    active.iter().any(|a| same_dir(a, dir)) || is_locked(dir)
+}
+
+fn ensure_not_in_use(dir: &Path, active: &[PathBuf]) -> Result<()> {
+    if is_in_use(dir, active) {
+        bail!("{} belongs to a recording in progress", dir.display());
+    }
+    Ok(())
+}
+
 /// Session folders (`.tyto-rec-*`) with a readable manifest, newest first.
-/// A folder without one is skipped with a warning.
-pub fn scan_unfinished(recordings_dir: &Path) -> Vec<UnfinishedRecording> {
+/// A folder without one is skipped with a warning; folders of a live session
+/// (`active` or locked) are skipped.
+pub fn scan_unfinished(recordings_dir: &Path, active: &[PathBuf]) -> Vec<UnfinishedRecording> {
     let Ok(entries) = std::fs::read_dir(recordings_dir) else {
         return Vec::new();
     };
@@ -59,7 +128,7 @@ pub fn scan_unfinished(recordings_dir: &Path) -> Vec<UnfinishedRecording> {
     for entry in entries.flatten() {
         let dir = entry.path();
         let is_session = entry.file_name().to_string_lossy().starts_with(SESSION_PREFIX);
-        if !is_session || !dir.is_dir() {
+        if !is_session || !dir.is_dir() || is_in_use(&dir, active) {
             continue;
         }
         let m = match read_manifest(&dir) {
@@ -120,6 +189,7 @@ struct WavLayout {
     block_align: u64,
     sample_rate: u32,
     channels: u16,
+    bits_per_sample: u16,
 }
 
 fn le16(b: &[u8], at: usize) -> u16 {
@@ -142,7 +212,7 @@ fn wav_layout(f: &mut File, len: u64) -> Result<Option<WavLayout>> {
         bail!("not a WAV file");
     }
     let mut pos = 12u64;
-    let mut fmt: Option<(u16, u32, u16)> = None;
+    let mut fmt: Option<(u16, u32, u16, u16)> = None;
     loop {
         if pos + 8 > len {
             return Ok(None);
@@ -154,7 +224,7 @@ fn wav_layout(f: &mut File, len: u64) -> Result<Option<WavLayout>> {
         let body = pos + 8;
         match &chunk[0..4] {
             b"data" => {
-                let Some((channels, sample_rate, block_align)) = fmt else {
+                let Some((channels, sample_rate, block_align, bits_per_sample)) = fmt else {
                     bail!("WAV data chunk before fmt");
                 };
                 if block_align == 0 {
@@ -165,6 +235,7 @@ fn wav_layout(f: &mut File, len: u64) -> Result<Option<WavLayout>> {
                     block_align: u64::from(block_align),
                     sample_rate,
                     channels,
+                    bits_per_sample,
                 }));
             }
             b"fmt " => {
@@ -173,7 +244,7 @@ fn wav_layout(f: &mut File, len: u64) -> Result<Option<WavLayout>> {
                 }
                 let mut b = [0u8; 16];
                 f.read_exact(&mut b)?;
-                fmt = Some((le16(&b, 2), le32(&b, 4), le16(&b, 12)));
+                fmt = Some((le16(&b, 2), le32(&b, 4), le16(&b, 12), le16(&b, 14)));
             }
             _ => {}
         }
@@ -220,8 +291,12 @@ pub fn repair_wav(path: &Path) -> Result<u64> {
     Ok(repair(path)?.map_or(0, |(_, frames)| frames))
 }
 
-/// Appends `frames` of silence (all-zero bytes: our segments are f32).
+/// Appends `frames` of silence as all-zero bytes: silence for float and for
+/// PCM of 16 bits or more (our segments are f32), not for 8-bit PCM.
 fn pad_wav(path: &Path, l: &WavLayout, frames_now: u64, pad: u64) -> Result<()> {
+    if l.bits_per_sample < 16 {
+        bail!("cannot pad {}-bit audio with zero bytes", l.bits_per_sample);
+    }
     let data = (frames_now + pad) * l.block_align;
     if l.data_start - 8 + data > u64::from(u32::MAX) {
         bail!("padded WAV would exceed 4 GB");
@@ -269,8 +344,8 @@ fn parse_ffmpeg_time(stderr: &str) -> Option<f64> {
 const PROBE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Length of a (possibly truncated) fragmented MP4 segment, read with ffmpeg.
-/// The header duration of a fragmented file may be missing, so the stream is
-/// also read through (`-c copy`, fast) and the longer of the two is taken.
+/// The header duration of a fragmented file may be missing or wrong, so the
+/// stream is read through (`-c copy`, fast); see `video_seconds_from_stderr`.
 /// Blocking: call from `spawn_blocking`.
 pub fn probe_video_seconds(ffmpeg: &Path, file: &Path) -> Option<f64> {
     let mut cmd = Command::new(ffmpeg);
@@ -302,11 +377,21 @@ pub fn probe_video_seconds(ffmpeg: &Path, file: &Path) -> Option<f64> {
         }
     }
     // A truncated file may end with an error: what was read still counts.
-    let out = reader.join().unwrap_or_default();
-    let header = parse_ffmpeg_duration(&out).unwrap_or(0.0);
-    let read = parse_ffmpeg_time(&out).unwrap_or(0.0);
-    let secs = header.max(read);
-    (secs > 0.0).then_some(secs)
+    video_seconds_from_stderr(&reader.join().unwrap_or_default())
+}
+
+/// What the copy pass actually read (`time=`) wins: the header of a truncated
+/// fragmented MP4 may count samples whose data never reached the disk. The
+/// header is the fallback, unless ffmpeg only estimated it from the bitrate.
+fn video_seconds_from_stderr(out: &str) -> Option<f64> {
+    let read = parse_ffmpeg_time(out).filter(|t| *t > 0.0);
+    let header = || {
+        if out.contains("Estimating duration from bitrate") {
+            return None;
+        }
+        parse_ffmpeg_duration(out).filter(|d| *d > 0.0)
+    };
+    read.or_else(header)
 }
 
 /// `seg-0003.mp4`, `seg-0003.mic.wav` → 3. Gap fillers and lists are not segments.
@@ -450,25 +535,55 @@ fn final_path(dir: &Path, finalizing_to: &str) -> PathBuf {
     }
 }
 
+fn file_len(path: &Path) -> Option<u64> {
+    std::fs::metadata(path).ok().filter(|md| md.is_file()).map(|md| md.len())
+}
+
 fn is_saved(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|md| md.is_file() && md.len() > 0)
+    file_len(path).is_some_and(|len| len > 0)
+}
+
+/// After a successful mux, before the rename: stores the size of `partial` as
+/// `final_bytes`, so recovery can tell our finished file from a later one with the same name.
+pub fn record_final_bytes(dir: &Path, m: &mut Manifest, partial: &Path) -> Result<()> {
+    let len = std::fs::metadata(partial)
+        .with_context(|| format!("stat {}", partial.display()))?
+        .len();
+    m.final_bytes = Some(len);
+    write_manifest_atomic(dir, m)
 }
 
 /// Review Focus 3: a crash after the final rename must not produce a second copy.
+/// The file at `finalizing_to` is ours only if it has exactly `final_bytes`.
+/// Otherwise the recording is finalized again, and `finalizing_to` / `final_bytes`
+/// are cleared so the save picks a free name (never the other file's).
 pub fn recovery_action(dir: &Path, m: &Manifest) -> RecoveryAction {
-    if let Some(to) = m.finalizing_to.as_deref() {
+    if let (Some(to), Some(bytes)) = (m.finalizing_to.as_deref(), m.final_bytes) {
         let path = final_path(dir, to);
-        if is_saved(&path) {
+        if bytes > 0 && file_len(&path) == Some(bytes) {
             return RecoveryAction::AlreadyFinished(path);
         }
     }
-    RecoveryAction::Finalize(m.clone())
+    if let Some(to) = m.finalizing_to.as_deref() {
+        if file_len(&final_path(dir, to)).is_some() {
+            tracing::warn!("{to} is not this recording's file, saving it under a new name");
+        }
+    }
+    let mut m = m.clone();
+    m.finalizing_to = None;
+    m.final_bytes = None;
+    RecoveryAction::Finalize(m)
 }
 
 /// Reads the manifest and decides; for `Finalize` the open segments are closed
 /// from the disk and the rebuilt manifest is saved before it is returned.
-pub fn prepare_recovery(dir: &Path, video_seconds: impl Fn(&Path) -> Option<f64>) -> Result<RecoveryAction> {
+/// Refuses a live session's folder and a manifest from a newer build.
+pub fn prepare_recovery(dir: &Path, active: &[PathBuf], video_seconds: impl Fn(&Path) -> Option<f64>) -> Result<RecoveryAction> {
+    ensure_not_in_use(dir, active)?;
     let m = read_manifest(dir)?;
+    if m.version > MANIFEST_VERSION {
+        bail!("manifest version {} is newer than {MANIFEST_VERSION}", m.version);
+    }
     match recovery_action(dir, &m) {
         RecoveryAction::Finalize(m) => {
             let m = rebuild_manifest(dir, m, video_seconds);
@@ -479,18 +594,43 @@ pub fn prepare_recovery(dir: &Path, video_seconds: impl Fn(&Path) -> Option<f64>
     }
 }
 
-/// Removes a session folder, but only once the final file is in place: after a
-/// failed mux the segments must survive for the next attempt.
-pub fn remove_working_dir(dir: &Path, final_file: &Path) -> Result<()> {
+fn ensure_session_dir(dir: &Path) -> Result<()> {
     let is_session = dir
         .file_name()
         .is_some_and(|n| n.to_string_lossy().starts_with(SESSION_PREFIX));
     if !is_session {
         bail!("{} is not a recording session folder", dir.display());
     }
+    Ok(())
+}
+
+/// Removes a session folder, but only once the final file is in place (and has
+/// the manifest's `final_bytes`, when recorded): after a failed mux the segments
+/// must survive for the next attempt. The saving recorder drops its
+/// `SessionLock` first and passes its own folder out of `active`.
+pub fn remove_working_dir(dir: &Path, final_file: &Path, active: &[PathBuf]) -> Result<()> {
+    ensure_session_dir(dir)?;
+    ensure_not_in_use(dir, active)?;
     if !is_saved(final_file) {
         bail!("{} is missing, keeping {}", final_file.display(), dir.display());
     }
+    if let Some(bytes) = read_manifest(dir).ok().and_then(|m| m.final_bytes) {
+        if file_len(final_file) != Some(bytes) {
+            bail!(
+                "{} is not this recording's file, keeping {}",
+                final_file.display(),
+                dir.display()
+            );
+        }
+    }
+    std::fs::remove_dir_all(dir).with_context(|| format!("remove {}", dir.display()))
+}
+
+/// "Delete" in the recovery prompt: drops an unfinished recording for good.
+/// Refuses a live session's folder.
+pub fn discard_unfinished(dir: &Path, active: &[PathBuf]) -> Result<()> {
+    ensure_session_dir(dir)?;
+    ensure_not_in_use(dir, active)?;
     std::fs::remove_dir_all(dir).with_context(|| format!("remove {}", dir.display()))
 }
 
@@ -498,7 +638,7 @@ pub fn remove_working_dir(dir: &Path, final_file: &Path) -> Result<()> {
 mod tests {
     use super::super::encoder::VideoEncoder;
     use super::super::quality::Quality;
-    use super::super::segments::finalize_plan;
+    use super::super::segments::{finalize_plan, MANIFEST};
     use super::*;
 
     fn manifest(mode: Mode, segments: Vec<SegmentRecord>) -> Manifest {
@@ -512,7 +652,15 @@ mod tests {
             fps: Some(15),
             segments,
             finalizing_to: None,
+            final_bytes: None,
         }
+    }
+
+    fn unfinalized(m: &Manifest) -> RecoveryAction {
+        let mut m = m.clone();
+        m.finalizing_to = None;
+        m.final_bytes = None;
+        RecoveryAction::Finalize(m)
     }
 
     fn closed_seg(index: u32) -> SegmentRecord {
@@ -578,7 +726,7 @@ mod tests {
         std::fs::create_dir(tmp.path().join(".tyto-rec-b")).unwrap();
         std::fs::write(tmp.path().join("Встреча.mp4"), b"mp4").unwrap();
 
-        let found = scan_unfinished(tmp.path());
+        let found = scan_unfinished(tmp.path(), &[]);
         assert_eq!(found.len(), 1);
         assert_eq!(
             found[0],
@@ -592,7 +740,40 @@ mod tests {
         );
         let json = serde_json::to_string(&found[0]).unwrap();
         assert!(json.contains("\"startedAt\"") && json.contains("\"approxSeconds\":10"));
-        assert!(scan_unfinished(&tmp.path().join("missing")).is_empty());
+        assert!(scan_unfinished(&tmp.path().join("missing"), &[]).is_empty());
+    }
+
+    #[test]
+    fn live_sessions_are_not_offered_or_touched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join(".tyto-rec-a");
+        std::fs::create_dir(&a).unwrap();
+        write_manifest_atomic(&a, &manifest(Mode::Video, vec![closed_seg(1)])).unwrap();
+        let done = tmp.path().join("Встреча.mp4");
+        std::fs::write(&done, b"mp4").unwrap();
+
+        // marked active by the recorder state
+        let active = vec![a.clone()];
+        assert!(scan_unfinished(tmp.path(), &active).is_empty());
+        assert!(prepare_recovery(&a, &active, |_| None).is_err());
+        assert!(discard_unfinished(&a, &active).is_err());
+        assert!(remove_working_dir(&a, &done, &active).is_err());
+
+        // held by a session lock (another recorder, or this one without the state)
+        let lock = SessionLock::acquire(&a).unwrap();
+        assert!(SessionLock::acquire(&a).is_err());
+        assert!(scan_unfinished(tmp.path(), &[]).is_empty());
+        assert!(prepare_recovery(&a, &[], |_| None).is_err());
+        assert!(discard_unfinished(&a, &[]).is_err());
+        assert!(a.join(MANIFEST).is_file());
+
+        // the lock file of a crashed process is not held: the folder is offered again
+        drop(lock);
+        assert!(a.join(LOCK).is_file());
+        assert_eq!(scan_unfinished(tmp.path(), &[]).len(), 1);
+        discard_unfinished(&a, &[]).unwrap();
+        assert!(!a.exists());
+        assert!(discard_unfinished(tmp.path(), &[]).is_err());
     }
 
     #[test]
@@ -627,6 +808,19 @@ mod tests {
             Some(9.86)
         );
         assert_eq!(parse_ffmpeg_time("time=N/A"), None);
+    }
+
+    #[test]
+    fn what_ffmpeg_read_wins_over_the_header() {
+        let read = "  Duration: 00:00:12.00, start: 0.000000\nframe=  148 time=00:00:09.86 bitrate=N/A\n";
+        assert_eq!(video_seconds_from_stderr(read), Some(9.86));
+        assert_eq!(video_seconds_from_stderr("  Duration: 00:00:09.90, start: 0.0\n"), Some(9.9));
+        let estimated = "Estimating duration from bitrate, this may be inaccurate\n  Duration: 00:00:30.00, start: 0.0\n";
+        assert_eq!(video_seconds_from_stderr(estimated), None);
+        assert_eq!(
+            video_seconds_from_stderr("Duration: N/A\nframe=    0 time=00:00:00.00\n"),
+            None
+        );
     }
 
     #[test]
@@ -705,20 +899,62 @@ mod tests {
         let mut m = manifest(Mode::Video, vec![closed_seg(1)]);
         m.finalizing_to = Some(done.to_string_lossy().into_owned());
 
-        assert_eq!(recovery_action(&dir, &m), RecoveryAction::Finalize(m.clone()));
+        // crash during the mux: no file yet
+        assert_eq!(recovery_action(&dir, &m), unfinalized(&m));
         // mux failed or never finished: the working folder stays
-        assert!(remove_working_dir(&dir, &done).is_err());
+        assert!(remove_working_dir(&dir, &done, &[]).is_err());
         assert!(dir.is_dir());
 
-        std::fs::write(&done, b"mp4").unwrap();
+        // mux done, size recorded, renamed, crash before the folder was removed
+        let partial = dir.join("final.partial.mp4");
+        std::fs::write(&partial, b"our mp4").unwrap();
+        record_final_bytes(&dir, &mut m, &partial).unwrap();
+        assert_eq!(read_manifest(&dir).unwrap().final_bytes, Some(7));
+        std::fs::rename(&partial, &done).unwrap();
         assert_eq!(recovery_action(&dir, &m), RecoveryAction::AlreadyFinished(done.clone()));
-        write_manifest_atomic(&dir, &m).unwrap();
         assert_eq!(
-            prepare_recovery(&dir, |_| None).unwrap(),
+            prepare_recovery(&dir, &[], |_| None).unwrap(),
             RecoveryAction::AlreadyFinished(done.clone())
         );
-        remove_working_dir(&dir, &done).unwrap();
+        remove_working_dir(&dir, &done, &[]).unwrap();
         assert!(!dir.exists() && done.is_file());
-        assert!(remove_working_dir(&rec, &done).is_err());
+        assert!(remove_working_dir(&rec, &done, &[]).is_err());
+    }
+
+    #[test]
+    fn a_later_file_with_the_same_name_is_not_taken_for_ours() {
+        // A crashed during the mux; B was saved later under the same free name.
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = tmp.path().join("Записи");
+        let dir = rec.join(".tyto-rec-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let taken = rec.join("Планерка.mp4");
+        std::fs::write(&taken, b"recording B, other size").unwrap();
+        let mut m = manifest(Mode::Video, vec![closed_seg(1)]);
+        m.finalizing_to = Some(taken.to_string_lossy().into_owned());
+
+        // no final_bytes (crash before the mux finished)
+        assert_eq!(recovery_action(&dir, &m), unfinalized(&m));
+        // final_bytes recorded, but the file there has another size
+        m.final_bytes = Some(7);
+        assert_eq!(recovery_action(&dir, &m), unfinalized(&m));
+        write_manifest_atomic(&dir, &m).unwrap();
+        match prepare_recovery(&dir, &[], |_| None).unwrap() {
+            RecoveryAction::Finalize(r) => assert!(r.finalizing_to.is_none() && r.final_bytes.is_none()),
+            other => panic!("expected Finalize, got {other:?}"),
+        }
+        let saved = read_manifest(&dir).unwrap();
+        assert!(saved.finalizing_to.is_none() && saved.final_bytes.is_none());
+        // and the folder is never removed on the strength of B's file
+        m.final_bytes = Some(7);
+        write_manifest_atomic(&dir, &m).unwrap();
+        assert!(remove_working_dir(&dir, &taken, &[]).is_err());
+        assert!(dir.is_dir() && taken.is_file());
+
+        // a newer build's manifest is not rewritten
+        m.version = MANIFEST_VERSION + 1;
+        write_manifest_atomic(&dir, &m).unwrap();
+        assert!(prepare_recovery(&dir, &[], |_| None).is_err());
+        assert_eq!(read_manifest(&dir).unwrap().version, MANIFEST_VERSION + 1);
     }
 }

@@ -77,6 +77,10 @@ pub struct Manifest {
     pub segments: Vec<SegmentRecord>,
     /// Final file being written; set before the mux starts (used by recovery).
     pub finalizing_to: Option<String>,
+    /// Size of the muxed file, written right before it is renamed to `finalizing_to`:
+    /// recovery trusts a file there only if it has exactly this size.
+    #[serde(default)]
+    pub final_bytes: Option<u64>,
 }
 
 /// `segment_file(1, "mp4")` → `seg-0001.mp4`, `segment_file(1, "mic.wav")` → `seg-0001.mic.wav`.
@@ -477,6 +481,7 @@ mod tests {
             fps: Some(15),
             segments,
             finalizing_to: None,
+            final_bytes: None,
         }
     }
 
