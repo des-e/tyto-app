@@ -1,0 +1,211 @@
+name: Tyto Check
+
+# Rust and web checks for Tyto on every push to plan-1 (source of truth for
+# Rust: there is no MSVC toolchain locally). Manual run with bundle=true also
+# makes an unsigned test build.
+
+on:
+    push:
+        branches:
+            - plan-1
+        paths:
+            - "desktop/**"
+            - "crates/**"
+            - "Cargo.toml"
+            - "Cargo.lock"
+            - "i18n/**"
+            - ".github/workflows/tyto-check.yml"
+    workflow_dispatch:
+        inputs:
+            bundle:
+                description: "Make an unsigned test bundle"
+                type: boolean
+                default: false
+            mac_target:
+                description: "Target triple for the macOS bundle"
+                type: string
+                default: "aarch64-apple-darwin"
+
+env:
+    RUST_BACKTRACE: 1
+    CARGO_PROFILE_DEV_DEBUG: 0
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    web:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  package_json_file: desktop/package.json
+
+            - name: setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+                  cache-dependency-path: desktop/pnpm-lock.yaml
+
+            - name: Install frontend dependencies
+              run: pnpm install
+              working-directory: ./desktop
+
+            - name: Generate i18n
+              run: pnpm i18n:generate
+              working-directory: ./desktop
+
+            - name: Tests
+              run: pnpm test
+              working-directory: ./desktop
+
+            - name: Type check
+              run: pnpm exec tsc --noEmit
+              working-directory: ./desktop
+
+    rust:
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "windows-latest"
+                      triple: "x86_64-pc-windows-msvc"
+                      ext: ".exe"
+                    - platform: "macos-latest"
+                      triple: "aarch64-apple-darwin"
+                      ext: ""
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  package_json_file: desktop/package.json
+
+            - name: setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+                  cache-dependency-path: desktop/pnpm-lock.yaml
+
+            - name: setup chore
+              uses: getchore/setup-chore@v1
+              with:
+                  version: v1.6.0
+
+            - name: Install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Fetch the sidecars
+              run: chore setup ${{ matrix.triple }}
+
+            - name: Install frontend dependencies
+              run: pnpm install
+              working-directory: ./desktop
+
+            - name: Build frontend
+              run: pnpm build
+              working-directory: ./desktop
+
+            - uses: Swatinem/rust-cache@v2
+
+            - name: ffmpeg encoders
+              shell: bash
+              run: desktop/src-tauri/binaries/ffmpeg-${{ matrix.triple }}${{ matrix.ext }} -hide_banner -encoders | grep -E "h264|aac"
+
+            - name: cargo fmt
+              run: cargo fmt --all -- --check
+
+            - name: cargo clippy
+              run: cargo clippy --workspace --all-targets -- -D warnings
+
+            - name: cargo test
+              run: cargo test -p meeting-detect -p vibe
+
+    bundle:
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bundle }}
+        timeout-minutes: 90
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "windows-latest"
+                      name: "tyto-windows"
+                      glob: "target/**/bundle/**/*.exe"
+                    - platform: "macos-latest"
+                      name: "tyto-mac"
+                      glob: "target/**/bundle/**/*.dmg"
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  package_json_file: desktop/package.json
+
+            - name: setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+                  cache-dependency-path: desktop/pnpm-lock.yaml
+
+            - name: setup chore
+              uses: getchore/setup-chore@v1
+              with:
+                  version: v1.6.0
+
+            - name: Install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.platform == 'macos-latest' && inputs.mac_target || '' }}
+
+            - uses: Swatinem/rust-cache@v2
+
+            - name: Install frontend dependencies
+              run: pnpm install
+              working-directory: ./desktop
+
+            - name: Fetch the sidecars (Windows)
+              if: runner.os == 'Windows'
+              run: chore setup x86_64-pc-windows-msvc
+
+            - name: Fetch the sidecars (macOS)
+              if: runner.os == 'macOS'
+              run: chore setup ${{ inputs.mac_target }}
+
+            - name: Build (Windows)
+              if: runner.os == 'Windows'
+              shell: bash
+              working-directory: ./desktop
+              run: pnpm tauri build --target x86_64-pc-windows-msvc --config src-tauri/tauri.tyto.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+            - name: Build (macOS)
+              if: runner.os == 'macOS'
+              shell: bash
+              working-directory: ./desktop
+              run: pnpm tauri build --target ${{ inputs.mac_target }} --config src-tauri/tauri.tyto.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+            # The Cargo workspace root is the repo root, so bundles land in
+            # target/<triple>/release/bundle/.
+            - name: Upload bundle
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.name }}
+                  path: |
+                      ${{ matrix.glob }}
+                      desktop/src-tauri/target/**/bundle/**/*.exe
+                      desktop/src-tauri/target/**/bundle/**/*.dmg
+                  if-no-files-found: error
