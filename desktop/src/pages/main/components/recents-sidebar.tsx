@@ -25,7 +25,8 @@ import { FEATURES } from '~/lib/tyto/features'
 import { FinishBlinkWordmark } from '~/lib/tyto/wordmark'
 import { useMainAreaOffset } from '~/lib/tyto/main-area'
 import { groupRecents, recentMeta, recentsGroupLabel, useNow } from '~/lib/tyto/recents-groups'
-import { useRecordDuration } from '~/lib/tyto/recents-duration'
+import { useRecordMeta } from '~/lib/tyto/recents-duration'
+import { isInFolder, recordingsFolder } from '~/lib/tyto/media-path'
 import { TOGGLE_SIDEBAR_EVENT } from '~/components/layout'
 import { Button } from '~/components/ui/button'
 import { getTextDirection } from '~/paraglide/runtime.js'
@@ -157,8 +158,9 @@ function RecentRow({
 	onDeleted: () => void
 	onRenamed: () => void
 }) {
-	const { queue } = useSession()
-	const duration = useRecordDuration(entry.path)
+	const { queue, preference } = useSession()
+	const { duration, untranscribed } = useRecordMeta(entry.path)
+	const meta = [recentMeta(entry.createdAt, now, duration), untranscribed ? m.tytoNotTranscribed() : ''].filter(Boolean).join(' · ')
 	const [menu, setMenu] = useState<RowMenuState>({ sourcePath: null, sourceExists: false })
 	const [renaming, setRenaming] = useState(false)
 	const [retranscribing, setRetranscribing] = useState(false)
@@ -195,13 +197,42 @@ function RecentRow({
 		}
 	}
 
+	/**
+	 * A screen recording in `Записи/` is Tyto's own file, so deleting its project asks whether the
+	 * file goes too. Media the user dropped in is theirs: it is never deleted.
+	 */
+	async function isOwnRecording() {
+		try {
+			const record = await readTranscript(entry.path)
+			if (!record?.sourcePath) return false
+			return isInFolder(record.sourcePath, await recordingsFolder(preference.projectsPath))
+		} catch (error) {
+			console.warn('failed to locate the recording of a transcript:', error)
+			return false
+		}
+	}
+
 	async function remove() {
-		const confirmed = await dialog.ask(m.deleteTranscriptBody({ name: entry.name }), {
-			title: m.deleteTranscript(),
-			kind: 'warning',
-		})
-		if (!confirmed) return
-		await deleteTranscript(entry.path)
+		let deleteMedia = false
+		if (await isOwnRecording()) {
+			const withFile = m.tytoDeleteWithFile()
+			const keepFile = m.tytoKeepFile()
+			const answer = await dialog.message(m.tytoDeleteRecordingFile(), {
+				title: m.deleteTranscript(),
+				kind: 'warning',
+				buttons: { yes: withFile, no: keepFile, cancel: m.tytoCancel() },
+			})
+			// Custom buttons answer with their label on some platforms and with Yes/No on others.
+			if (answer === 'Yes' || answer === withFile) deleteMedia = true
+			else if (answer !== 'No' && answer !== keepFile) return
+		} else {
+			const confirmed = await dialog.ask(m.deleteTranscriptBody({ name: entry.name }), {
+				title: m.deleteTranscript(),
+				kind: 'warning',
+			})
+			if (!confirmed) return
+		}
+		await deleteTranscript(entry.path, { deleteMedia })
 		onDeleted()
 	}
 
@@ -241,7 +272,7 @@ function RecentRow({
 			<RetranscribeDialog open={retranscribing} onOpenChange={setRetranscribing} name={entry.name} onConfirm={retranscribe} />
 			<button type="button" onClick={onOpen} disabled={disabled} title={entry.name} className="tyto-recent-main">
 				<p className="tyto-recent-title truncate">{entry.name}</p>
-				<p className="tyto-recent-meta truncate">{recentMeta(entry.createdAt, now, duration)}</p>
+				<p className="tyto-recent-meta truncate">{meta}</p>
 			</button>
 
 			<DropdownMenu

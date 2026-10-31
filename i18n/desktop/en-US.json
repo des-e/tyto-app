@@ -756,5 +756,12 @@
 	"aiProxyLabel": "Proxy service",
 	"aiProxyNoAddress": "Enter the API address",
 	"aiProxyNoModel": "Enter the model",
-	"aiInsecureAddress": "The address is not https: the key will be sent unencrypted"
+	"aiInsecureAddress": "The address is not https: the key will be sent unencrypted",
+	"tytoNotTranscribed": "Not transcribed",
+	"tytoMediaMissing": "File not found",
+	"tytoMediaPick": "Locate file",
+	"tytoDeleteRecordingFile": "Delete the recording file too?",
+	"tytoDeleteWithFile": "Delete with file",
+	"tytoKeepFile": "Keep file",
+	"tytoCancel": "Cancel"
 }

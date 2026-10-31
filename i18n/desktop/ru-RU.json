@@ -756,5 +756,12 @@
 	"aiProxyLabel": "Прокси-сервис",
 	"aiProxyNoAddress": "Укажите адрес API",
 	"aiProxyNoModel": "Укажите модель",
-	"aiInsecureAddress": "Адрес без https: ключ будет передаваться незашифрованным"
+	"aiInsecureAddress": "Адрес без https: ключ будет передаваться незашифрованным",
+	"tytoNotTranscribed": "Не расшифровано",
+	"tytoMediaMissing": "Файл не найден",
+	"tytoMediaPick": "Указать файл",
+	"tytoDeleteRecordingFile": "Удалить и файл записи?",
+	"tytoDeleteWithFile": "Удалить с файлом",
+	"tytoKeepFile": "Оставить файл",
+	"tytoCancel": "Отмена"
 }

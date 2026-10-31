@@ -1,13 +1,15 @@
 import * as pathApi from '@tauri-apps/api/path'
 import * as fs from '@tauri-apps/plugin-fs'
 import type { Segment, SpeakerNames } from './transcript'
+import { shouldCopyMedia } from './tyto/media-path'
 
 /**
  * Transcript persistence.
  *
  * The store is *a folder of project folders*: `Documents/Vibe/<name>-<yyyyMMdd-HHmmss>/` holding
  * `transcript.vibe.json` next to a copy of the media it was transcribed from (`audio.<ext>`), so a
- * saved transcript stays playable even after the original file moves or is deleted.
+ * saved transcript stays playable even after the original file moves or is deleted. Video is the
+ * exception: recordings in `Записи/` and dropped videos are referenced by `sourcePath`, not copied.
  *
  * There is no index and no database — listing scans the store and derives the display name and
  * creation date from the folder name, so the list never has to read (and parse) every transcript.
@@ -35,6 +37,8 @@ export interface TranscriptRecord {
 	modelPath?: string | null
 	/** Filename of the media copy inside the project folder, relative to it (e.g. `audio.mp3`). */
 	audioFile?: string
+	/** Length of the media, for projects saved before (or without) a transcript. */
+	durationSeconds?: number
 	segments: Segment[]
 	/** Names the user gave the diarized speakers, by zero-based speaker index. */
 	speakerNames?: SpeakerNames
@@ -76,6 +80,13 @@ export interface SaveTranscriptInput {
 	projectsPath?: string | null
 	/** Vibe-created media is removed only after its project copy and metadata are durable. */
 	moveSourceMedia?: boolean
+	/**
+	 * Copy the media into the project folder. Unset: audio is copied, video is referenced where it
+	 * lies. `moveSourceMedia` always copies.
+	 */
+	copyMedia?: boolean
+	/** Length of the media in seconds, kept for projects that have no transcript yet. */
+	durationSeconds?: number
 	segments: Segment[]
 	language?: string
 	modelPath?: string | null
@@ -172,6 +183,10 @@ function parseSpeakerNames(value: unknown): SpeakerNames | undefined {
 		if (Number.isInteger(speaker) && speaker >= 0 && typeof name === 'string' && name.trim()) names[speaker] = name.trim()
 	}
 	return Object.keys(names).length ? names : undefined
+}
+
+function validDuration(value: unknown): value is number {
+	return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
 function serialize(record: TranscriptRecord) {
@@ -280,12 +295,14 @@ export async function saveTranscript(input: SaveTranscriptInput): Promise<SaveTr
 			createdAt: createdAt.toISOString(),
 			language: input.language,
 			modelPath: input.modelPath ?? null,
+			...(validDuration(input.durationSeconds) ? { durationSeconds: input.durationSeconds } : {}),
 			segments: input.segments,
 		}
 
+		const copyMedia = input.moveSourceMedia || (input.copyMedia ?? shouldCopyMedia(input.sourcePath))
 		let media: { audioFile: string; path: string } | undefined
 		try {
-			media = await copySourceMedia(projectFolder, input.sourcePath)
+			if (copyMedia) media = await copySourceMedia(projectFolder, input.sourcePath)
 		} catch (error) {
 			if (input.moveSourceMedia) throw error
 			console.warn('failed to copy imported media; saving its external source path:', input.sourcePath, error)
@@ -362,6 +379,7 @@ export async function readTranscript(path: string): Promise<TranscriptRecord | n
 			language: typeof parsed.language === 'string' ? parsed.language : undefined,
 			modelPath: typeof parsed.modelPath === 'string' ? parsed.modelPath : null,
 			audioFile: typeof parsed.audioFile === 'string' && parsed.audioFile ? basename(parsed.audioFile) : undefined,
+			durationSeconds: validDuration(parsed.durationSeconds) ? parsed.durationSeconds : undefined,
 			segments: parsed.segments.filter(
 				(segment): segment is Segment => typeof segment === 'object' && segment !== null && typeof (segment as Segment).text === 'string',
 			),
@@ -448,6 +466,25 @@ export async function updateTranscriptSummary(path: string, summary: string): Pr
 }
 
 /**
+ * Point a stored transcript at a different media file (the user located a moved recording). The
+ * project's own copy, if any, is no longer the media of record, so `audioFile` goes.
+ * @returns whether it was written (never throws).
+ */
+export async function updateTranscriptMedia(path: string, mediaPath: string): Promise<boolean> {
+	try {
+		const record = await readTranscript(path)
+		if (!record) return false
+		const next: TranscriptRecord = { ...record, sourcePath: mediaPath }
+		delete next.audioFile
+		await writeRecordAtomic(path, next)
+		return true
+	} catch (error) {
+		console.warn('failed to update transcript media:', path, error)
+		return false
+	}
+}
+
+/**
  * Fired on `window` whenever the store changed (a save or a delete) so open lists can refresh
  * without the writer having to know about them.
  */
@@ -459,10 +496,21 @@ export function notifyTranscriptsChanged() {
 
 /**
  * Remove one transcript: the whole project folder (media copy included) for project saves, the
- * single file for legacy ones. Returns whether it is gone.
+ * single file for legacy ones. With `deleteMedia` the external media file (`record.sourcePath`, a
+ * screen recording) goes too. Returns whether the transcript is gone.
  */
-export async function deleteTranscript(path: string): Promise<boolean> {
+export async function deleteTranscript(path: string, options?: { deleteMedia?: boolean }): Promise<boolean> {
 	try {
+		if (options?.deleteMedia) {
+			const record = await readTranscript(path)
+			if (record?.sourcePath) {
+				try {
+					if (await fs.exists(record.sourcePath)) await fs.remove(record.sourcePath)
+				} catch (error) {
+					console.warn('failed to delete recording file:', record.sourcePath, error)
+				}
+			}
+		}
 		if (isProjectRecordPath(path)) {
 			await fs.remove(await pathApi.dirname(path), { recursive: true })
 			return true

@@ -115,6 +115,8 @@ export interface TranscribeQueue {
 	renameJob: (jobId: string, name: string) => Promise<boolean>
 	/** Update the visible title while the inline rename editor is open. */
 	previewJobName: (jobId: string, name: string) => void
+	/** Point a job at a media file the user located after the original went missing. */
+	relinkMedia: (jobId: string, path: string) => void
 	/** Attach an AI summary to a job. Persists to the job's saved file when it has one. */
 	setJobSummary: (jobId: string, summary: string) => void
 	/** Replace the question-and-answer thread of a job. Persists like the summary. */
@@ -688,6 +690,8 @@ export function useTranscribeQueue(): TranscribeQueue {
 
 	const previewJobName = useCallback((jobId: string, name: string) => patch(jobId, { name }), [patch])
 
+	const relinkMedia = useCallback((jobId: string, path: string) => patch(jobId, { path }), [patch])
+
 	/** Same fire-and-forget write-back as the segment edits: the screen must not wait on the disk. */
 	const setJobSummary = useCallback(
 		(jobId: string, summary: string) => {
@@ -764,6 +768,7 @@ export function useTranscribeQueue(): TranscribeQueue {
 		updateSegmentText,
 		renameJob,
 		previewJobName,
+		relinkMedia,
 		setJobSummary,
 		setJobThread,
 		setSpeakerName,

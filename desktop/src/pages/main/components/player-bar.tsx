@@ -10,6 +10,7 @@ import { Button } from '~/components/ui/button'
 import { PlaybackRateButton } from '~/components/playback-rate-button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
 import { usePlaybackRate } from '~/lib/playback-rate'
+import { MissingMedia } from '~/lib/tyto/media-missing'
 import { PlayerClock, ReplicaTimeline } from '~/lib/tyto/replica-timeline'
 import type { NamedPath } from '~/lib/types'
 import type { Job } from '../hooks/use-transcribe-queue'
@@ -58,6 +59,24 @@ export default function PlayerBar({ job }: { job: Job }) {
 
 	const sourcePath = job.path
 	const seekable = Number.isFinite(duration) && duration > 0
+	// Video is referenced where it lies, so it can go missing; the player stands aside until it is
+	// located. Only a definite "no" counts: a failed check keeps the player.
+	const [missingPath, setMissingPath] = useState<string | null>(null)
+	const missing = missingPath === sourcePath
+	useEffect(() => {
+		let alive = true
+		void (async () => {
+			try {
+				const present = await fs.exists(sourcePath)
+				if (alive && present === false) setMissingPath(sourcePath)
+			} catch {
+				/* unknown: keep the player */
+			}
+		})()
+		return () => {
+			alive = false
+		}
+	}, [sourcePath])
 
 	// The transcript highlights the line being spoken; it reads the position from these events.
 	const broadcast = useCallback((seconds: number, isPlaying: boolean) => {
@@ -219,15 +238,19 @@ export default function PlayerBar({ job }: { job: Job }) {
 			transition={{ duration: 0.2, ease: 'easeOut' }}
 			className="tyto-bar tyto-player sticky bottom-0 z-10">
 			{/* Transport controls read left-to-right in every locale, like the timeline they drive. */}
-			<div dir="ltr" className="flex min-w-0 flex-1 items-center gap-3">
-				<Button iconOnly size="md" onClick={toggle} aria-label={playing ? m.pause() : m.play()} className="h-8 w-8 shrink-0">
-					{playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
-				</Button>
-				<PlayerClock currentTime={currentTime} duration={duration} />
-				<ReplicaTimeline segments={job.segments} duration={duration} currentTime={currentTime} seekable={seekable} onSeek={seekTo} onToggle={toggle} />
-			</div>
+			{missing ? (
+				<MissingMedia job={job} />
+			) : (
+				<div dir="ltr" className="flex min-w-0 flex-1 items-center gap-3">
+					<Button iconOnly size="md" onClick={toggle} aria-label={playing ? m.pause() : m.play()} className="h-8 w-8 shrink-0">
+						{playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
+					</Button>
+					<PlayerClock currentTime={currentTime} duration={duration} />
+					<ReplicaTimeline segments={job.segments} duration={duration} currentTime={currentTime} seekable={seekable} onSeek={seekTo} onToggle={toggle} />
+				</div>
+			)}
 
-			<PlaybackRateButton playbackRate={playbackRate} onCycle={cyclePlaybackRate} />
+			{!missing && <PlaybackRateButton playbackRate={playbackRate} onCycle={cyclePlaybackRate} />}
 
 			<Tooltip>
 				<TooltipTrigger asChild>
@@ -239,14 +262,16 @@ export default function PlayerBar({ job }: { job: Job }) {
 				<TooltipContent side="top">{basename(sourcePath)}</TooltipContent>
 			</Tooltip>
 
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button variant="ghost" size="iconSm" onClick={() => void saveACopy()} aria-label={m.save()} className="shrink-0">
-						<Download className="h-4 w-4" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent side="top">{m.save()}</TooltipContent>
-			</Tooltip>
+			{!missing && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button variant="ghost" size="iconSm" onClick={() => void saveACopy()} aria-label={m.save()} className="shrink-0">
+							<Download className="h-4 w-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="top">{m.save()}</TooltipContent>
+				</Tooltip>
+			)}
 		</motion.div>
 	)
 }
