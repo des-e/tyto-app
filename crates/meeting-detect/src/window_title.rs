@@ -30,13 +30,28 @@ fn matching_browser(browsers: &[ProcessInfo], pid: u32, title: &str) -> Option<P
     browsers.iter().find(|browser| browser.pid == Some(pid)).cloned()
 }
 
+/// A Chromium browser captures audio in a utility child of the same executable, so the owner pid
+/// differs from the pid of its windows; the executable path still ties the two together.
+#[cfg(any(target_os = "windows", test))]
+fn browser_with_executable(browsers: &[ProcessInfo], executable: &str) -> Option<ProcessInfo> {
+    browsers
+        .iter()
+        .find(|browser| {
+            browser
+                .executable
+                .as_deref()
+                .is_some_and(|path| path.eq_ignore_ascii_case(executable))
+        })
+        .cloned()
+}
+
 #[cfg(target_os = "windows")]
 mod platform {
     use super::matching_browser;
     use crate::{ProcessInfo, WindowInfo};
     use std::ffi::c_void;
     use std::mem::size_of;
-    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     use windows::core::BOOL;
     use windows::Win32::Foundation::{HWND, LPARAM, RECT};
     use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
@@ -112,6 +127,10 @@ mod platform {
     struct Search<'a> {
         browsers: &'a [ProcessInfo],
         found: Option<ProcessInfo>,
+        /// Whether a browser's executable is known, so windows of other pids are worth reading.
+        by_executable: bool,
+        /// Pids of Meet-titled windows that belong to none of the browser pids.
+        other_meet_pids: Vec<u32>,
     }
 
     unsafe extern "system" fn inspect_window(window: HWND, parameter: LPARAM) -> BOOL {
@@ -122,7 +141,8 @@ mod platform {
 
         let mut pid = 0;
         unsafe { GetWindowThreadProcessId(window, Some(&mut pid)) };
-        if !search.browsers.iter().any(|browser| browser.pid == Some(pid)) {
+        let known = search.browsers.iter().any(|browser| browser.pid == Some(pid));
+        if !known && !search.by_executable {
             return BOOL(1);
         }
 
@@ -133,6 +153,12 @@ mod platform {
         }
 
         let title = String::from_utf16_lossy(&buffer[..length as usize]);
+        if !known {
+            if super::is_meet_title(&title) && !search.other_meet_pids.contains(&pid) {
+                search.other_meet_pids.push(pid);
+            }
+            return BOOL(1);
+        }
         search.found = matching_browser(search.browsers, pid, &title);
         if search.found.is_some() {
             BOOL(0)
@@ -141,13 +167,38 @@ mod platform {
         }
     }
 
+    /// The browser whose executable runs one of `pids`; only those pids are looked up.
+    fn browser_by_executable(browsers: &[ProcessInfo], pids: &[u32]) -> Option<ProcessInfo> {
+        let wanted: Vec<Pid> = pids.iter().map(|pid| Pid::from_u32(*pid)).collect();
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&wanted),
+            false,
+            ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+        );
+        wanted.iter().find_map(|pid| {
+            let executable = system.process(*pid)?.exe()?.to_string_lossy().into_owned();
+            super::browser_with_executable(browsers, &executable)
+        })
+    }
+
     pub(super) fn meet_process(browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
-        let mut search = Search { browsers, found: None };
+        let mut search = Search {
+            browsers,
+            found: None,
+            by_executable: browsers.iter().any(|browser| browser.executable.is_some()),
+            other_meet_pids: Vec::new(),
+        };
         let parameter = LPARAM((&mut search as *mut Search<'_>) as isize);
         // Stopping enumeration after a match reports an error, so the result itself is intentionally
         // ignored. A genuine API failure and an empty search both safely produce `None`.
         let _ = unsafe { EnumWindows(Some(inspect_window), parameter) };
-        search.found
+        if search.found.is_some() || search.other_meet_pids.is_empty() {
+            return search.found;
+        }
+        // The microphone owner is a browser's audio-service child: its windows live in the main
+        // process of the same executable.
+        browser_by_executable(browsers, &search.other_meet_pids)
     }
 }
 
@@ -411,6 +462,21 @@ mod tests {
         );
         assert_eq!(matching_browser(&browsers, 7, "Google Meet"), None);
         assert_eq!(matching_browser(&browsers, 42, "Inbox"), None);
+    }
+
+    #[test]
+    fn audio_service_child_finds_its_browser_by_executable() {
+        let mut child = browser(Some(4242), "browser.exe");
+        child.executable = Some(r"C:\Users\me\AppData\Local\Yandex\YandexBrowser\Application\browser.exe".into());
+        let browsers = [browser(Some(1), "chrome.exe"), child.clone()];
+        assert_eq!(
+            browser_with_executable(
+                &browsers,
+                r"c:\users\me\appdata\local\yandex\yandexbrowser\application\BROWSER.EXE"
+            ),
+            Some(child)
+        );
+        assert_eq!(browser_with_executable(&browsers, r"C:\Other\browser.exe"), None);
     }
 
     #[cfg(target_os = "linux")]
