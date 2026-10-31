@@ -153,12 +153,15 @@ impl fmt::Display for FinalizeError {
 
 impl std::error::Error for FinalizeError {}
 
+/// Segment files of one audio source and their outpoints, in order.
+pub type AudioEntries = Vec<(String, Option<f64>)>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct FinalizePlan {
     /// Video segment files, in order (empty in audio mode).
     pub video: Vec<String>,
     /// Per source: segment files and their outpoints, in order.
-    pub audio: Vec<(AudioSource, Vec<(String, Option<f64>)>)>,
+    pub audio: Vec<(AudioSource, AudioEntries)>,
     pub reencode_video: bool,
     pub ext: &'static str,
 }
