@@ -199,7 +199,8 @@ fn repair(path: &Path) -> Result<Option<(WavLayout, u64)>> {
     let data = (len - l.data_start).min(max_data);
     let data = data - data % l.block_align;
     set_wav_data_len(&mut f, &l, data)?;
-    Ok(Some((data / l.block_align, l)))
+    let frames = data / l.block_align;
+    Ok(Some((l, frames)))
 }
 
 fn set_wav_data_len(f: &mut File, l: &WavLayout, data: u64) -> Result<()> {
