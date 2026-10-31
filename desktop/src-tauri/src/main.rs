@@ -1,5 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// eyre's `bail!` ends with a semicolon; newer rustc flags it in match arms (upstream code).
+#![allow(semicolon_in_expressions_from_non_local_macros)]
 
 mod analytics;
 mod cleaner;
