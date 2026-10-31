@@ -17,9 +17,19 @@ const RU: Record<string, string> = {
 	tytoDeleteWithFile: 'Удалить с файлом',
 	tytoKeepFile: 'Оставить файл',
 	tytoCancel: 'Отмена',
+	tytoDeleteProjectBody: 'Удалить «{name}»? Исходный файл останется на месте.',
 }
 
-const KEYS = ['tytoNotTranscribed', 'tytoMediaMissing', 'tytoMediaPick', 'tytoDeleteRecordingFile', 'tytoDeleteWithFile', 'tytoKeepFile', 'tytoCancel']
+const KEYS = [
+	'tytoNotTranscribed',
+	'tytoMediaMissing',
+	'tytoMediaPick',
+	'tytoDeleteRecordingFile',
+	'tytoDeleteWithFile',
+	'tytoKeepFile',
+	'tytoCancel',
+	'tytoDeleteProjectBody',
+]
 
 describe('тексты записи экрана', () => {
 	it.each(KEYS)('%s: есть в ru и en, без «—», «ё», «терминал»', (key) => {

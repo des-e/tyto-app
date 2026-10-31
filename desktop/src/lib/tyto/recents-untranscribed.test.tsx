@@ -26,12 +26,8 @@ vi.mock('~/lib/transcripts-store', () => ({
 	renameTranscript: vi.fn(async () => null),
 	resolveProjectAudio: vi.fn(async () => null),
 	TRANSCRIPTS_CHANGED_EVENT: 'transcripts-changed',
+	TRANSCRIPT_FILENAME: 'transcript.vibe.json',
 }))
-
-vi.mock('~/lib/tyto/media-path', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('./media-path')>()
-	return { ...actual, recordingsFolder: vi.fn(async () => 'C:\\Users\\D\\Documents\\Tyto\\Записи') }
-})
 
 const session = vi.hoisted(() => ({
 	value: {
@@ -118,9 +114,24 @@ describe('записи без расшифровки и удаление с фа
 		expect(vi.mocked(dialog.message)).toHaveBeenCalledWith('Удалить и файл записи?', {
 			title: 'Удалить расшифровку',
 			kind: 'warning',
-			buttons: { yes: 'Удалить с файлом', no: 'Оставить файл', cancel: 'Отмена' },
+			// Enter answers the first button: it keeps the file.
+			buttons: { yes: 'Оставить файл', no: 'Удалить с файлом', cancel: 'Отмена' },
 		})
 		expect(vi.mocked(dialog.ask)).not.toHaveBeenCalled()
+	})
+
+	it('ответ Yes (Enter, первая кнопка) оставляет файл, No удаляет с файлом', async () => {
+		vi.mocked(dialog.message).mockResolvedValueOnce('Yes')
+		renderSidebar()
+		await deleteRow('Запись экрана')
+		await vi.waitFor(() => expect(vi.mocked(deleteTranscript)).toHaveBeenCalledWith(SCREEN, { deleteMedia: false }))
+		cleanup()
+
+		vi.mocked(deleteTranscript).mockClear()
+		vi.mocked(dialog.message).mockResolvedValueOnce('No')
+		renderSidebar()
+		await deleteRow('Запись экрана')
+		await vi.waitFor(() => expect(vi.mocked(deleteTranscript)).toHaveBeenCalledWith(SCREEN, { deleteMedia: true }))
 	})
 
 	it('«Оставить файл» удаляет проект без файла, «Отмена» ничего не удаляет', async () => {
@@ -143,7 +154,10 @@ describe('записи без расшифровки и удаление с фа
 		renderSidebar()
 		await deleteRow('Созвон с подрядчиком')
 		await vi.waitFor(() => expect(vi.mocked(deleteTranscript)).toHaveBeenCalledWith(DROPPED, { deleteMedia: false }))
-		expect(vi.mocked(dialog.ask)).toHaveBeenCalledOnce()
+		expect(vi.mocked(dialog.ask)).toHaveBeenCalledExactlyOnceWith('Удалить «Созвон с подрядчиком»? Исходный файл останется на месте.', {
+			title: 'Удалить расшифровку',
+			kind: 'warning',
+		})
 		expect(vi.mocked(dialog.message)).not.toHaveBeenCalled()
 	})
 })

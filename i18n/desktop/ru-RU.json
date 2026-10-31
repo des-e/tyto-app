@@ -763,5 +763,6 @@
 	"tytoDeleteRecordingFile": "Удалить и файл записи?",
 	"tytoDeleteWithFile": "Удалить с файлом",
 	"tytoKeepFile": "Оставить файл",
-	"tytoCancel": "Отмена"
+	"tytoCancel": "Отмена",
+	"tytoDeleteProjectBody": "Удалить «{name}»? Исходный файл останется на месте."
 }

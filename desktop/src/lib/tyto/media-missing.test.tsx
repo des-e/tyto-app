@@ -21,6 +21,7 @@ const session = vi.hoisted(() => ({ value: { queue: { relinkMedia: vi.fn() } } }
 vi.mock('~/pages/main/session', () => ({ useSession: () => session.value }))
 
 import * as dialog from '@tauri-apps/plugin-dialog'
+import { toast } from 'sonner'
 import { TooltipProvider } from '~/components/ui/tooltip'
 import { audioExtensions, videoExtensions } from '~/lib/config'
 import type { Segment } from '~/lib/transcript'
@@ -89,6 +90,14 @@ describe('пропавший файл записи', () => {
 		expect(vi.mocked(updateTranscriptMedia)).toHaveBeenCalledWith('/p/plan/transcript.vibe.json', 'E:/moved/plan.mp4')
 		const options = vi.mocked(dialog.open).mock.calls[0]?.[0]
 		expect(options?.filters?.[0]?.extensions).toEqual(expect.arrayContaining([...videoExtensions, ...audioExtensions]))
+	})
+
+	it('запись проекта не обновилась: очередь не перепривязана, ошибка видна', async () => {
+		vi.mocked(updateTranscriptMedia).mockResolvedValueOnce(false)
+		renderPlayer(makeJob())
+		fireEvent.click(await screen.findByRole('button', { name: 'Указать файл' }))
+		await vi.waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled())
+		expect(session.value.queue.relinkMedia).not.toHaveBeenCalled()
 	})
 
 	it('выбор отменен: ничего не меняется', async () => {

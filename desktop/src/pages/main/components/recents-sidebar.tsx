@@ -26,7 +26,7 @@ import { FinishBlinkWordmark } from '~/lib/tyto/wordmark'
 import { useMainAreaOffset } from '~/lib/tyto/main-area'
 import { groupRecents, recentMeta, recentsGroupLabel, useNow } from '~/lib/tyto/recents-groups'
 import { useRecordMeta } from '~/lib/tyto/recents-duration'
-import { isInFolder, recordingsFolder } from '~/lib/tyto/media-path'
+import { isInFolder, recordingsFolderFor } from '~/lib/tyto/media-path'
 import { TOGGLE_SIDEBAR_EVENT } from '~/components/layout'
 import { Button } from '~/components/ui/button'
 import { getTextDirection } from '~/paraglide/runtime.js'
@@ -158,7 +158,7 @@ function RecentRow({
 	onDeleted: () => void
 	onRenamed: () => void
 }) {
-	const { queue, preference } = useSession()
+	const { queue } = useSession()
 	const { duration, untranscribed } = useRecordMeta(entry.path)
 	const meta = [recentMeta(entry.createdAt, now, duration), untranscribed ? m.tytoNotTranscribed() : ''].filter(Boolean).join(' · ')
 	const [menu, setMenu] = useState<RowMenuState>({ sourcePath: null, sourceExists: false })
@@ -205,7 +205,8 @@ function RecentRow({
 		try {
 			const record = await readTranscript(entry.path)
 			if (!record?.sourcePath) return false
-			return isInFolder(record.sourcePath, await recordingsFolder(preference.projectsPath))
+			// The `Записи` folder beside this project, so a changed projects folder setting still finds it.
+			return isInFolder(record.sourcePath, recordingsFolderFor(entry.path))
 		} catch (error) {
 			console.warn('failed to locate the recording of a transcript:', error)
 			return false
@@ -217,16 +218,17 @@ function RecentRow({
 		if (await isOwnRecording()) {
 			const withFile = m.tytoDeleteWithFile()
 			const keepFile = m.tytoKeepFile()
+			// The first button answers Enter, so it is the one that keeps the file.
 			const answer = await dialog.message(m.tytoDeleteRecordingFile(), {
 				title: m.deleteTranscript(),
 				kind: 'warning',
-				buttons: { yes: withFile, no: keepFile, cancel: m.tytoCancel() },
+				buttons: { yes: keepFile, no: withFile, cancel: m.tytoCancel() },
 			})
 			// Custom buttons answer with their label on some platforms and with Yes/No on others.
-			if (answer === 'Yes' || answer === withFile) deleteMedia = true
-			else if (answer !== 'No' && answer !== keepFile) return
+			if (answer === 'No' || answer === withFile) deleteMedia = true
+			else if (answer !== 'Yes' && answer !== keepFile) return
 		} else {
-			const confirmed = await dialog.ask(m.deleteTranscriptBody({ name: entry.name }), {
+			const confirmed = await dialog.ask(m.tytoDeleteProjectBody({ name: entry.name }), {
 				title: m.deleteTranscript(),
 				kind: 'warning',
 			})

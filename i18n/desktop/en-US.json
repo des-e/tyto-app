@@ -763,5 +763,6 @@
 	"tytoDeleteRecordingFile": "Delete the recording file too?",
 	"tytoDeleteWithFile": "Delete with file",
 	"tytoKeepFile": "Keep file",
-	"tytoCancel": "Cancel"
+	"tytoCancel": "Cancel",
+	"tytoDeleteProjectBody": "Delete “{name}”? The original file stays where it is."
 }

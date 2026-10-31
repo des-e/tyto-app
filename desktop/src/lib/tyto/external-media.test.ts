@@ -55,7 +55,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 }))
 
 import { deleteTranscript, readTranscript, saveTranscript, updateTranscriptMedia } from '~/lib/transcripts-store'
-import { isInFolder, isVideoPath, recordingsFolder, RECORDINGS_FOLDER, shouldCopyMedia } from './media-path'
+import { isInFolder, isVideoPath, recordingsFolder, recordingsFolderFor, RECORDINGS_FOLDER, shouldCopyMedia } from './media-path'
 
 const createdAt = new Date(2026, 9, 31, 10, 20, 30)
 
@@ -129,6 +129,32 @@ describe('внешние медиа в проектах', () => {
 		expect(disk.files.has(saved!.recordPath)).toBe(false)
 	})
 
+	it('deleteTranscript с deleteMedia не удаляет файл вне Записи/: D:/zoom/meet.mp4 остается', async () => {
+		disk.files.set('D:/zoom/meet.mp4', 'video')
+		const saved = await saveTranscript({ name: 'meet', sourcePath: 'D:/zoom/meet.mp4', segments: [], createdAt })
+		expect(await deleteTranscript(saved!.recordPath, { deleteMedia: true })).toBe(true)
+		expect(disk.files.has('D:/zoom/meet.mp4')).toBe(true)
+		expect(disk.removed).not.toContain('D:/zoom/meet.mp4')
+		expect(disk.files.has(saved!.recordPath)).toBe(false)
+	})
+
+	it('deleteTranscript с deleteMedia: путь с .. из Записи/ наружу не удаляется', async () => {
+		const outside = `/documents/Tyto/${RECORDINGS_FOLDER}/../../Desktop/my.mp4`
+		disk.files.set(outside, 'video')
+		const saved = await saveTranscript({ name: 'my', sourcePath: outside, segments: [], createdAt })
+		expect(await deleteTranscript(saved!.recordPath, { deleteMedia: true })).toBe(true)
+		expect(disk.files.has(outside)).toBe(true)
+	})
+
+	it('deleteTranscript удаляет проект раньше файла записи', async () => {
+		const source = `/documents/Tyto/${RECORDINGS_FOLDER}/screen.mp4`
+		disk.files.set(source, 'video')
+		const saved = await saveTranscript({ name: 'screen', sourcePath: source, segments: [], createdAt })
+		disk.removed = []
+		await deleteTranscript(saved!.recordPath, { deleteMedia: true })
+		expect(disk.removed).toEqual(['/documents/Tyto/screen-20261031-102030', source])
+	})
+
 	it('deleteTranscript без deleteMedia файл записи не трогает', async () => {
 		disk.files.set('D:/zoom/meet.mp4', 'video')
 		const saved = await saveTranscript({ name: 'meet', sourcePath: 'D:/zoom/meet.mp4', segments: [], createdAt })
@@ -142,6 +168,23 @@ describe('внешние медиа в проектах', () => {
 		expect(isInFolder('/Users/d/Documents/Tyto/Записи/a.mp4', '/Users/d/Documents/Tyto/Записи/')).toBe(true)
 		expect(isInFolder('/Users/d/Documents/Tyto/записи/a.mp4', '/Users/d/Documents/Tyto/Записи')).toBe(false)
 		expect(isInFolder('', '/Users/d/Documents/Tyto/Записи')).toBe(false)
+	})
+
+	it('isInFolder: любой сегмент .. дает false, сегменты . пропускаются', () => {
+		expect(isInFolder('C:/Users/D/Documents/Tyto/Записи/../../Desktop/my.mp4', 'C:/Users/D/Documents/Tyto/Записи')).toBe(false)
+		expect(isInFolder('C:\\Users\\D\\Documents\\Tyto\\Записи\\sub\\..\\a.mp4', 'C:/Users/D/Documents/Tyto/Записи')).toBe(false)
+		expect(isInFolder('/Users/d/Tyto/Записи/a.mp4', '/Users/d/Tyto/x/../Записи')).toBe(false)
+		expect(isInFolder('/Users/d/Tyto/Записи/./a.mp4', '/Users/d/Tyto/Записи')).toBe(true)
+		expect(isInFolder('C:\\Users\\D\\Tyto\\.\\Записи\\a.mp4', 'c:/users/d/tyto/./Записи/')).toBe(true)
+		expect(isInFolder('/Users/d/Tyto/Записи/.', '/Users/d/Tyto/Записи')).toBe(false)
+		expect(isInFolder('/a.mp4', '/')).toBe(false)
+	})
+
+	it('recordingsFolderFor: Записи рядом с папкой проекта, без создания', () => {
+		expect(recordingsFolderFor('/documents/Tyto/meet-20261031-102030/transcript.vibe.json')).toBe(`/documents/Tyto/${RECORDINGS_FOLDER}`)
+		expect(recordingsFolderFor('C:\\Users\\D\\Documents\\Tyto\\meet-20261031-102030\\transcript.vibe.json')).toBe(`C:\\Users\\D\\Documents\\Tyto\\${RECORDINGS_FOLDER}`)
+		expect(recordingsFolderFor('/documents/Tyto/old-20250101-000000.vibe.json')).toBe(`/documents/Tyto/${RECORDINGS_FOLDER}`)
+		expect(disk.directories.size).toBe(0)
 	})
 
 	it('видео распознается по расширению без учета регистра', () => {

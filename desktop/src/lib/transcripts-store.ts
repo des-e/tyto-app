@@ -1,7 +1,7 @@
 import * as pathApi from '@tauri-apps/api/path'
 import * as fs from '@tauri-apps/plugin-fs'
 import type { Segment, SpeakerNames } from './transcript'
-import { shouldCopyMedia } from './tyto/media-path'
+import { isInFolder, recordingsFolderFor, shouldCopyMedia } from './tyto/media-path'
 
 /**
  * Transcript persistence.
@@ -496,31 +496,33 @@ export function notifyTranscriptsChanged() {
 
 /**
  * Remove one transcript: the whole project folder (media copy included) for project saves, the
- * single file for legacy ones. With `deleteMedia` the external media file (`record.sourcePath`, a
- * screen recording) goes too. Returns whether the transcript is gone.
+ * single file for legacy ones. With `deleteMedia` the recording file (`record.sourcePath`) goes too,
+ * but only when it lies in the `Записи` folder beside the projects: media the user brought in is
+ * never deleted, whoever asks. Returns whether the transcript is gone.
  */
 export async function deleteTranscript(path: string, options?: { deleteMedia?: boolean }): Promise<boolean> {
+	let mediaToDelete: string | null = null
+	if (options?.deleteMedia) {
+		const record = await readTranscript(path)
+		if (record?.sourcePath && isInFolder(record.sourcePath, recordingsFolderFor(path))) mediaToDelete = record.sourcePath
+		else if (record?.sourcePath) console.warn('refusing to delete media outside the recordings folder:', record.sourcePath)
+	}
 	try {
-		if (options?.deleteMedia) {
-			const record = await readTranscript(path)
-			if (record?.sourcePath) {
-				try {
-					if (await fs.exists(record.sourcePath)) await fs.remove(record.sourcePath)
-				} catch (error) {
-					console.warn('failed to delete recording file:', record.sourcePath, error)
-				}
-			}
-		}
-		if (isProjectRecordPath(path)) {
-			await fs.remove(await pathApi.dirname(path), { recursive: true })
-			return true
-		}
-		await fs.remove(path)
-		return true
+		// The project goes first: if that fails, its media must still be there.
+		if (isProjectRecordPath(path)) await fs.remove(await pathApi.dirname(path), { recursive: true })
+		else await fs.remove(path)
 	} catch (error) {
 		console.warn('failed to delete transcript:', path, error)
 		return false
 	}
+	if (mediaToDelete) {
+		try {
+			if (await fs.exists(mediaToDelete)) await fs.remove(mediaToDelete)
+		} catch (error) {
+			console.warn('failed to delete recording file:', mediaToDelete, error)
+		}
+	}
+	return true
 }
 
 /**

@@ -1,5 +1,6 @@
 import * as dialog from '@tauri-apps/plugin-dialog'
 import { FileQuestion } from 'lucide-react'
+import { toast } from 'sonner'
 import { m } from '~/paraglide/messages.js'
 import { Button } from '~/components/ui/button'
 import { audioExtensions, videoExtensions } from '~/lib/config'
@@ -26,7 +27,14 @@ export function MissingMedia({ job }: { job: Job }) {
 			console.warn('failed to pick the media file:', error)
 		}
 		if (!picked) return
-		if (job.savedPath && (await updateTranscriptMedia(job.savedPath, picked))) notifyTranscriptsChanged()
+		if (job.savedPath) {
+			// Relinking only the session would play now and be "missing" again on the next open.
+			if (!(await updateTranscriptMedia(job.savedPath, picked))) {
+				toast.error(m.error(), { position: 'bottom-center' })
+				return
+			}
+			notifyTranscriptsChanged()
+		}
 		queue.relinkMedia(job.id, picked)
 	}
 
