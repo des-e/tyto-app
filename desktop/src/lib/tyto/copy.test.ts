@@ -80,7 +80,7 @@ const COPY: Array<[string, string]> = [
 	['updateAvailableOpenRecents', 'Доступно обновление: откройте недавние'],
 	['hotkeyActivationPushToTalkDescription', 'Удерживайте сочетание клавиш для записи, отпустите для расшифровки.'],
 	['updateWindowConfirm', 'Обновить'],
-	['diarizeDownloadFailed','Не получилось скачать модель говорящих. Включить их можно позже в настройках.'],
+	['diarizeDownloadFailed', 'Не получилось скачать модель говорящих. Включить их можно позже в настройках.'],
 	['closeToTray', 'Сворачивать в трей при закрытии'],
 	['launchAtStartup', 'Запускать вместе с системой'],
 	['preventSleep', 'Не давать компьютеру засыпать'],

@@ -23,8 +23,10 @@
 ; it is tyto.exe (mainBinaryName). Tauri's own template deletes the old name it finds in
 ; the uninstall key and retargets the shortcuts, but its "is the app running" check looks
 ; for tyto.exe only, so a running old vibe.exe stays locked and the Delete silently fails.
-; taskkill /IM would also hit upstream Vibe's vibe.exe, so wait for the file instead and
-; ask the person to close Tyto if it stays locked.
+; taskkill /IM would also hit upstream Vibe's vibe.exe, so wait for the file instead.
+; This runs in POSTINSTALL, after tyto.exe is in place, and never aborts: a leftover
+; vibe.exe does no harm, while an aborted install with the old exe already gone would
+; leave no app and no in-app updater.
 !macro RemoveOldMainBinary OLD_NAME
     ${If} ${FileExists} "$INSTDIR\${OLD_NAME}"
         StrCpy $1 0
@@ -37,15 +39,16 @@
                 Sleep 500
                 Goto tyto_old_main_retry
             ${EndIf}
-            MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Tyto is still running. Close it (also from the tray icon) and press Retry." /SD IDCANCEL IDRETRY tyto_old_main_retry
-            Abort "The old ${OLD_NAME} is still running"
+            ; Still locked (old Tyto left running): Windows removes it on the next reboot.
+            Delete /REBOOTOK "$INSTDIR\${OLD_NAME}"
+            DetailPrint "The old ${OLD_NAME} is still in use, it will be removed after a reboot"
+        ${Else}
+            DetailPrint "Removed the old ${OLD_NAME}"
         ${EndIf}
-        DetailPrint "Removed the old ${OLD_NAME}"
     ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
-    !insertmacro RemoveOldMainBinary "vibe.exe"
     ; Keep one entry per bundled sidecar that can outlive the main application.
     !insertmacro StopSidecarBeforeInstall "tyto-engine.exe"
     ; Tyto 0.1.0-0.1.3 shipped the engine as vibe-server.exe; an upgrade must stop
@@ -56,7 +59,8 @@
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-    ; «Запускать вместе с системой» stores the exe path in HKCU Run under the product name.
+    !insertmacro RemoveOldMainBinary "vibe.exe"
+    ; "Launch at startup" stores the exe path in HKCU Run under the product name.
     ; An entry written by 0.1.0-0.1.4 points at the deleted vibe.exe; repoint it so the next
     ; login still starts Tyto. The app rewrites it in its own format on start (setup.rs).
     ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Tyto"

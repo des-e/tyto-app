@@ -40,9 +40,21 @@ describe('tyto tauri config', () => {
 
 	it('the installer removes the old vibe.exe and repoints autostart at tyto.exe', () => {
 		const nsh = readFileSync(resolve(tauriDir, 'vc_redist.nsh'), 'utf-8')
-		expect(nsh).toContain('!insertmacro RemoveOldMainBinary "vibe.exe"')
-		expect(nsh).toContain('!macro NSIS_HOOK_POSTINSTALL')
-		expect(nsh).toContain('$INSTDIR\\tyto.exe')
+		const hook = (name: string) => {
+			const start = nsh.indexOf(`!macro ${name}`)
+			expect(start).toBeGreaterThanOrEqual(0)
+			return nsh.slice(start, nsh.indexOf('!macroend', start))
+		}
+		const removal = '!insertmacro RemoveOldMainBinary "vibe.exe"'
+		// Only after tyto.exe is in place: an abort earlier must not leave the person with no exe.
+		expect(hook('NSIS_HOOK_PREINSTALL')).not.toContain(removal)
+		expect(hook('NSIS_HOOK_POSTINSTALL')).toContain(removal)
+		expect(hook('NSIS_HOOK_POSTINSTALL')).toContain('$INSTDIR\\tyto.exe')
+		// A locked leftover is non-fatal: removed on reboot, never an Abort or a prompt.
+		const macro = hook('RemoveOldMainBinary')
+		expect(macro).toContain('Delete /REBOOTOK')
+		expect(macro).not.toContain('Abort')
+		expect(macro).not.toContain('MessageBox')
 	})
 
 	it('uses its own updater endpoint and key', () => {
