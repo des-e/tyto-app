@@ -44,6 +44,12 @@ pub struct AudioTrackRecord {
     pub frames: u64,
     /// Set when the file is longer than the segment: concat cuts it here.
     pub outpoint_secs: Option<f64>,
+    /// Frames that came from the device (no padding): zero means nothing was recorded.
+    #[serde(default)]
+    pub captured_frames: u64,
+    /// Segment length the track was aligned to.
+    #[serde(default)]
+    pub target_ms: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -51,6 +57,7 @@ pub struct SegmentRecord {
     pub index: u32,
     pub video_file: Option<String>,
     pub encoder: Option<VideoEncoder>,
+    /// Frames written to the segment; must stay 0 until the first real frame arrives.
     pub video_frames: u64,
     /// Active (unpaused) time of the segment.
     pub wall_ms: u64,
@@ -78,6 +85,7 @@ pub fn segment_file(index: u32, kind: &str) -> String {
 }
 
 /// Writes `manifest.json` via a temp file and rename, so a crash never leaves half a manifest.
+/// The temp name is fixed: write the manifest from one thread only.
 pub fn write_manifest_atomic(dir: &Path, m: &Manifest) -> Result<()> {
     let tmp = dir.join(format!("{MANIFEST}.tmp"));
     let data = serde_json::to_vec_pretty(m).context("serialize manifest")?;
@@ -86,8 +94,19 @@ pub fn write_manifest_atomic(dir: &Path, m: &Manifest) -> Result<()> {
         f.write_all(&data).context("write manifest")?;
         f.sync_all().context("sync manifest")?;
     }
-    std::fs::rename(&tmp, dir.join(MANIFEST)).context("rename manifest")?;
-    Ok(())
+    // On Windows an antivirus or the indexer may hold manifest.json for a moment.
+    let target = dir.join(MANIFEST);
+    let mut attempt = 0;
+    loop {
+        match std::fs::rename(&tmp, &target) {
+            Ok(()) => return Ok(()),
+            Err(_) if attempt < 3 => {
+                attempt += 1;
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => return Err(e).context("rename manifest"),
+        }
+    }
 }
 
 pub fn read_manifest(dir: &Path) -> Result<Manifest> {
@@ -124,14 +143,27 @@ pub fn align_audio(target_ms: u64, sample_rate: u32, frames: u64) -> AudioAlign 
     }
 }
 
+/// `\\?\C:\x` → `C:\x`, `\\?\UNC\srv\x` → `\\srv\x`: ffmpeg does not open verbatim paths.
+fn strip_verbatim(p: &str) -> String {
+    if let Some(rest) = p.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else {
+        p.strip_prefix(r"\\?\").unwrap_or(p).to_string()
+    }
+}
+
 /// ffmpeg concat demuxer list. Paths use `/`, `'` is written as `'\''`.
+/// A set time is the segment length: `outpoint` cuts a longer file, and
+/// `duration` places the next file there even if this one is shorter.
 pub fn concat_list(entries: &[(PathBuf, Option<f64>)]) -> String {
     let mut s = String::new();
-    for (path, outpoint) in entries {
-        let p = path.to_string_lossy().replace('\\', "/").replace('\'', "'\\''");
+    for (path, secs) in entries {
+        let p = strip_verbatim(&path.to_string_lossy())
+            .replace('\\', "/")
+            .replace('\'', "'\\''");
         s.push_str(&format!("file '{p}'\n"));
-        if let Some(secs) = outpoint {
-            s.push_str(&format!("outpoint {secs}\n"));
+        if let Some(secs) = secs {
+            s.push_str(&format!("outpoint {secs}\nduration {secs}\n"));
         }
     }
     s
@@ -153,21 +185,43 @@ impl fmt::Display for FinalizeError {
 
 impl std::error::Error for FinalizeError {}
 
-/// Segment files of one audio source and their outpoints, in order.
+/// Segment files of one audio source and their lengths in seconds, in order.
 pub type AudioEntries = Vec<(String, Option<f64>)>;
+
+/// A silent WAV that stands in for a segment where a source has no file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SilenceFile {
+    pub file: String,
+    pub sample_rate: u32,
+    pub channels: u16,
+    pub frames: u64,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FinalizePlan {
     /// Video segment files, in order (empty in audio mode).
     pub video: Vec<String>,
-    /// Per source: segment files and their outpoints, in order.
+    /// Per source: segment files and their lengths, in order.
     pub audio: Vec<(AudioSource, AudioEntries)>,
     pub reencode_video: bool,
     pub ext: &'static str,
+    /// Written by `write_concat_lists` before the mux.
+    pub silence: Vec<SilenceFile>,
 }
 
 fn has_samples(s: &SegmentRecord) -> bool {
-    s.audio.iter().any(|a| a.frames > 0)
+    s.audio.iter().any(|a| a.captured_frames > 0)
+}
+
+/// Length of a segment on the final timeline.
+fn segment_ms(m: &Manifest, s: &SegmentRecord) -> u64 {
+    if let Some(t) = s.audio.iter().map(|a| a.target_ms).find(|t| *t > 0) {
+        return t;
+    }
+    match (m.mode, m.fps) {
+        (Mode::Video, Some(fps)) if fps > 0 => s.video_frames * 1000 / u64::from(fps),
+        _ => s.wall_ms,
+    }
 }
 
 pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
@@ -191,29 +245,40 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
     };
     let reencode_video = is_video && used.windows(2).any(|w| w[0].encoder != w[1].encoder);
 
-    // A source goes into the mix only if every used segment has it: concat lists
-    // of different sources must cover the same timeline, or the sources drift apart.
     let mut sources: Vec<AudioSource> = Vec::new();
     for a in used.iter().flat_map(|s| s.audio.iter()) {
         if !sources.contains(&a.source) {
             sources.push(a.source);
         }
     }
+    // Every source covers every used segment, so the concat lists share one
+    // timeline: a segment without a file for a source gets a silent stand-in.
     let mut audio = Vec::new();
+    let mut silence = Vec::new();
     for src in sources {
-        let entries: Vec<(String, Option<f64>)> = used
-            .iter()
-            .filter_map(|s| s.audio.iter().find(|a| a.source == src))
-            .map(|a| (a.file.clone(), a.outpoint_secs))
-            .collect();
-        if entries.len() == used.len() {
-            audio.push((src, entries));
-        } else {
-            tracing::warn!("audio source {} is missing in some segments, left out of the mix", src.name());
+        let Some(like) = used.iter().flat_map(|s| s.audio.iter()).find(|a| a.source == src) else {
+            continue;
+        };
+        let mut entries: AudioEntries = Vec::new();
+        for s in &used {
+            let ms = segment_ms(m, s);
+            let secs = (ms > 0).then_some(ms as f64 / 1000.0);
+            match s.audio.iter().find(|a| a.source == src) {
+                Some(a) => entries.push((a.file.clone(), if a.target_ms > 0 { secs } else { a.outpoint_secs })),
+                None => {
+                    tracing::warn!("segment {} has no {} audio, filled with silence", s.index, src.name());
+                    let file = segment_file(s.index, &format!("{}.gap.wav", src.name()));
+                    silence.push(SilenceFile {
+                        file: file.clone(),
+                        sample_rate: like.sample_rate,
+                        channels: like.channels,
+                        frames: (u128::from(ms) * u128::from(like.sample_rate) / 1000) as u64,
+                    });
+                    entries.push((file, secs));
+                }
+            }
         }
-    }
-    if m.mode == Mode::Audio && audio.is_empty() {
-        return Err(FinalizeError::Empty);
+        audio.push((src, entries));
     }
 
     Ok(FinalizePlan {
@@ -224,6 +289,7 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
             Mode::Video => "mp4",
             Mode::Audio => "m4a",
         },
+        silence,
     })
 }
 
@@ -233,8 +299,27 @@ pub fn audio_list(source: AudioSource) -> String {
     format!("{}.txt", source.name())
 }
 
-/// Writes `video.txt` and `<source>.txt` concat lists into the session folder.
+fn write_silence_wav(path: &Path, s: &SilenceFile) -> Result<()> {
+    let spec = hound::WavSpec {
+        channels: s.channels.max(1),
+        sample_rate: s.sample_rate,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+    let mut w = hound::WavWriter::create(path, spec).with_context(|| format!("create {}", path.display()))?;
+    for _ in 0..s.frames * u64::from(spec.channels) {
+        w.write_sample(0.0f32)?;
+    }
+    w.finalize().context("finalize silence")?;
+    Ok(())
+}
+
+/// Writes the silent stand-ins and the `video.txt` / `<source>.txt` concat lists
+/// into the session folder.
 pub fn write_concat_lists(plan: &FinalizePlan, dir: &Path) -> Result<()> {
+    for s in &plan.silence {
+        write_silence_wav(&dir.join(&s.file), s)?;
+    }
     if !plan.video.is_empty() {
         let entries: Vec<(PathBuf, Option<f64>)> = plan.video.iter().map(|f| (dir.join(f), None)).collect();
         std::fs::write(dir.join(VIDEO_LIST), concat_list(&entries)).context("write video list")?;
@@ -246,52 +331,99 @@ pub fn write_concat_lists(plan: &FinalizePlan, dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Each input is put on its own timeline: gaps (a short segment file) become
+/// silence, so the sources stay in sync with each other and with the video.
+const ALIGN_FILTER: &str = "aresample=async=1:first_pts=0";
+
 /// ffmpeg arguments for the final file: concat of the segments and ONE mixed AAC
 /// track (WebView2 and WKWebView play only the first audio track, and the engine
 /// mixes all tracks itself, so a second copy of the sound would double the volume).
+///
+/// Re-encoding (segments from different encoders) feeds every segment as its own
+/// input into the `concat` filter: the concat demuxer would decode all of them
+/// with the first file's SPS/PPS.
 pub fn finalize_args(plan: &FinalizePlan, dir: &Path, out: &Path, enc: VideoEncoder, p: &Preset) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let s = |v: &str| v.to_string();
+    let path = |name: &str| strip_verbatim(&dir.join(name).to_string_lossy());
     a.extend(["-hide_banner", "-loglevel", "error", "-y"].map(s));
     let has_video = !plan.video.is_empty();
-    let concat_input = |a: &mut Vec<String>, list: String| {
+    let reencode = has_video && plan.reencode_video;
+    let concat_input = |a: &mut Vec<String>, list: &str| {
         a.extend(["-f", "concat", "-safe", "0", "-i"].map(s));
-        a.push(dir.join(list).to_string_lossy().into_owned());
+        a.push(path(list));
     };
-    if has_video {
-        concat_input(&mut a, VIDEO_LIST.to_string());
-    }
+    let video_inputs = if reencode {
+        for f in &plan.video {
+            a.push(s("-i"));
+            a.push(path(f));
+        }
+        plan.video.len()
+    } else if has_video {
+        concat_input(&mut a, VIDEO_LIST);
+        1
+    } else {
+        0
+    };
     for (src, _) in &plan.audio {
-        concat_input(&mut a, audio_list(*src));
+        concat_input(&mut a, &audio_list(*src));
     }
 
-    if has_video {
-        a.extend(["-map", "0:v"].map(s));
-        if plan.reencode_video {
-            a.extend(codec_args(enc, p));
-        } else {
-            a.extend(["-c:v", "copy"].map(s));
+    let mut graph: Vec<String> = Vec::new();
+    let mut maps: Vec<String> = Vec::new();
+    let mut video_codec: Vec<String> = Vec::new();
+    if reencode {
+        // `-vf` cannot apply to a filtergraph output: move it into the graph.
+        let mut codec = codec_args(enc, p);
+        let mut vf = String::new();
+        if let Some(i) = codec.iter().position(|x| x == "-vf") {
+            codec.remove(i);
+            if i < codec.len() {
+                vf = format!(",{}", codec.remove(i));
+            }
         }
+        let ins: String = (0..video_inputs).map(|i| format!("[{i}:v]")).collect();
+        graph.push(format!("{ins}concat=n={video_inputs}:v=1:a=0{vf}[v]"));
+        maps.push(s("[v]"));
+        video_codec = codec;
+    } else if has_video {
+        maps.push(s("0:v"));
+        video_codec.extend(["-c:v", "copy"].map(s));
     }
-    let first_audio = usize::from(has_video);
-    match plan.audio.len() {
-        0 => a.push(s("-an")),
-        1 => {
-            a.push(s("-map"));
-            a.push(format!("{first_audio}:a"));
-        }
+
+    let n = plan.audio.len();
+    match n {
+        0 => {}
+        1 => graph.push(format!("[{video_inputs}:a]{ALIGN_FILTER}[a]")),
         n => {
-            let inputs: String = (first_audio..first_audio + n).map(|i| format!("[{i}:a]")).collect();
+            let mut mix = String::new();
+            for k in 0..n {
+                graph.push(format!("[{}:a]{ALIGN_FILTER}[a{k}]", video_inputs + k));
+                mix.push_str(&format!("[a{k}]"));
+            }
             // Same mix as `ffmpeg::merge_wav_files`: sum without averaging, cap the peaks.
-            a.push(s("-filter_complex"));
-            a.push(format!(
-                "{inputs}amix=inputs={n}:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.97[a]"
+            graph.push(format!(
+                "{mix}amix=inputs={n}:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.97[a]"
             ));
-            a.extend(["-map", "[a]"].map(s));
         }
     }
-    if !plan.audio.is_empty() {
+    if n > 0 {
+        maps.push(s("[a]"));
+    }
+
+    if !graph.is_empty() {
+        a.push(s("-filter_complex"));
+        a.push(graph.join(";"));
+    }
+    for m in maps {
+        a.push(s("-map"));
+        a.push(m);
+    }
+    a.extend(video_codec);
+    if n > 0 {
         a.extend(["-c:a", "aac", "-b:a", "128k"].map(s));
+    } else {
+        a.push(s("-an"));
     }
     a.extend(["-movflags", "+faststart"].map(s));
     a.push(out.to_string_lossy().into_owned());
@@ -316,6 +448,8 @@ mod tests {
             channels: 1,
             frames,
             outpoint_secs: None,
+            captured_frames: frames,
+            target_ms: frames * 1000 / 48_000,
         }
     }
 
@@ -386,6 +520,18 @@ mod tests {
     }
 
     #[test]
+    fn concat_list_fixes_segment_length_and_strips_verbatim_prefix() {
+        let list = concat_list(&[
+            (PathBuf::from(r"\\?\C:\Записи\.tyto-rec-1\seg-0001.mic.wav"), Some(600.0)),
+            (PathBuf::from(r"\\?\UNC\nas\share\seg-0002.mic.wav"), None),
+        ]);
+        assert_eq!(
+            list,
+            "file 'C:/Записи/.tyto-rec-1/seg-0001.mic.wav'\noutpoint 600\nduration 600\nfile '//nas/share/seg-0002.mic.wav'\n"
+        );
+    }
+
+    #[test]
     fn empty_segments_are_skipped_and_all_empty_is_an_error() {
         // Review Focus 1: stop a second after start, pause right after start
         let m = manifest_with(vec![seg(1, 0, &[0, 0]), seg(2, 0, &[0])]);
@@ -398,9 +544,38 @@ mod tests {
         let plan = finalize_plan(&audio_only).unwrap();
         assert_eq!(plan.ext, "m4a");
         assert!(plan.video.is_empty());
-        assert_eq!(plan.audio[0].1, vec![("seg-0002.mic.wav".to_string(), None)]);
+        assert_eq!(plan.audio[0].1, vec![("seg-0002.mic.wav".to_string(), Some(10.0))]);
         audio_only.segments = vec![seg(1, 0, &[0])];
         assert_eq!(finalize_plan(&audio_only).unwrap_err(), FinalizeError::Empty);
+    }
+
+    #[test]
+    fn padding_alone_is_not_a_recording() {
+        // Stop 0.3 s after start in audio mode: the sink padded 0.3 s of silence, nothing was captured.
+        let mut padded = seg(1, 0, &[14_400, 14_400]);
+        for t in &mut padded.audio {
+            t.captured_frames = 0;
+        }
+        let mut m = manifest_with(vec![padded]);
+        m.mode = Mode::Audio;
+        assert_eq!(finalize_plan(&m).unwrap_err(), FinalizeError::Empty);
+    }
+
+    #[test]
+    fn a_source_missing_in_one_segment_gets_silence_not_dropped() {
+        let m = manifest_with(vec![seg(1, 150, &[480_000, 480_000]), seg(2, 150, &[480_000])]);
+        let plan = finalize_plan(&m).unwrap();
+        assert_eq!(plan.audio.len(), 2);
+        let system = &plan.audio[1].1;
+        assert_eq!(system[1], ("seg-0002.system.gap.wav".to_string(), Some(10.0)));
+        assert_eq!(plan.silence[0].frames, 480_000);
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut small = plan.clone();
+        small.silence[0].frames = 10;
+        write_concat_lists(&small, dir.path()).unwrap();
+        let r = hound::WavReader::open(dir.path().join("seg-0002.system.gap.wav")).unwrap();
+        assert_eq!((r.duration(), r.spec().sample_rate), (10, 48_000));
     }
 
     #[test]
@@ -416,9 +591,15 @@ mod tests {
             Path::new("/out.mp4"),
             VideoEncoder::MediaFoundation,
             &preset(Quality::Good),
-        )
-        .join(" ");
-        assert!(args.contains("-c:v h264_mf") && !args.contains("-c:v copy"));
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("-c:v h264_mf") && !joined.contains("-c:v copy"));
+        // each segment is its own input, joined by the concat filter (not the demuxer)
+        assert_eq!(joined.matches("-f concat").count(), 1);
+        assert!(!joined.contains("video.txt") && !joined.contains("-vf"));
+        let graph = &args[args.iter().position(|x| x == "-filter_complex").unwrap() + 1];
+        assert!(graph.starts_with("[0:v][1:v]concat=n=2:v=1:a=0,format=nv12[v];[2:a]aresample"));
+        assert!(joined.contains("-map [v]") && joined.contains("-map [a]"));
     }
 
     #[test]
@@ -431,7 +612,8 @@ mod tests {
             &preset(Quality::Good),
         )
         .join(" ");
-        assert!(args.contains("[1:a][2:a]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.97[a]"));
+        assert!(args.contains("amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.97[a]"));
+        assert!(args.contains("[1:a]aresample=async=1:first_pts=0[a0];[2:a]aresample=async=1:first_pts=0[a1];[a0][a1]amix"));
         assert!(
             args.contains("-map 0:v") && args.contains("-c:v copy") && args.contains("-c:a aac") && args.contains("+faststart")
         );
@@ -461,6 +643,7 @@ mod tests {
         write_concat_lists(&two_source_plan(), dir.path()).unwrap();
         let mic = std::fs::read_to_string(dir.path().join("mic.txt")).unwrap();
         assert_eq!(mic.matches("file '").count(), 2);
+        assert_eq!(mic.matches("duration 10\n").count(), 2);
         assert!(dir.path().join(VIDEO_LIST).is_file() && dir.path().join("system.txt").is_file());
     }
 
