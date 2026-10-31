@@ -17,6 +17,7 @@ mod handoff;
 mod keepawake;
 mod logging;
 mod meeting_prompt;
+mod screen;
 mod server;
 mod setup;
 mod transcript;
