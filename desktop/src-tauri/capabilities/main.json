@@ -28,6 +28,8 @@
 		"os:allow-locale",
 		"core:window:default",
 		"core:window:allow-unminimize",
+		"core:window:allow-start-dragging",
+		"core:window:allow-internal-toggle-maximize",
 		"core:window:allow-set-focus",
 		"core:window:allow-close",
 		"core:window:allow-destroy",
