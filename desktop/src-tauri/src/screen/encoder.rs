@@ -1,10 +1,12 @@
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use super::quality::Preset;
+use super::quality::{preset, Preset, Quality};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -96,6 +98,18 @@ pub fn video_segment_args(enc: VideoEncoder, p: &Preset, size: (u32, u32), out: 
     push(&["-video_size", &video_size]);
     let fps = p.fps.to_string();
     push(&["-framerate", &fps, "-i", "pipe:0", "-an"]);
+    a.extend(codec_args(enc, p));
+    let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
+    push(&["-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-f", "mp4"]);
+    a.push(out.to_string_lossy().into_owned());
+    a
+}
+
+/// Encoder flags shared by the real pipeline and the probe, so the probe
+/// exercises exactly what recording will use (hw_encoding, nv12, bitrate).
+pub fn codec_args(enc: VideoEncoder, p: &Preset) -> Vec<String> {
+    let mut a: Vec<String> = Vec::new();
+    let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["-c:v", enc.ffmpeg_name()]);
     match enc {
         VideoEncoder::Nvenc => push(&["-preset", "p4", "-rc", "vbr"]),
@@ -115,14 +129,12 @@ pub fn video_segment_args(enc: VideoEncoder, p: &Preset, size: (u32, u32), out: 
     } else {
         push(&["-vf", "format=nv12"]);
     }
-    push(&["-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-f", "mp4"]);
-    a.push(out.to_string_lossy().into_owned());
     a
 }
 
-/// Encodes a single synthetic frame to check the encoder works on this machine.
+/// Encodes a single synthetic frame with the same codec flags as recording.
 pub fn probe_args(enc: VideoEncoder) -> Vec<String> {
-    [
+    let mut a: Vec<String> = [
         "-hide_banner",
         "-loglevel",
         "error",
@@ -132,15 +144,13 @@ pub fn probe_args(enc: VideoEncoder) -> Vec<String> {
         "color=size=256x144:rate=1",
         "-frames:v",
         "1",
-        "-c:v",
-        enc.ffmpeg_name(),
-        "-f",
-        "null",
-        "-",
     ]
     .iter()
     .map(|s| s.to_string())
-    .collect()
+    .collect();
+    a.extend(codec_args(enc, &preset(Quality::Good)));
+    a.extend(["-f", "null", "-"].iter().map(|s| s.to_string()));
+    a
 }
 
 /// Search order: exe dir, `../Resources` (mac bundle), cwd, PATH.
@@ -168,6 +178,8 @@ fn find_on_path() -> Option<PathBuf> {
 }
 
 /// First existing ffmpeg: the bundled one, then PATH.
+/// Unlike `crate::ffmpeg::find_ffmpeg_path`, the bundle is preferred over PATH:
+/// a developer's full PATH build must not mask the essentials build users get.
 pub fn bundled_ffmpeg() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok();
     let cwd = std::env::current_dir().ok();
@@ -176,37 +188,73 @@ pub fn bundled_ffmpeg() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-fn run(ffmpeg: &Path, args: &[String]) -> Option<std::process::Output> {
+/// Runs ffmpeg and returns (success, stdout); a run longer than `timeout` is killed and fails.
+fn run(ffmpeg: &Path, args: &[String], timeout: Duration) -> Option<(bool, String)> {
     let mut cmd = Command::new(ffmpeg);
-    cmd.args(args).stdin(Stdio::null());
+    cmd.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.output().ok()
+    let mut child = cmd.spawn().ok()?;
+    let mut stdout = child.stdout.take()?;
+    // Drain stdout on a thread so a full pipe cannot stall the child.
+    let reader = std::thread::spawn(move || {
+        let mut s = String::new();
+        let mut buf = Vec::new();
+        let _ = stdout.read_to_end(&mut buf);
+        s.push_str(&String::from_utf8_lossy(&buf));
+        s
+    });
+    let start = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(st)) => break Some(st),
+            Ok(None) if start.elapsed() < timeout => std::thread::sleep(Duration::from_millis(25)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    let out = reader.join().unwrap_or_default();
+    status.map(|st| (st.success(), out))
 }
+
+const LIST_TIMEOUT: Duration = Duration::from_secs(3);
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Picks the first encoder that is listed by the bundle and passes a probe.
 /// The bundle may lack libx264, so the last resort is the platform's own encoder.
-/// Cached for the lifetime of the process.
+/// Blocking (up to ~3 s + 5 s per candidate): call from `spawn_blocking`.
+/// Only a probe-verified choice is cached (per process, first call wins);
+/// a fallback after failed probes is not cached, so the next call retries.
 pub fn select_encoder(ffmpeg: &Path, os: TargetOs) -> VideoEncoder {
     static CACHE: OnceLock<VideoEncoder> = OnceLock::new();
-    *CACHE.get_or_init(|| {
-        let listed = run(ffmpeg, &["-hide_banner".to_string(), "-encoders".to_string()])
-            .map(|o| parse_encoders(&String::from_utf8_lossy(&o.stdout)))
-            .unwrap_or_default();
-        let list = candidates(&listed, os);
-        let chosen = list
-            .iter()
-            .copied()
-            .find(|e| run(ffmpeg, &probe_args(*e)).map(|o| o.status.success()).unwrap_or(false))
-            .unwrap_or_else(|| {
-                list.last().copied().unwrap_or(match os {
-                    TargetOs::Windows => VideoEncoder::MediaFoundation,
-                    TargetOs::MacOs => VideoEncoder::VideoToolbox,
-                })
-            });
-        tracing::info!("selected encoder {}", chosen.ffmpeg_name());
-        chosen
-    })
+    if let Some(e) = CACHE.get() {
+        return *e;
+    }
+    let listed = run(ffmpeg, &["-hide_banner".to_string(), "-encoders".to_string()], LIST_TIMEOUT)
+        .map(|(_, out)| parse_encoders(&out))
+        .unwrap_or_default();
+    let list = candidates(&listed, os);
+    let verified = list
+        .iter()
+        .copied()
+        .find(|e| matches!(run(ffmpeg, &probe_args(*e), PROBE_TIMEOUT), Some((true, _))));
+    if let Some(e) = verified {
+        tracing::info!("selected encoder {}", e.ffmpeg_name());
+        return *CACHE.get_or_init(|| e);
+    }
+    let fallback = list.last().copied().unwrap_or(match os {
+        TargetOs::Windows => VideoEncoder::MediaFoundation,
+        TargetOs::MacOs => VideoEncoder::VideoToolbox,
+    });
+    tracing::warn!("no encoder probe passed, falling back to {}", fallback.ffmpeg_name());
+    tracing::info!("selected encoder {}", fallback.ffmpeg_name());
+    fallback
 }
 
 #[cfg(test)]
@@ -273,6 +321,27 @@ mod tests {
         assert!(
             hw.contains("-c:v h264_mf") && hw.contains("-hw_encoding 1") && hw.contains("format=nv12") && hw.contains("-g 60")
         );
+    }
+
+    #[test]
+    fn probe_uses_the_same_codec_args_as_recording() {
+        for enc in [
+            VideoEncoder::Nvenc,
+            VideoEncoder::Qsv,
+            VideoEncoder::Amf,
+            VideoEncoder::MediaFoundation,
+            VideoEncoder::VideoToolbox,
+            VideoEncoder::X264,
+        ] {
+            let codec = codec_args(enc, &preset(Quality::Good));
+            let probe = probe_args(enc);
+            let seg = video_segment_args(enc, &preset(Quality::Good), (1280, 720), Path::new("s.mp4"));
+            for list in [&probe, &seg] {
+                assert!(list.windows(codec.len()).any(|w| w == codec.as_slice()), "{enc:?}: {list:?}");
+            }
+        }
+        let mf = probe_args(VideoEncoder::MediaFoundation).join(" ");
+        assert!(mf.contains("-hw_encoding 1") && mf.contains("format=nv12") && mf.contains("-b:v 2000k"));
     }
 
     #[test]

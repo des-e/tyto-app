@@ -82,6 +82,8 @@ pub fn letterbox(src: (u32, u32), dst: (u32, u32)) -> Rect {
     } else {
         (sw * dh / sh, dh)
     };
+    // Even sides, so the rect can feed the encoder directly.
+    let (w, h) = (w & !1, h & !1);
     Rect {
         x: ((dw - w) / 2) as u32,
         y: ((dh - h) / 2) as u32,
