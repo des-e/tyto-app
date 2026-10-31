@@ -144,7 +144,7 @@ pub fn align_audio(target_ms: u64, sample_rate: u32, frames: u64) -> AudioAlign 
 }
 
 /// `\\?\C:\x` → `C:\x`, `\\?\UNC\srv\x` → `\\srv\x`: ffmpeg does not open verbatim paths.
-fn strip_verbatim(p: &str) -> String {
+pub(super) fn strip_verbatim(p: &str) -> String {
     if let Some(rest) = p.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{rest}")
     } else {
@@ -214,7 +214,7 @@ fn has_samples(s: &SegmentRecord) -> bool {
 }
 
 /// Length of a segment on the final timeline.
-fn segment_ms(m: &Manifest, s: &SegmentRecord) -> u64 {
+pub(super) fn segment_ms(m: &Manifest, s: &SegmentRecord) -> u64 {
     if let Some(t) = s.audio.iter().map(|a| a.target_ms).find(|t| *t > 0) {
         return t;
     }

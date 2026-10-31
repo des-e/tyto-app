@@ -8,5 +8,6 @@ pub mod disk;
 pub mod encoder;
 pub mod pacer;
 pub mod quality;
+pub mod recovery;
 pub mod segments;
 pub mod session;
