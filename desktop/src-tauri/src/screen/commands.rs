@@ -27,10 +27,10 @@ pub async fn recording_resume(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn recording_stop(app: AppHandle) -> Result<(), String> {
-    recorder::stop(&app, None, StopReason::User).map_err(text)
+    recorder::stop(&app, None, StopReason::User, None).map_err(text)
 }
 
 #[tauri::command]
-pub fn recording_state(app: AppHandle) -> Result<Option<RecordingStatePayload>, String> {
+pub async fn recording_state(app: AppHandle) -> Result<Option<RecordingStatePayload>, String> {
     Ok(recorder::state(&app))
 }

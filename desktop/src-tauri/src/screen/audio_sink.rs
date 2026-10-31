@@ -143,6 +143,35 @@ impl SegmentedWavSink {
         }
     }
 
+    /// Fills silence up to `until` while the device sends nothing (silent
+    /// loopback), a little at every writer tick, so a long silence never turns
+    /// into one huge write when the next block or the close comes. The caller
+    /// keeps `until` behind the clock, so blocks still on their way fit after it.
+    pub fn catch_up(&mut self, until: Instant) {
+        let (rate, channels, source) = (self.sample_rate, self.channels, self.source);
+        let Some(seg) = self.open.as_mut() else {
+            return;
+        };
+        if seg.failed || seg.full {
+            return;
+        }
+        let ch = u64::from(channels);
+        let elapsed = until.saturating_duration_since(seg.start);
+        let expected = (elapsed.as_nanos() * u128::from(rate) / 1_000_000_000) as u64;
+        let behind = expected.saturating_sub(seg.samples / ch);
+        if behind == 0 {
+            return;
+        }
+        if let Err(e) = seg.silence(behind * ch) {
+            seg.failed = true;
+            tracing::error!("audio write for {} failed: {e:#}", source.name());
+        }
+        if seg.room() == 0 && !seg.full {
+            seg.full = true;
+            tracing::error!("audio segment for {} reached the WAV size limit", source.name());
+        }
+    }
+
     /// Pads the segment to `target_ms` (or marks the overhang for `outpoint`),
     /// finalizes the WAV and returns its record; `None` if no segment was open.
     /// A failed write does not lose the segment: what was written is kept and the
@@ -265,6 +294,32 @@ mod tests {
         sink.open(&dir.path().join("c.wav"), t0).unwrap();
         let rec = sink.close(250).unwrap().unwrap();
         assert_eq!((rec.frames, rec.captured_frames), (250, 0));
+    }
+
+    #[test]
+    fn a_long_silence_is_filled_step_by_step_not_in_one_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("seg-0001.system.wav");
+        let mut sink = SegmentedWavSink::new(AudioSource::System, 1_000, 1);
+        let t0 = Instant::now();
+        sink.open(&path, t0).unwrap();
+        // ten minutes of silent loopback, the writer ticks every 20 ms
+        let mut biggest = 0;
+        let mut written = 0;
+        for tick in 1..=30_000u64 {
+            sink.catch_up(t0 + Duration::from_millis(tick * 20));
+            let now_written = sink.open.as_ref().unwrap().samples;
+            biggest = biggest.max(now_written - written);
+            written = now_written;
+        }
+        assert!(biggest <= 20, "a tick wrote {biggest} samples");
+        assert_eq!(written, 600_000);
+        // the next block lands right after the silence, nothing more to pad
+        sink.write(&[0.5; 10], t0 + Duration::from_secs(600));
+        let rec = sink.close(600_010).unwrap().unwrap();
+        assert_eq!((rec.frames, rec.captured_frames), (600_010, 10));
+        let s = read(&path);
+        assert!(s[..600_000].iter().all(|v| *v == 0.0) && s[600_000..].iter().all(|v| *v == 0.5));
     }
 
     #[test]

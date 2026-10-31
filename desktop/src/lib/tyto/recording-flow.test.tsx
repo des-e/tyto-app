@@ -252,6 +252,36 @@ describe('запись аудио через новый модуль', () => {
 		await waitFor(() => expect(queue.hydrate).toHaveBeenCalled())
 	})
 
+	it('второй «Остановить» во время сохранения ничего не делает: ни ошибки, ни сброса', async () => {
+		pref.value.homeTab = 'record'
+		backend.handlers.recording_stop = vi.fn(() => bus.emit('recording_state', { status: 'finishing', mode: 'audio', activeMs: 5_000 }))
+		await renderApp()
+		await waitFor(() => expect(sessionRef.current?.recording.inputDevice).toEqual(mic))
+		await act(() => sessionRef.current!.recording.startRecord())
+		await act(() => sessionRef.current!.recording.stopRecord())
+		expect(sessionRef.current?.recording.isFinishing).toBe(true)
+		expect(sessionRef.current?.recording.isRecording).toBe(true)
+		await act(() => sessionRef.current!.recording.stopRecord())
+		await act(() => sessionRef.current!.recording.pauseRecord())
+		expect(backend.handlers.recording_stop).toHaveBeenCalledTimes(1)
+		expect(commands()).not.toContain('recording_pause')
+		expect(toast.error).not.toHaveBeenCalled()
+		expect(sessionRef.current?.recording.isRecording).toBe(true)
+
+		await act(async () => bus.emit('recording_finished', finished()))
+		await waitFor(() => expect(sessionRef.current?.recording.isRecording).toBe(false))
+		expect(sessionRef.current?.recording.status).toBe('idle')
+	})
+
+	it('отключенное устройство: свое предупреждение по-русски, проект создан', async () => {
+		await renderApp()
+		await act(async () => bus.emit('recording_finished', finished({ warning: 'device_lost' })))
+		await waitFor(() =>
+			expect(toast.warning).toHaveBeenCalledWith('Устройство звука отключилось. Запись остановлена и сохранена', expect.anything()),
+		)
+		await waitFor(() => expect(queue.hydrate).toHaveBeenCalled())
+	})
+
 	it('глобальная клавиша записи и плашка созвона идут через recording_start, а не start_record', async () => {
 		persisted.values = { [CONFIG_KEYS.recordingShortcutEnabled]: true }
 		await renderApp()

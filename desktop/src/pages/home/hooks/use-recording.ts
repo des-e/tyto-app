@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
-import { type SetStateAction, useContext, useEffect, useState } from 'react'
+import { type SetStateAction, useContext, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type { AudioDevice } from '~/lib/audio'
 import { CONFIG_KEYS } from '~/lib/config-keys'
 import { usePersisted } from '~/lib/config-store'
@@ -16,7 +17,9 @@ import {
 	resumeRecording,
 	startRecording,
 	stopRecording,
+	type RecorderStatus,
 } from '~/lib/tyto/screen-recording'
+import { m } from '~/paraglide/messages.js'
 import { ErrorModalContext } from '~/providers/error-modal'
 import { usePreferenceProvider } from '~/providers/preference'
 
@@ -29,7 +32,8 @@ export function useRecording(onBeforeStart: () => void) {
 	const [inputDevice, setInputDevice] = useState<AudioDevice | null>(null)
 	const [outputDevice, setOutputDevice] = useState<AudioDevice | null>(null)
 	const [isRecording, setIsRecording] = useState(false)
-	const [isPaused, setIsPaused] = useState(false)
+	const [status, setStatus] = useState<RecorderStatus>('idle')
+	const statusRef = useRef<RecorderStatus>('idle')
 	const [recordingName, setRecordingName] = useState('')
 
 	function setInputDeviceAndSave(value: SetStateAction<AudioDevice | null>) {
@@ -65,28 +69,30 @@ export function useRecording(onBeforeStart: () => void) {
 		if (preference.homeTab === 'record') loadAudioDevices()
 	}, [preference.homeTab])
 
+	function updateStatus(next: RecorderStatus) {
+		statusRef.current = next
+		setStatus(next)
+	}
+
 	// The recorder is one per app: a recording started by the shortcut or the meeting prompt pauses here too.
 	useEffect(() => {
 		const end = () => {
 			stopKeepAwake(KEEP_AWAKE.record)
-			setIsPaused(false)
+			updateStatus('idle')
 		}
-		const unlisteners = [
-			onRecordingState((state) => setIsPaused(state.status === 'paused')),
-			onRecordingFinished(end),
-			onRecordingFailed(end),
-		]
+		const unlisteners = [onRecordingState((state) => updateStatus(state.status)), onRecordingFinished(end), onRecordingFailed(end)]
 		return () => {
 			for (const unlisten of unlisteners) unlisten.then((dispose) => dispose())
 		}
 	}, [])
 
 	async function startRecord(mode: RecordingMode = 'audio', target?: CaptureTarget) {
+		if (statusRef.current !== 'idle') return
 		if (outputDevice && !(await ensureSystemAudioPermission())) return
 		startKeepAwake(KEEP_AWAKE.record)
 		onBeforeStart()
 		setIsRecording(true)
-		setIsPaused(false)
+		updateStatus('recording')
 		const selectedDevices = [inputDevice, outputDevice].filter((device): device is AudioDevice => device !== null)
 		try {
 			await startRecording({
@@ -101,35 +107,40 @@ export function useRecording(onBeforeStart: () => void) {
 		} catch (error) {
 			stopKeepAwake(KEEP_AWAKE.record)
 			setIsRecording(false)
+			updateStatus('idle')
 			console.error('startRecord error: ', error)
 			setErrorModal?.({ log: String(error), open: true })
 		}
 	}
 
 	async function pauseRecord() {
+		if (statusRef.current !== 'recording') return
 		try {
 			await pauseRecording()
 		} catch (error) {
 			console.error('pauseRecord error: ', error)
+			toast.error(m.error(), { description: String(error), position: 'bottom-center' })
 		}
 	}
 
 	async function resumeRecord() {
+		if (statusRef.current !== 'paused') return
 		try {
 			await resumeRecording()
 		} catch (error) {
 			console.error('resumeRecord error: ', error)
+			toast.error(m.error(), { description: String(error), position: 'bottom-center' })
 		}
 	}
 
+	/** A stop while the recording is being saved does nothing: the result is on its way. */
 	async function stopRecord() {
+		if (statusRef.current === 'finishing') return
 		try {
 			await stopRecording()
 		} catch (error) {
-			stopKeepAwake(KEEP_AWAKE.record)
-			setIsRecording(false)
 			console.error('stopRecord error: ', error)
-			setErrorModal?.({ log: String(error), open: true })
+			toast.error(m.error(), { description: String(error), position: 'bottom-center' })
 		}
 	}
 
@@ -140,7 +151,9 @@ export function useRecording(onBeforeStart: () => void) {
 		outputDevice,
 		isRecording,
 		setIsRecording,
-		isPaused,
+		status,
+		isPaused: status === 'paused',
+		isFinishing: status === 'finishing',
 		recordingName,
 		setRecordingName,
 		setInputDevice: setInputDeviceAndSave,

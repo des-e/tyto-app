@@ -201,6 +201,8 @@ async fn main() -> Result<()> {
                 // Bounded: a slow or unreachable ingest host must not hold up quitting.
                 analytics::flush_events_bounded(app, std::time::Duration::from_secs(2));
             }
+            // Close the open recording segment (recovered on the next start) and stop a running mux.
+            screen::recorder::shutdown(app);
             // A base URL left in the config file would point an agent at a dead port.
             cmd::config::set_api_base_url(app, None).log_error();
             let mutex = app.state::<tokio::sync::Mutex<setup::ServerState>>();

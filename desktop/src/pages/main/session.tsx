@@ -11,7 +11,7 @@ import { pathToNamedPath } from '~/lib/fs'
 import { cleanupPartialDownloads, listInstalledModels, type InstalledModel } from '~/lib/model'
 import { autoProjectName } from '~/lib/project-name'
 import { notifyTranscriptsChanged, saveTranscript, TRANSCRIPT_VERSION, type TranscriptRecord } from '~/lib/transcripts-store'
-import { onRecordingFailed, onRecordingFinished, onRecordingState } from '~/lib/tyto/screen-recording'
+import { onRecordingFailed, onRecordingFinished, onRecordingState, WARNING_DEVICE_LOST, WARNING_WRITE_FAILED } from '~/lib/tyto/screen-recording'
 import type { NamedPath, ProjectSource } from '~/lib/types'
 import { useConfirmExit } from '~/lib/use-confirm-exit'
 import { hotkeyRecordingActive } from '~/providers/hotkey'
@@ -161,7 +161,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			recording.setIsRecording(false)
 			setPanel('none')
 			if (payload.stopReason === 'low_disk') toast.warning(m.tytoLowDiskStopped(), { position: 'bottom-center' })
-			if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
+			if (payload.warning === WARNING_DEVICE_LOST) toast.warning(m.tytoRecordingDeviceLost(), { position: 'bottom-center' })
+			else if (payload.warning === WARNING_WRITE_FAILED) toast.warning(m.tytoRecordingWriteFailed(), { position: 'bottom-center' })
+			else if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
 
 			const { preference: current, hydrate, transcribeJob } = recordingCompletionRef.current
 			const name = autoProjectName(payload.name, 'record')
@@ -207,7 +209,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 				return
 			}
 			const message = payload.message || m.error()
-			toast.error(m.error(), { description: message, position: 'bottom-center' })
+			const title = payload.code === 'encoder' ? m.tytoRecordingSaveFailed() : m.error()
+			toast.error(title, { description: message, position: 'bottom-center' })
 			setErrorModal?.({ log: message, open: true })
 		})
 		return () => {
@@ -371,7 +374,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	// actually be lost: a run in flight, or finished results that never reached disk
 	// (saving disabled or failed).
 	const hasUnsavedResults = queue.jobs.some((job) => job.status === 'done' && !job.hydrated && !job.savedPath)
-	useConfirmExit(preference.closeToTray, queue.running || hasUnsavedResults)
+	useConfirmExit(preference.closeToTray, queue.running || hasUnsavedResults || recording.isRecording)
 
 	const mode: SessionMode = queue.jobs.length === 0 ? 'idle' : queue.running || queue.jobs.some((job) => job.status === 'queued') ? 'working' : 'done'
 

@@ -1,19 +1,31 @@
 //! Recording runtime: devices, segments, rotation, the disk watch and saving.
 //!
 //! Every file goes straight into `<Записи>/.tyto-rec-<time>/` (never the temp
-//! folder that `cleaner.rs` empties). One `SegmentedWavSink` per selected source;
-//! the device callback writes into it with `try_lock`, so a callback that meets a
-//! rotation drops one buffer and the sink pads the hole with silence. A segment
-//! is closed on pause, every `SEGMENT_MAX`, when a sink fails, and on stop.
+//! folder that `cleaner.rs` empties).
+//!
+//! Threads of a session:
+//! - the device callbacks only copy a block into a bounded queue (`BlockSender`):
+//!   no lock, no file I/O; a full queue drops the block and counts it;
+//! - one writer thread owns the sinks and the manifest: it drains the queues,
+//!   fills silence step by step while a source sends nothing, rotates segments
+//!   (`SEGMENT_MAX`, a failed sink) and closes them on pause and stop;
+//! - a watchdog emits `recording_state` once a second, stops on low disk and
+//!   on a lost device or a failed write;
+//! - the saver muxes after stop.
 //!
 //! Save order (see `recovery`): `SessionLock` from the start → `finalizing_to`
-//! → mux into `final.partial.<ext>` → `record_final_bytes` → rename → drop the
-//! lock → `remove_working_dir`. A failed mux keeps the working folder.
+//! → mux into `final.partial.<ext>` → `record_final_bytes` → rename (never over
+//! an existing file) → drop the lock → `remove_working_dir`. A failed mux keeps
+//! the working folder.
 
 use std::collections::HashSet;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command as Process, Stdio};
+use std::process::{Child, Command as Process, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -43,9 +55,25 @@ pub const STATE_EVENT: &str = "recording_state";
 pub const FINISHED_EVENT: &str = "recording_finished";
 pub const FAILED_EVENT: &str = "recording_failed";
 
+/// `RecordingFinished.warning` codes; the frontend shows its own text for them.
+pub const WARN_DEVICE_LOST: &str = "device_lost";
+pub const WARN_WRITE_FAILED: &str = "write_failed";
+
 const TICK: Duration = Duration::from_secs(1);
 /// Free space is checked every 10 ticks (it lists every volume).
 const DISK_EVERY_TICKS: u64 = 10;
+const WRITER_TICK: Duration = Duration::from_millis(15);
+/// Blocks queued per source (a few seconds of audio): the writer may be busy for a moment.
+const BLOCK_QUEUE: usize = 1024;
+const SPARE_BUFFERS: usize = 64;
+/// A source that sent nothing for this long is filled with silence as time goes,
+/// up to `FILL_MARGIN` behind the clock (blocks still on their way fit after it).
+const IDLE_BEFORE_FILL: Duration = Duration::from_millis(500);
+const FILL_MARGIN: Duration = Duration::from_millis(300);
+/// A microphone delivers blocks even in silence: none for this long means it is gone.
+/// (Loopback legitimately sends nothing while nothing plays, so it is not checked.)
+const STALL_AFTER: Duration = Duration::from_secs(3);
+const MANIFEST_WAIT: Duration = Duration::from_secs(120);
 
 /// What to record in video mode (used from the Windows capture task on).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,9 +136,77 @@ fn millis(d: Duration) -> u64 {
     u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
 }
 
+/// Problems found by the callbacks and the writer; the watchdog acts on them.
+#[derive(Default)]
+struct Health {
+    /// A device went away (stream error) or the microphone stalled.
+    device_lost: AtomicBool,
+    /// The writer could not open a segment or save the manifest.
+    write_failed: AtomicBool,
+    /// Frames dropped because a queue was full.
+    dropped_frames: AtomicU64,
+}
+
+struct Block {
+    /// Time of the block's first frame.
+    start: Instant,
+    samples: Vec<f32>,
+}
+
+/// The device-callback side of a source: copies the block into the queue and
+/// returns. Never blocks and never touches a file.
+struct BlockSender {
+    blocks: SyncSender<Block>,
+    spares: Receiver<Vec<f32>>,
+    rate: u32,
+    channels: u16,
+    health: Arc<Health>,
+}
+
+impl BlockSender {
+    fn push(&mut self, data: &[f32], arrival: Instant) {
+        let frames = (data.len() / usize::from(self.channels.max(1))) as u64;
+        let span = Duration::from_nanos(frames * 1_000_000_000 / u64::from(self.rate.max(1)));
+        // The sink places a block by its START time.
+        let start = arrival.checked_sub(span).unwrap_or(arrival);
+        let mut samples = self.spares.try_recv().unwrap_or_default();
+        samples.clear();
+        samples.extend_from_slice(data);
+        if self.blocks.try_send(Block { start, samples }).is_err() {
+            self.health.dropped_frames.fetch_add(frames, Ordering::Relaxed);
+        }
+    }
+}
+
+/// The writer side of a source.
+struct Input {
+    blocks: Receiver<Block>,
+    spares: SyncSender<Vec<f32>>,
+    last_data: Option<Instant>,
+}
+
+fn source_queue(rate: u32, channels: u16, health: Arc<Health>) -> (BlockSender, Input) {
+    let (block_tx, block_rx) = mpsc::sync_channel(BLOCK_QUEUE);
+    let (spare_tx, spare_rx) = mpsc::sync_channel(SPARE_BUFFERS);
+    (
+        BlockSender {
+            blocks: block_tx,
+            spares: spare_rx,
+            rate,
+            channels,
+            health,
+        },
+        Input {
+            blocks: block_rx,
+            spares: spare_tx,
+            last_data: None,
+        },
+    )
+}
+
 struct Track {
     source: AudioSource,
-    sink: Arc<Mutex<SegmentedWavSink>>,
+    sink: SegmentedWavSink,
 }
 
 struct OpenSegment {
@@ -118,8 +214,8 @@ struct OpenSegment {
     started: Instant,
 }
 
-/// Segments and manifest of one session, without devices: the device callbacks
-/// feed the sinks in the app, tests feed them by hand.
+/// Segments and manifest of one session. Owned by the writer thread (the only
+/// one that writes the manifest while recording).
 struct Segments {
     dir: PathBuf,
     manifest: Manifest,
@@ -158,9 +254,9 @@ impl Segments {
             audio: Vec::new(),
             closed: false,
         });
-        for t in &self.tracks {
+        for t in &mut self.tracks {
             let path = self.dir.join(segment_file(index, &format!("{}.wav", t.source.name())));
-            lock(&t.sink).open(&path, now)?;
+            t.sink.open(&path, now)?;
         }
         write_manifest_atomic(&self.dir, &self.manifest)
     }
@@ -173,8 +269,8 @@ impl Segments {
         };
         let wall_ms = millis(now.saturating_duration_since(seg.started));
         let mut audio = Vec::new();
-        for t in &self.tracks {
-            match lock(&t.sink).close(wall_ms) {
+        for t in &mut self.tracks {
+            match t.sink.close(wall_ms) {
                 Ok(Some(rec)) => audio.push(rec),
                 Ok(None) => {}
                 Err(e) => tracing::error!("closing {} audio of segment {} failed: {e:#}", t.source.name(), seg.index),
@@ -194,15 +290,123 @@ impl Segments {
         if now.saturating_duration_since(seg.started) >= SEGMENT_MAX {
             return Some("segment reached its maximum length");
         }
-        if self.tracks.iter().any(|t| lock(&t.sink).has_failed()) {
+        if self.tracks.iter().any(|t| t.sink.has_failed()) {
             return Some("an audio file stopped taking samples");
         }
         None
     }
 
+    /// The new segment starts at the same instant the old one ends.
     fn rotate(&mut self, now: Instant) -> Result<()> {
         self.close_segment(now)?;
         self.open_segment(now)
+    }
+}
+
+enum Ctl {
+    Pause(Instant),
+    Resume(Instant),
+    /// Close the open segment and hand the manifest back.
+    Finish(Instant, Sender<Manifest>),
+}
+
+struct Writer {
+    segments: Segments,
+    inputs: Vec<Input>,
+    health: Arc<Health>,
+    ctl: Receiver<Ctl>,
+    stall_reported: bool,
+}
+
+impl Writer {
+    fn drain(&mut self) {
+        for (input, track) in self.inputs.iter_mut().zip(self.segments.tracks.iter_mut()) {
+            while let Ok(block) = input.blocks.try_recv() {
+                input.last_data = Some(block.start);
+                track.sink.write(&block.samples, block.start);
+                // A full spare queue just lets the buffer go.
+                let _ = input.spares.try_send(block.samples);
+            }
+        }
+    }
+
+    fn fail(&self, what: &str, e: &eyre::Report) {
+        tracing::error!("{what}: {e:#}");
+        self.health.write_failed.store(true, Ordering::SeqCst);
+    }
+
+    fn tick(&mut self, now: Instant) {
+        self.drain();
+        let Some(seg_start) = self.segments.open.as_ref().map(|s| s.started) else {
+            return;
+        };
+        if let Some(until) = now.checked_sub(FILL_MARGIN) {
+            for (input, track) in self.inputs.iter().zip(self.segments.tracks.iter_mut()) {
+                let idle = input
+                    .last_data
+                    .is_none_or(|t| now.saturating_duration_since(t) >= IDLE_BEFORE_FILL);
+                if idle {
+                    track.sink.catch_up(until);
+                }
+            }
+        }
+        if !self.stall_reported {
+            for (input, track) in self.inputs.iter().zip(self.segments.tracks.iter()) {
+                if track.source != AudioSource::Mic {
+                    continue;
+                }
+                let heard = input.last_data.map_or(seg_start, |t| t.max(seg_start));
+                if now.saturating_duration_since(heard) > STALL_AFTER {
+                    tracing::error!("the microphone sent nothing for {STALL_AFTER:?}");
+                    self.stall_reported = true;
+                    self.health.device_lost.store(true, Ordering::SeqCst);
+                }
+            }
+        }
+        if self.health.write_failed.load(Ordering::SeqCst) {
+            return;
+        }
+        if let Some(why) = self.segments.rotation_reason(now) {
+            tracing::info!("new segment: {why}");
+            if let Err(e) = self.segments.rotate(now) {
+                self.fail("rotating the segment failed", &e);
+            }
+        }
+    }
+
+    fn run(mut self) {
+        loop {
+            match self.ctl.recv_timeout(WRITER_TICK) {
+                Ok(Ctl::Pause(at)) => {
+                    self.drain();
+                    if let Err(e) = self.segments.close_segment(at) {
+                        tracing::error!("saving the manifest on pause failed: {e:#}");
+                    }
+                }
+                Ok(Ctl::Resume(at)) => {
+                    // Blocks of the pause were dropped by the closed sinks.
+                    self.drain();
+                    if let Err(e) = self.segments.open_segment(at) {
+                        self.fail("opening a segment on resume failed", &e);
+                    }
+                }
+                Ok(Ctl::Finish(at, reply)) => {
+                    self.drain();
+                    if let Err(e) = self.segments.close_segment(at) {
+                        tracing::error!("saving the manifest on stop failed: {e:#}");
+                    }
+                    let _ = reply.send(self.segments.manifest.clone());
+                    return;
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    self.drain();
+                    let _ = self.segments.close_segment(Instant::now());
+                    return;
+                }
+            }
+            self.tick(Instant::now());
+        }
     }
 }
 
@@ -214,14 +418,29 @@ unsafe impl Send for StreamHandle {}
 struct ActiveRecording {
     status: Status,
     mode: Mode,
+    dir: PathBuf,
     recordings_dir: PathBuf,
     stem: String,
     clock: Instant,
     timeline: Timeline,
-    segments: Segments,
+    ctl: Sender<Ctl>,
+    writer: Option<JoinHandle<()>>,
     streams: Vec<StreamHandle>,
     lock: Option<SessionLock>,
-    warnings: Vec<String>,
+    health: Arc<Health>,
+    warnings: Vec<&'static str>,
+}
+
+/// A stopped session whose writer is closing the last segment.
+struct PendingSave {
+    manifest: Receiver<Manifest>,
+    writer: Option<JoinHandle<()>>,
+    dir: PathBuf,
+    recordings_dir: PathBuf,
+    stem: String,
+    lock: Option<SessionLock>,
+    stop_reason: StopReason,
+    warnings: Vec<&'static str>,
 }
 
 struct SaveJob {
@@ -231,7 +450,36 @@ struct SaveJob {
     manifest: Manifest,
     lock: Option<SessionLock>,
     stop_reason: StopReason,
-    warnings: Vec<String>,
+    warnings: Vec<&'static str>,
+}
+
+impl PendingSave {
+    fn into_job(self) -> Result<SaveJob, RecordingFailed> {
+        let manifest = match self.manifest.recv_timeout(MANIFEST_WAIT) {
+            Ok(m) => {
+                if let Some(writer) = self.writer {
+                    let _ = writer.join();
+                }
+                m
+            }
+            Err(e) => {
+                tracing::error!("the writer did not hand the manifest back ({e}), reading it from disk");
+                read_manifest(&self.dir).map_err(|e| RecordingFailed {
+                    code: FailCode::Other,
+                    message: format!("{e:#}. The recording is kept in {}", self.dir.display()),
+                })?
+            }
+        };
+        Ok(SaveJob {
+            dir: self.dir,
+            recordings_dir: self.recordings_dir,
+            stem: self.stem,
+            manifest,
+            lock: self.lock,
+            stop_reason: self.stop_reason,
+            warnings: self.warnings,
+        })
+    }
 }
 
 impl ActiveRecording {
@@ -247,19 +495,34 @@ impl ActiveRecording {
         }
     }
 
+    fn send(&self, ctl: Ctl) {
+        if self.ctl.send(ctl).is_err() {
+            tracing::error!("the recording writer is gone");
+            self.health.write_failed.store(true, Ordering::SeqCst);
+        }
+    }
+
     fn pause(&mut self, now: Instant) -> Result<()> {
         transition(Some(self.status), Command::Pause)?;
-        if let Err(e) = self.segments.close_segment(now) {
-            tracing::error!("saving the manifest on pause failed: {e:#}");
-        }
+        self.send(Ctl::Pause(now));
         let at = self.ms(now);
         self.timeline.pause(at);
         self.status = Status::Paused;
         Ok(())
     }
 
-    /// Stops the devices, closes the open segment and hands the session to the saver.
-    fn begin_stop(&mut self, reason: StopReason, now: Instant) -> SaveJob {
+    fn resume(&mut self, now: Instant) -> Result<()> {
+        transition(Some(self.status), Command::Resume)?;
+        self.send(Ctl::Resume(now));
+        let at = self.ms(now);
+        self.timeline.resume(at);
+        self.status = Status::Recording;
+        Ok(())
+    }
+
+    /// Stops the devices and asks the writer to close the open segment; the
+    /// saver waits for the manifest outside the runtime lock.
+    fn begin_stop(&mut self, reason: StopReason, now: Instant) -> PendingSave {
         self.status = Status::Finishing;
         for stream in self.streams.drain(..) {
             if let Err(e) = stream.0.pause() {
@@ -268,14 +531,18 @@ impl ActiveRecording {
         }
         let at = self.ms(now);
         self.timeline.pause(at);
-        if let Err(e) = self.segments.close_segment(now) {
-            tracing::error!("saving the manifest on stop failed: {e:#}");
+        let (tx, rx) = mpsc::channel();
+        self.send(Ctl::Finish(now, tx));
+        let dropped = self.health.dropped_frames.load(Ordering::Relaxed);
+        if dropped > 0 {
+            tracing::warn!("{dropped} audio frames were dropped (writer queue full)");
         }
-        SaveJob {
-            dir: self.segments.dir.clone(),
+        PendingSave {
+            manifest: rx,
+            writer: self.writer.take(),
+            dir: self.dir.clone(),
             recordings_dir: self.recordings_dir.clone(),
             stem: self.stem.clone(),
-            manifest: self.segments.manifest.clone(),
             lock: self.lock.take(),
             stop_reason: reason,
             warnings: std::mem::take(&mut self.warnings),
@@ -283,16 +550,17 @@ impl ActiveRecording {
     }
 }
 
-/// Holds the session that is recording or saving now.
+/// Holds the session that is recording or saving now, and the running mux.
 #[derive(Default)]
 pub struct RecorderRuntime {
     inner: Mutex<Option<ActiveRecording>>,
+    ffmpeg: Mutex<Option<Child>>,
 }
 
 impl RecorderRuntime {
     /// Working folder of the session recording or saving now: recovery must not touch it.
     pub fn active_dirs(&self) -> Vec<PathBuf> {
-        lock(&self.inner).iter().map(|r| r.segments.dir.clone()).collect()
+        lock(&self.inner).iter().map(|r| r.dir.clone()).collect()
     }
 
     pub fn state(&self) -> Option<RecordingStatePayload> {
@@ -334,6 +602,13 @@ fn open_device(host: &cpal::Host, d: &AudioDevice) -> Result<(cpal::Device, cpal
     }
 }
 
+fn is_device_lost(kind: cpal::ErrorKind) -> bool {
+    matches!(
+        kind,
+        cpal::ErrorKind::DeviceNotAvailable | cpal::ErrorKind::StreamInvalidated | cpal::ErrorKind::HostUnavailable
+    )
+}
+
 fn start_session(
     app: &AppHandle,
     o: &StartOptions,
@@ -360,28 +635,34 @@ fn start_session(
         opened.push((source, device, config));
     }
 
+    let health = Arc::new(Health::default());
     let meter = Arc::new(LevelMeter::new(app.clone()));
     let mut tracks = Vec::new();
+    let mut inputs = Vec::new();
     let mut streams = Vec::new();
     for (source, device, config) in opened {
         // Rate and channels stay fixed for the session: the concat lists cannot mix them.
         let rate: u32 = config.sample_rate();
         let channels: u16 = config.channels().max(1);
         tracing::debug!("recording {} at {rate} Hz, {channels} channels", source.name());
-        let sink = Arc::new(Mutex::new(SegmentedWavSink::new(source, rate, channels)));
-        let writer = sink.clone();
-        let on_data = move |data: &[f32]| {
-            // The sink places a block by its START time.
-            let arrival = Instant::now();
-            let frames = (data.len() / usize::from(channels)) as u64;
-            let span = Duration::from_nanos(frames * 1_000_000_000 / u64::from(rate.max(1)));
-            let start = arrival.checked_sub(span).unwrap_or(arrival);
-            if let Ok(mut sink) = writer.try_lock() {
-                sink.write(data, start);
-            }
-        };
-        let stream = build_capture_stream(&device, config, on_data, meter.clone())?;
-        tracks.push(Track { source, sink });
+        let (mut sender, input) = source_queue(rate, channels, health.clone());
+        let lost = health.clone();
+        let stream = build_capture_stream(
+            &device,
+            config,
+            move |data: &[f32]| sender.push(data, Instant::now()),
+            move |err: cpal::Error| {
+                if is_device_lost(err.kind()) {
+                    lost.device_lost.store(true, Ordering::SeqCst);
+                }
+            },
+            meter.clone(),
+        )?;
+        tracks.push(Track {
+            source,
+            sink: SegmentedWavSink::new(source, rate, channels),
+        });
+        inputs.push(input);
         streams.push(StreamHandle(stream));
     }
 
@@ -397,9 +678,22 @@ fn start_session(
         finalizing_to: None,
         final_bytes: None,
     };
-    let mut segments = Segments::new(dir, manifest, tracks);
+    let mut segments = Segments::new(dir.clone(), manifest, tracks);
     let clock = Instant::now();
+    // Opened before the devices play: their latency is padded by the sinks.
     segments.open_segment(clock)?;
+    let (ctl_tx, ctl_rx) = mpsc::channel();
+    let writer = Writer {
+        segments,
+        inputs,
+        health: health.clone(),
+        ctl: ctl_rx,
+        stall_reported: false,
+    };
+    let writer = std::thread::Builder::new()
+        .name("tyto-rec-writer".into())
+        .spawn(move || writer.run())
+        .context("start the recording writer")?;
     for stream in &streams {
         stream.0.play().context("start capture stream")?;
     }
@@ -408,13 +702,16 @@ fn start_session(
     Ok(ActiveRecording {
         status: Status::Recording,
         mode: Mode::Audio,
+        dir,
         recordings_dir,
         stem,
         clock,
         timeline,
-        segments,
+        ctl: ctl_tx,
+        writer: Some(writer),
         streams,
         lock: Some(session_lock),
+        health,
         warnings: Vec::new(),
     })
 }
@@ -440,7 +737,9 @@ pub fn start(app: &AppHandle, o: StartOptions) -> Result<()> {
     let rec = match start_session(app, &o, recordings_dir, dir.clone(), started) {
         Ok(rec) => rec,
         Err(e) => {
-            // Nothing was recorded; the lock and the streams are already dropped.
+            // Nothing was recorded. The writer (if it started) exits when its
+            // control channel drops; give it a moment before removing the folder.
+            std::thread::sleep(Duration::from_millis(100));
             if let Err(rm) = std::fs::remove_dir_all(&dir) {
                 tracing::warn!("removing {} failed: {rm}", dir.display());
             }
@@ -467,49 +766,38 @@ pub fn pause(app: &AppHandle) -> Result<()> {
     Ok(())
 }
 
-/// A segment that cannot be opened (disk full, device gone) stops the session
-/// and saves what was recorded, with the reason as a warning.
 pub fn resume(app: &AppHandle) -> Result<()> {
     let runtime = app.state::<RecorderRuntime>();
     let mut guard = lock(&runtime.inner);
     let rec = guard.as_mut().ok_or(SessionError::NotRecording)?;
-    transition(Some(rec.status), Command::Resume)?;
     let now = Instant::now();
-    match rec.segments.open_segment(now) {
-        Ok(()) => {
-            let at = rec.ms(now);
-            rec.timeline.resume(at);
-            rec.status = Status::Recording;
-            emit_state(app, rec.state(now));
-        }
-        Err(e) => {
-            tracing::error!("resuming failed, stopping: {e:#}");
-            rec.warnings.push(format!("Recording stopped: {e:#}"));
-            let job = rec.begin_stop(StopReason::User, now);
-            emit_state(app, rec.state(now));
-            drop(guard);
-            spawn_save(app.clone(), job);
-        }
-    }
+    rec.resume(now)?;
+    emit_state(app, rec.state(now));
     Ok(())
 }
 
+/// Stopping a session that is already saving, or no session, does nothing.
 /// `only`: stop only if this is still the running session (the watchdog's own stop).
-pub fn stop(app: &AppHandle, only: Option<&Path>, reason: StopReason) -> Result<()> {
+pub fn stop(app: &AppHandle, only: Option<&Path>, reason: StopReason, warning: Option<&'static str>) -> Result<()> {
     let runtime = app.state::<RecorderRuntime>();
-    let job = {
+    let pending = {
         let mut guard = lock(&runtime.inner);
-        let rec = guard.as_mut().ok_or(SessionError::NotRecording)?;
-        if only.is_some_and(|d| d != rec.segments.dir.as_path()) {
+        let Some(rec) = guard.as_mut() else {
+            return Ok(());
+        };
+        if rec.status == Status::Finishing || only.is_some_and(|d| d != rec.dir.as_path()) {
             return Ok(());
         }
         transition(Some(rec.status), Command::Stop)?;
+        if let Some(w) = warning {
+            rec.warnings.push(w);
+        }
         let now = Instant::now();
-        let job = rec.begin_stop(reason, now);
+        let pending = rec.begin_stop(reason, now);
         emit_state(app, rec.state(now));
-        job
+        pending
     };
-    spawn_save(app.clone(), job);
+    spawn_save(app.clone(), pending);
     Ok(())
 }
 
@@ -517,8 +805,33 @@ pub fn state(app: &AppHandle) -> Option<RecordingStatePayload> {
     app.state::<RecorderRuntime>().state()
 }
 
-/// Once a second: `recording_state`, segment rotation, and every 10 s the free
-/// space (stop and save with `low_disk` below the reserve).
+/// App quit: close the open segment (the folder stays for recovery) and stop a
+/// running mux. Bounded, so quitting never hangs.
+pub fn shutdown(app: &AppHandle) {
+    let Some(runtime) = app.try_state::<RecorderRuntime>() else {
+        return;
+    };
+    if let Some(child) = lock(&runtime.ffmpeg).as_mut() {
+        let _ = child.kill();
+    }
+    let Ok(mut guard) = runtime.inner.try_lock() else {
+        return;
+    };
+    let Some(rec) = guard.as_mut() else {
+        return;
+    };
+    if rec.status == Status::Finishing {
+        return;
+    }
+    let pending = rec.begin_stop(StopReason::User, Instant::now());
+    drop(guard);
+    if pending.manifest.recv_timeout(Duration::from_secs(2)).is_err() {
+        tracing::warn!("the recording writer did not finish before quit");
+    }
+}
+
+/// Once a second: `recording_state`; stops on a lost device or a failed write,
+/// and every 10 s checks the free space (stop and save with `low_disk`).
 fn spawn_watchdog(app: AppHandle, dir: PathBuf) {
     std::thread::spawn(move || {
         let mut tick: u64 = 0;
@@ -526,32 +839,30 @@ fn spawn_watchdog(app: AppHandle, dir: PathBuf) {
             std::thread::sleep(TICK);
             tick += 1;
             let runtime = app.state::<RecorderRuntime>();
-            let mut job = None;
-            let active_ms = {
-                let mut guard = lock(&runtime.inner);
-                let Some(rec) = guard.as_mut().filter(|r| r.segments.dir == dir) else {
+            let (active_ms, problem) = {
+                let guard = lock(&runtime.inner);
+                let Some(rec) = guard.as_ref().filter(|r| r.dir == dir) else {
                     return;
                 };
                 if rec.status == Status::Finishing {
                     return;
                 }
-                let now = Instant::now();
-                if rec.status == Status::Recording {
-                    if let Some(why) = rec.segments.rotation_reason(now) {
-                        tracing::info!("new segment: {why}");
-                        if let Err(e) = rec.segments.rotate(now) {
-                            tracing::error!("rotating the segment failed, stopping: {e:#}");
-                            rec.warnings.push(format!("Recording stopped: {e:#}"));
-                            job = Some(rec.begin_stop(StopReason::User, now));
-                        }
-                    }
-                }
-                let state = rec.state(now);
+                let state = rec.state(Instant::now());
                 emit_state(&app, state);
-                state.active_ms
+                let problem = if rec.health.device_lost.load(Ordering::SeqCst) {
+                    Some(WARN_DEVICE_LOST)
+                } else if rec.health.write_failed.load(Ordering::SeqCst) {
+                    Some(WARN_WRITE_FAILED)
+                } else {
+                    None
+                };
+                (state.active_ms, problem)
             };
-            if let Some(job) = job {
-                spawn_save(app.clone(), job);
+            if let Some(warning) = problem {
+                tracing::warn!("stopping the recording: {warning}");
+                if let Err(e) = stop(&app, Some(dir.as_path()), StopReason::User, Some(warning)) {
+                    tracing::error!("stop after {warning} failed: {e:#}");
+                }
                 return;
             }
             if tick.is_multiple_of(DISK_EVERY_TICKS) {
@@ -560,7 +871,7 @@ fn spawn_watchdog(app: AppHandle, dir: PathBuf) {
                 };
                 if disk::should_stop(free, disk::mux_reserve(&dir, active_ms)) {
                     tracing::warn!("{free} bytes free, stopping the recording");
-                    if let Err(e) = stop(&app, Some(dir.as_path()), StopReason::LowDisk) {
+                    if let Err(e) = stop(&app, Some(dir.as_path()), StopReason::LowDisk, None) {
                         tracing::error!("low-disk stop failed: {e:#}");
                     }
                     return;
@@ -570,14 +881,17 @@ fn spawn_watchdog(app: AppHandle, dir: PathBuf) {
     });
 }
 
-fn spawn_save(app: AppHandle, job: SaveJob) {
+fn spawn_save(app: AppHandle, pending: PendingSave) {
     std::thread::spawn(move || {
-        let dir = job.dir.clone();
-        let outcome = save(job, crate::ffmpeg::find_ffmpeg_path());
+        let dir = pending.dir.clone();
+        let outcome = pending.into_job().and_then(|job| {
+            let runtime = app.state::<RecorderRuntime>();
+            save(job, crate::ffmpeg::find_ffmpeg_path(), &runtime.ffmpeg)
+        });
         {
             let runtime = app.state::<RecorderRuntime>();
             let mut guard = lock(&runtime.inner);
-            if guard.as_ref().is_some_and(|r| r.segments.dir == dir) {
+            if guard.as_ref().is_some_and(|r| r.dir == dir) {
                 *guard = None;
             }
         }
@@ -636,7 +950,8 @@ fn plan_seconds(plan: &FinalizePlan) -> f64 {
     (secs * 1000.0).round() / 1000.0
 }
 
-fn run_ffmpeg(ffmpeg: &Path, args: &[String]) -> Result<()> {
+/// Runs ffmpeg with its child kept in `slot`, so a quit can kill it.
+fn run_ffmpeg(ffmpeg: &Path, args: &[String], slot: &Mutex<Option<Child>>) -> Result<()> {
     let mut cmd = Process::new(ffmpeg);
     cmd.args(args)
         .stdin(Stdio::null())
@@ -644,30 +959,64 @@ fn run_ffmpeg(ffmpeg: &Path, args: &[String]) -> Result<()> {
         .stderr(Stdio::piped());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    let out = cmd.output().with_context(|| format!("run {}", ffmpeg.display()))?;
-    if !out.status.success() {
-        let stderr: String = String::from_utf8_lossy(&out.stderr).chars().take(2000).collect();
-        bail!("ffmpeg failed ({}): {}", out.status, stderr.trim());
+    let mut child = cmd.spawn().with_context(|| format!("run {}", ffmpeg.display()))?;
+    let stderr = child.stderr.take();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(mut stderr) = stderr {
+            let _ = stderr.read_to_string(&mut text);
+        }
+        text
+    });
+    *lock(slot) = Some(child);
+    let status = loop {
+        let polled = lock(slot).as_mut().map(|c| c.try_wait());
+        match polled {
+            None => bail!("ffmpeg was stopped"),
+            Some(Ok(Some(status))) => {
+                lock(slot).take();
+                break status;
+            }
+            Some(Ok(None)) => std::thread::sleep(Duration::from_millis(50)),
+            Some(Err(e)) => {
+                lock(slot).take();
+                return Err(e).context("wait for ffmpeg");
+            }
+        }
+    };
+    let stderr = reader.join().unwrap_or_default();
+    if !status.success() {
+        let stderr: String = stderr.chars().take(2000).collect();
+        bail!("ffmpeg failed ({status}): {}", stderr.trim());
     }
     Ok(())
 }
 
-fn rename_with_retry(from: &Path, to: &Path) -> Result<()> {
+/// Renames the muxed file into place without replacing anything: if a file
+/// with that name appeared meanwhile, a new free name is picked (and saved in
+/// the manifest before the rename).
+fn move_into_place(job: &mut SaveJob, partial: &Path, mut target: PathBuf, ext: &str) -> Result<PathBuf> {
     let mut attempt = 0;
     loop {
-        match std::fs::rename(from, to) {
-            Ok(()) => return Ok(()),
+        if target.exists() {
+            let taken = reserved_names(&job.recordings_dir, &job.dir);
+            target = pick_output_path(&job.recordings_dir, &job.stem, ext, &taken);
+            job.manifest.finalizing_to = target.file_name().map(|n| n.to_string_lossy().into_owned());
+            write_manifest_atomic(&job.dir, &job.manifest)?;
+        }
+        match std::fs::rename(partial, &target) {
+            Ok(()) => return Ok(target),
             // An antivirus or the indexer may hold the fresh file for a moment.
             Err(_) if attempt < 5 => {
                 attempt += 1;
                 std::thread::sleep(Duration::from_millis(200));
             }
-            Err(e) => return Err(e).with_context(|| format!("rename to {}", to.display())),
+            Err(e) => return Err(e).with_context(|| format!("rename to {}", target.display())),
         }
     }
 }
 
-fn mux(job: &mut SaveJob, plan: &FinalizePlan, ffmpeg: Option<PathBuf>) -> Result<PathBuf> {
+fn mux(job: &mut SaveJob, plan: &FinalizePlan, ffmpeg: Option<PathBuf>, slot: &Mutex<Option<Child>>) -> Result<PathBuf> {
     let ffmpeg = ffmpeg.context("ffmpeg not found")?;
     let taken = reserved_names(&job.recordings_dir, &job.dir);
     let final_path = pick_output_path(&job.recordings_dir, &job.stem, plan.ext, &taken);
@@ -682,18 +1031,17 @@ fn mux(job: &mut SaveJob, plan: &FinalizePlan, ffmpeg: Option<PathBuf>) -> Resul
     write_concat_lists(plan, &job.dir)?;
     let partial = job.dir.join(format!("final.partial.{}", plan.ext));
     let args = finalize_args(plan, &job.dir, &partial, VideoEncoder::X264, &preset(job.manifest.quality));
-    run_ffmpeg(&ffmpeg, &args)?;
+    run_ffmpeg(&ffmpeg, &args, slot)?;
     if !partial.is_file() {
         bail!("ffmpeg wrote no {}", partial.display());
     }
     record_final_bytes(&job.dir, &mut job.manifest, &partial)?;
-    rename_with_retry(&partial, &final_path)?;
-    Ok(final_path)
+    move_into_place(job, &partial, final_path, plan.ext)
 }
 
 /// Finalizes a stopped session. Nothing recorded: the working folder is removed
 /// and the result is `too_short`. A failed mux keeps the folder for recovery.
-fn save(mut job: SaveJob, ffmpeg: Option<PathBuf>) -> Result<RecordingFinished, RecordingFailed> {
+fn save(mut job: SaveJob, ffmpeg: Option<PathBuf>, slot: &Mutex<Option<Child>>) -> Result<RecordingFinished, RecordingFailed> {
     let plan = match finalize_plan(&job.manifest) {
         Ok(plan) => plan,
         Err(FinalizeError::Empty) => {
@@ -707,7 +1055,7 @@ fn save(mut job: SaveJob, ffmpeg: Option<PathBuf>) -> Result<RecordingFinished, 
             });
         }
     };
-    match mux(&mut job, &plan, ffmpeg) {
+    match mux(&mut job, &plan, ffmpeg, slot) {
         Ok(final_path) => {
             drop(job.lock.take());
             if let Err(e) = remove_working_dir(&job.dir, &final_path, &[]) {
@@ -721,7 +1069,7 @@ fn save(mut job: SaveJob, ffmpeg: Option<PathBuf>) -> Result<RecordingFinished, 
                     .unwrap_or_default(),
                 duration_seconds: plan_seconds(&plan),
                 has_video: !plan.video.is_empty(),
-                warning: (!job.warnings.is_empty()).then(|| job.warnings.join("; ")),
+                warning: job.warnings.first().map(|w| (*w).to_string()),
                 stop_reason: job.stop_reason,
                 recovered: false,
             })
@@ -756,19 +1104,18 @@ mod tests {
     }
 
     fn mic_session(dir: &Path) -> Segments {
-        let sink = Arc::new(Mutex::new(SegmentedWavSink::new(AudioSource::Mic, 1_000, 1)));
         Segments::new(
             dir.to_path_buf(),
             manifest(),
             vec![Track {
                 source: AudioSource::Mic,
-                sink,
+                sink: SegmentedWavSink::new(AudioSource::Mic, 1_000, 1),
             }],
         )
     }
 
-    fn feed(s: &Segments, frames: usize, at: Instant) {
-        lock(&s.tracks[0].sink).write(&vec![0.25; frames], at);
+    fn feed(s: &mut Segments, frames: usize, at: Instant) {
+        s.tracks[0].sink.write(&vec![0.25; frames], at);
     }
 
     fn job(recordings: &Path, s: &Segments, session_lock: Option<SessionLock>) -> SaveJob {
@@ -783,6 +1130,10 @@ mod tests {
         }
     }
 
+    fn no_child() -> Mutex<Option<Child>> {
+        Mutex::new(None)
+    }
+
     #[test]
     fn pause_closes_the_segment_at_its_active_length() {
         let root = tempfile::tempdir().unwrap();
@@ -791,13 +1142,13 @@ mod tests {
         let t0 = Instant::now();
         s.open_segment(t0).unwrap();
         assert!(!read_manifest(&dir).unwrap().segments[0].closed);
-        feed(&s, 500, t0);
+        feed(&mut s, 500, t0);
         s.close_segment(t0 + Duration::from_millis(500)).unwrap();
         // paused for 30 s: nothing is written, the next segment starts on resume
-        feed(&s, 100, t0 + Duration::from_secs(10));
+        feed(&mut s, 100, t0 + Duration::from_secs(10));
         let t1 = t0 + Duration::from_secs(30);
         s.open_segment(t1).unwrap();
-        feed(&s, 300, t1);
+        feed(&mut s, 300, t1);
         s.close_segment(t1 + Duration::from_millis(300)).unwrap();
 
         let m = read_manifest(&dir).unwrap();
@@ -818,7 +1169,7 @@ mod tests {
     }
 
     #[test]
-    fn a_long_or_failed_segment_asks_for_rotation() {
+    fn a_long_segment_asks_for_rotation() {
         let root = tempfile::tempdir().unwrap();
         let mut s = mic_session(root.path());
         let t0 = Instant::now();
@@ -833,6 +1184,100 @@ mod tests {
     }
 
     #[test]
+    fn the_callback_only_enqueues_even_after_a_long_silence() {
+        let health = Arc::new(Health::default());
+        let (mut sender, input) = source_queue(48_000, 2, health.clone());
+        let t0 = Instant::now();
+        // the first block after ten silent minutes: one block in the queue, nothing else
+        sender.push(&[0.5; 960], t0 + Duration::from_secs(600));
+        let block = input.blocks.try_recv().unwrap();
+        assert_eq!(block.samples.len(), 960);
+        assert_eq!(block.start, t0 + Duration::from_secs(600) - Duration::from_millis(10));
+        assert!(input.blocks.try_recv().is_err());
+        // a returned buffer is reused instead of allocating
+        input.spares.try_send(block.samples).unwrap();
+        sender.push(&[0.25; 4], t0);
+        assert!(input.spares.try_send(Vec::new()).is_ok());
+        // a full queue drops the block and counts it, without waiting
+        for _ in 0..BLOCK_QUEUE {
+            sender.push(&[0.0; 2], t0);
+        }
+        assert_eq!(health.dropped_frames.load(Ordering::Relaxed), 1);
+    }
+
+    fn writer_with(dir: &Path, sources: &[AudioSource]) -> (Writer, Vec<BlockSender>, Sender<Ctl>, Arc<Health>) {
+        let health = Arc::new(Health::default());
+        let mut tracks = Vec::new();
+        let mut inputs = Vec::new();
+        let mut senders = Vec::new();
+        for &source in sources {
+            let (sender, input) = source_queue(1_000, 1, health.clone());
+            tracks.push(Track {
+                source,
+                sink: SegmentedWavSink::new(source, 1_000, 1),
+            });
+            inputs.push(input);
+            senders.push(sender);
+        }
+        let (ctl_tx, ctl_rx) = mpsc::channel();
+        let writer = Writer {
+            segments: Segments::new(dir.to_path_buf(), manifest(), tracks),
+            inputs,
+            health: health.clone(),
+            ctl: ctl_rx,
+            stall_reported: false,
+        };
+        (writer, senders, ctl_tx, health)
+    }
+
+    #[test]
+    fn the_writer_fills_silent_loopback_as_time_goes_and_reports_a_stalled_mic() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, mut senders, _ctl, health) = writer_with(root.path(), &[AudioSource::Mic, AudioSource::System]);
+        let t0 = Instant::now();
+        w.segments.open_segment(t0).unwrap();
+        // the mic talks for 2 s, the loopback stays silent
+        for i in 0..100u64 {
+            let at = t0 + Duration::from_millis(20 * (i + 1));
+            senders[0].push(&[0.5; 20], at);
+            w.tick(at);
+        }
+        let system = w.segments.tracks[1].sink.has_failed();
+        assert!(!system);
+        w.tick(t0 + Duration::from_millis(2_000));
+        assert!(!health.device_lost.load(Ordering::SeqCst));
+        // then the mic goes quiet for more than 3 s: gone
+        w.tick(t0 + Duration::from_millis(5_100));
+        assert!(health.device_lost.load(Ordering::SeqCst));
+
+        w.segments.close_segment(t0 + Duration::from_millis(5_100)).unwrap();
+        let audio = &w.segments.manifest.segments[0].audio;
+        assert_eq!(audio[0].captured_frames, 2_000);
+        // the loopback was filled with silence along the way and padded to the length
+        assert_eq!((audio[1].captured_frames, audio[1].frames), (0, 5_100));
+    }
+
+    #[test]
+    fn pause_and_finish_go_through_the_writer() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, mut senders, ctl, _health) = writer_with(root.path(), &[AudioSource::Mic]);
+        let t0 = Instant::now();
+        w.segments.open_segment(t0).unwrap();
+        senders[0].push(&[0.5; 500], t0 + Duration::from_millis(500));
+        let handle = std::thread::spawn(move || w.run());
+        ctl.send(Ctl::Pause(t0 + Duration::from_millis(500))).unwrap();
+        ctl.send(Ctl::Resume(t0 + Duration::from_secs(10))).unwrap();
+        let (tx, rx) = mpsc::channel();
+        ctl.send(Ctl::Finish(t0 + Duration::from_millis(10_200), tx)).unwrap();
+        let m = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        handle.join().unwrap();
+        let lengths: Vec<(u64, bool)> = m.segments.iter().map(|g| (g.wall_ms, g.closed)).collect();
+        assert_eq!(lengths, vec![(500, true), (200, true)]);
+        assert_eq!(m.segments[0].audio[0].captured_frames, 500);
+        assert_eq!(read_manifest(root.path()).unwrap(), m);
+    }
+
+    #[test]
     fn stop_right_after_start_is_too_short_and_leaves_nothing() {
         let root = tempfile::tempdir().unwrap();
         let dir = create_session_dir(root.path(), "2026-10-31 14-05-33").unwrap();
@@ -841,7 +1286,7 @@ mod tests {
         let t0 = Instant::now();
         s.open_segment(t0).unwrap();
         s.close_segment(t0 + Duration::from_millis(300)).unwrap();
-        let failed = save(job(root.path(), &s, Some(session_lock)), None).unwrap_err();
+        let failed = save(job(root.path(), &s, Some(session_lock)), None, &no_child()).unwrap_err();
         assert_eq!(failed.code, FailCode::TooShort);
         assert!(!dir.exists());
         assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
@@ -854,16 +1299,36 @@ mod tests {
         let mut s = mic_session(&dir);
         let t0 = Instant::now();
         s.open_segment(t0).unwrap();
-        feed(&s, 1_000, t0);
+        feed(&mut s, 1_000, t0);
         s.close_segment(t0 + Duration::from_secs(1)).unwrap();
         let missing = root.path().join("no-ffmpeg-here");
-        let failed = save(job(root.path(), &s, None), Some(missing)).unwrap_err();
+        let failed = save(job(root.path(), &s, None), Some(missing), &no_child()).unwrap_err();
         assert_eq!(failed.code, FailCode::Encoder);
         assert!(dir.join("seg-0001.mic.wav").is_file());
         let m = read_manifest(&dir).unwrap();
         assert_eq!(m.finalizing_to.as_deref(), Some("2026-10-31 14-05-33.m4a"));
         assert_eq!(m.final_bytes, None);
         assert!(!root.path().join("2026-10-31 14-05-33.m4a").exists());
+    }
+
+    #[test]
+    fn the_final_file_never_replaces_one_that_appeared_meanwhile() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = create_session_dir(root.path(), "2026-10-31 14-05-33").unwrap();
+        let s = mic_session(&dir);
+        let mut j = job(root.path(), &s, None);
+        let partial = dir.join("final.partial.m4a");
+        std::fs::write(&partial, b"ours").unwrap();
+        let target = root.path().join("2026-10-31 14-05-33.m4a");
+        std::fs::write(&target, b"someone else's").unwrap();
+        let placed = move_into_place(&mut j, &partial, target.clone(), "m4a").unwrap();
+        assert_eq!(placed, root.path().join("2026-10-31 14-05-33 (1).m4a"));
+        assert_eq!(std::fs::read(&target).unwrap(), b"someone else's");
+        assert_eq!(std::fs::read(&placed).unwrap(), b"ours");
+        assert_eq!(
+            read_manifest(&dir).unwrap().finalizing_to.as_deref(),
+            Some("2026-10-31 14-05-33 (1).m4a")
+        );
     }
 
     #[test]
@@ -898,6 +1363,14 @@ mod tests {
     }
 
     #[test]
+    fn a_lost_device_is_told_apart_from_other_stream_errors() {
+        assert!(is_device_lost(cpal::ErrorKind::DeviceNotAvailable));
+        assert!(is_device_lost(cpal::ErrorKind::StreamInvalidated));
+        assert!(!is_device_lost(cpal::ErrorKind::Xrun));
+        assert!(!is_device_lost(cpal::ErrorKind::DeviceChanged));
+    }
+
+    #[test]
     fn start_options_and_events_use_the_frontend_shape() {
         let o: StartOptions = serde_json::from_value(serde_json::json!({
             "mode": "audio",
@@ -917,14 +1390,14 @@ mod tests {
             name: "n".into(),
             duration_seconds: 65.0,
             has_video: false,
-            warning: None,
+            warning: Some(WARN_DEVICE_LOST.into()),
             stop_reason: StopReason::LowDisk,
             recovered: false,
         })
         .unwrap();
         assert_eq!(finished["stopReason"], "low_disk");
         assert_eq!(finished["durationSeconds"], 65.0);
-        assert!(finished["warning"].is_null());
+        assert_eq!(finished["warning"], "device_lost");
         assert_eq!(finished["hasVideo"], serde_json::json!(false));
         let failed = serde_json::to_value(RecordingFailed {
             code: FailCode::TooShort,

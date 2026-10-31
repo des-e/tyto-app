@@ -22,6 +22,10 @@ const RU: Record<string, string> = {
 	tytoLowDiskStopped: 'Мало места на диске. Запись остановлена и сохранена',
 	tytoRecordingPause: 'Пауза',
 	tytoRecordingResume: 'Продолжить',
+	tytoRecordingSaving: 'Сохраняю запись',
+	tytoRecordingDeviceLost: 'Устройство звука отключилось. Запись остановлена и сохранена',
+	tytoRecordingWriteFailed: 'Не удалось записать звук на диск. Запись остановлена и сохранена',
+	tytoRecordingSaveFailed: 'Не удалось сохранить запись. Ее части остались в папке Записи',
 }
 
 const KEYS = [
@@ -37,6 +41,10 @@ const KEYS = [
 	'tytoLowDiskStopped',
 	'tytoRecordingPause',
 	'tytoRecordingResume',
+	'tytoRecordingSaving',
+	'tytoRecordingDeviceLost',
+	'tytoRecordingWriteFailed',
+	'tytoRecordingSaveFailed',
 ]
 
 describe('тексты записи экрана', () => {

@@ -768,5 +768,9 @@
 	"tytoRecordingTooShort": "The recording is too short, nothing to save",
 	"tytoLowDiskStopped": "Low disk space. The recording was stopped and saved",
 	"tytoRecordingPause": "Pause",
-	"tytoRecordingResume": "Resume"
+	"tytoRecordingResume": "Resume",
+	"tytoRecordingSaving": "Saving the recording",
+	"tytoRecordingDeviceLost": "The audio device was disconnected. The recording was stopped and saved",
+	"tytoRecordingWriteFailed": "Could not write the audio to disk. The recording was stopped and saved",
+	"tytoRecordingSaveFailed": "Could not save the recording. Its parts are kept in the Записи folder"
 }

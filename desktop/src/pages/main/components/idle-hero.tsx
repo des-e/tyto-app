@@ -98,14 +98,15 @@ function RecordPanel() {
 				<div className="flex w-full gap-2">
 					<Button
 						variant="secondary"
+						disabled={recording.isFinishing}
 						onClick={() => (recording.isPaused ? recording.resumeRecord() : recording.pauseRecord())}
 						className="h-10 flex-1">
 						{recording.isPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
 						{recording.isPaused ? m.tytoRecordingResume() : m.tytoRecordingPause()}
 					</Button>
-					<Button onClick={() => recording.stopRecord()} className="h-10 flex-1">
+					<Button disabled={recording.isFinishing} onClick={() => recording.stopRecord()} className="h-10 flex-1">
 						<Square className="h-3.5 w-3.5 fill-current" />
-						{m.stopRecording()}
+						{recording.isFinishing ? m.tytoRecordingSaving() : m.stopRecording()}
 					</Button>
 				</div>
 			</div>

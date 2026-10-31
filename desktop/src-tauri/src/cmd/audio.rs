@@ -364,16 +364,18 @@ fn build_input_stream(
     }
 }
 
-fn build_capture_stream_typed<T, F>(
+fn build_capture_stream_typed<T, F, E>(
     device: &Device,
     config: SupportedStreamConfig,
     mut on_data: F,
+    mut on_error: E,
     meter: Arc<LevelMeter>,
 ) -> Result<Stream>
 where
     T: SizedSample,
     f32: FromSample<T>,
     F: FnMut(&[f32]) + Send + 'static,
+    E: FnMut(cpal::Error) + Send + 'static,
 {
     // Reused between callbacks: the conversion allocates only when a buffer grows.
     let mut converted: Vec<f32> = Vec::new();
@@ -385,31 +387,41 @@ where
             converted.extend(data.iter().map(|sample| f32::from_sample(*sample)));
             on_data(&converted);
         },
-        |err| tracing::error!("An error occurred on capture stream: {}", err),
+        move |err| {
+            tracing::error!("An error occurred on capture stream: {}", err);
+            on_error(err);
+        },
         None,
     )?;
     Ok(stream)
 }
 
-/// Capture stream for the screen recorder: any device format arrives as interleaved f32.
+/// Capture stream for the screen recorder: any device format arrives as interleaved f32,
+/// and stream errors (a device that went away) reach `on_error`.
 /// `start_record` keeps its own path (`build_input_stream`).
 pub(crate) fn build_capture_stream(
     device: &Device,
     config: SupportedStreamConfig,
     on_data: impl FnMut(&[f32]) + Send + 'static,
+    on_error: impl FnMut(cpal::Error) + Send + 'static,
     meter: Arc<LevelMeter>,
 ) -> Result<Stream> {
+    macro_rules! typed {
+        ($t:ty) => {
+            build_capture_stream_typed::<$t, _, _>(device, config, on_data, on_error, meter)
+        };
+    }
     match config.sample_format() {
-        cpal::SampleFormat::I8 => build_capture_stream_typed::<i8, _>(device, config, on_data, meter),
-        cpal::SampleFormat::I16 => build_capture_stream_typed::<i16, _>(device, config, on_data, meter),
-        cpal::SampleFormat::I32 => build_capture_stream_typed::<i32, _>(device, config, on_data, meter),
-        cpal::SampleFormat::I64 => build_capture_stream_typed::<i64, _>(device, config, on_data, meter),
-        cpal::SampleFormat::U8 => build_capture_stream_typed::<u8, _>(device, config, on_data, meter),
-        cpal::SampleFormat::U16 => build_capture_stream_typed::<u16, _>(device, config, on_data, meter),
-        cpal::SampleFormat::U32 => build_capture_stream_typed::<u32, _>(device, config, on_data, meter),
-        cpal::SampleFormat::U64 => build_capture_stream_typed::<u64, _>(device, config, on_data, meter),
-        cpal::SampleFormat::F32 => build_capture_stream_typed::<f32, _>(device, config, on_data, meter),
-        cpal::SampleFormat::F64 => build_capture_stream_typed::<f64, _>(device, config, on_data, meter),
+        cpal::SampleFormat::I8 => typed!(i8),
+        cpal::SampleFormat::I16 => typed!(i16),
+        cpal::SampleFormat::I32 => typed!(i32),
+        cpal::SampleFormat::I64 => typed!(i64),
+        cpal::SampleFormat::U8 => typed!(u8),
+        cpal::SampleFormat::U16 => typed!(u16),
+        cpal::SampleFormat::U32 => typed!(u32),
+        cpal::SampleFormat::U64 => typed!(u64),
+        cpal::SampleFormat::F32 => typed!(f32),
+        cpal::SampleFormat::F64 => typed!(f64),
         sample_format => bail!("Unsupported sample format '{}'", sample_format),
     }
 }

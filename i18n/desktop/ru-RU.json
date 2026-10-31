@@ -768,5 +768,9 @@
 	"tytoRecordingTooShort": "Запись слишком короткая, сохранять нечего",
 	"tytoLowDiskStopped": "Мало места на диске. Запись остановлена и сохранена",
 	"tytoRecordingPause": "Пауза",
-	"tytoRecordingResume": "Продолжить"
+	"tytoRecordingResume": "Продолжить",
+	"tytoRecordingSaving": "Сохраняю запись",
+	"tytoRecordingDeviceLost": "Устройство звука отключилось. Запись остановлена и сохранена",
+	"tytoRecordingWriteFailed": "Не удалось записать звук на диск. Запись остановлена и сохранена",
+	"tytoRecordingSaveFailed": "Не удалось сохранить запись. Ее части остались в папке Записи"
 }

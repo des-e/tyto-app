@@ -27,6 +27,13 @@ export interface RecordingState {
 	activeMs: number
 }
 
+/** What the UI shows: `recording_state` statuses, plus `idle` once finished or failed. */
+export type RecorderStatus = 'idle' | RecordingState['status']
+
+/** `RecordingFinished.warning` codes sent by the recorder. */
+export const WARNING_DEVICE_LOST = 'device_lost'
+export const WARNING_WRITE_FAILED = 'write_failed'
+
 export interface RecordingFinished {
 	path: string
 	name: string

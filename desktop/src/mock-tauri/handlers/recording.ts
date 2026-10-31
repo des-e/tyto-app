@@ -68,8 +68,8 @@ export function createRecordingHandlers(emit: Emit): CommandHandlerMap {
 			return undefined
 		},
 		recording_stop: () => {
-			if (!session) throw 'no recording in progress'
-			if (session.status === 'finishing') throw 'recording is being finished'
+			// Like the recorder: no session, or one already saving, is a no-op.
+			if (!session || session.status === 'finishing') return undefined
 			const stopped = session
 			stopped.activeMs = activeMs()
 			stopped.runningSince = null
