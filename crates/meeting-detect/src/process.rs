@@ -52,6 +52,8 @@ const BROWSER_PROCESS_NAMES: &[&str] = &[
     "brave-browser-stable",
     "arc",
     "arc.exe",
+    // Yandex Browser on Windows. Only the `.exe` form: a bare `browser` is too generic elsewhere.
+    "browser.exe",
 ];
 
 pub(crate) fn source(process: &ProcessInfo) -> Option<ProcessKind> {
@@ -273,6 +275,11 @@ mod tests {
             ("ignored", Some("/usr/bin/brave-browser")),
             ("Arc", None),
             ("ignored", Some(r"C:\Program Files\WindowsApps\TheBrowserCompany.Arc\Arc.exe")),
+            ("browser.exe", None),
+            (
+                "ignored",
+                Some(r"C:\Users\me\AppData\Local\Yandex\YandexBrowser\Application\browser.exe"),
+            ),
         ] {
             assert_eq!(source(&process(name, executable, None)), Some(ProcessKind::Browser));
         }

@@ -161,6 +161,36 @@ fn owners_from_sessions(sessions: &[CaptureSession], own_pid: u32) -> Vec<u32> {
     pids
 }
 
+/// How far up the parent chain an unrecognised Windows owner is followed.
+#[cfg(any(target_os = "windows", test))]
+const MAX_ANCESTORS: usize = 4;
+
+/// The first ancestor of `pid` that `process::source` recognises, starting from its `parent`.
+///
+/// `lookup` returns a pid's identity and parent, `None` once it is gone. The walk stops after
+/// [`MAX_ANCESTORS`] steps, at the System / Idle pids (≤ 4), at our own process, and on a cycle:
+/// Windows reuses pids, so a stale parent link can point back into the chain.
+#[cfg(any(target_os = "windows", test))]
+fn recognised_ancestor(
+    pid: u32,
+    parent: Option<u32>,
+    own_pid: u32,
+    mut lookup: impl FnMut(u32) -> Option<(crate::ProcessInfo, Option<u32>)>,
+) -> Option<crate::ProcessInfo> {
+    let mut visited = vec![pid];
+    let mut next = parent;
+    for _ in 0..MAX_ANCESTORS {
+        let ancestor = next.filter(|ancestor| *ancestor > 4 && *ancestor != own_pid && !visited.contains(ancestor))?;
+        visited.push(ancestor);
+        let (info, parent) = lookup(ancestor)?;
+        if crate::process::source(&info).is_some() {
+            return Some(info);
+        }
+        next = parent;
+    }
+    None
+}
+
 /// Combine the two Windows signals.
 ///
 /// `wasapi` is `None` when the session API failed. The registry is the fallback: it is read only
@@ -254,8 +284,8 @@ mod wasapi {
                     };
                     let Ok(pid) = control.GetProcessId() else { continue };
                     let active = control.GetState().is_ok_and(|state| state == AudioSessionStateActive);
-                    // Called through the vtable: it answers S_OK or S_FALSE, and a `Result` wrapper
-                    // would fold both into `Ok`.
+                    // It answers S_OK or S_FALSE. The raw vtable call keeps that distinction
+                    // whatever the generated wrapper returns.
                     let system = (Interface::vtable(&control).IsSystemSoundsSession)(Interface::as_raw(&control)) == S_OK;
                     sessions.push(CaptureSession { pid, active, system });
                 }
@@ -355,48 +385,83 @@ mod platform {
         }
     }
 
-    /// Identify session pids one by one — never the whole process list. A pid whose parent is this
-    /// process (a recorder sidecar) is ours and dropped, like our own pid.
+    /// Identity and parent of a pid already refreshed into `system`.
+    fn describe(system: &System, pid: u32) -> (ProcessInfo, Option<u32>) {
+        let process = system.process(Pid::from_u32(pid));
+        let executable = process
+            .and_then(|process| process.exe())
+            .map(|path| path.to_string_lossy().into_owned());
+        let name = process
+            .map(|process| process.name().to_string_lossy().into_owned())
+            .filter(|name| !name.is_empty())
+            .or_else(|| {
+                executable
+                    .as_deref()
+                    .and_then(|path| Path::new(path).file_name())
+                    .and_then(|name| name.to_str())
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(|| format!("pid {pid}"));
+        let parent = process.and_then(|process| process.parent()).map(|parent| parent.as_u32());
+        (
+            ProcessInfo {
+                pid: Some(pid),
+                name,
+                executable,
+                bundle_id: None,
+            },
+            parent,
+        )
+    }
+
+    fn refresh(system: &mut System, pids: &[Pid]) {
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(pids),
+            false,
+            ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+        );
+    }
+
+    /// Identify the session pids (and, for an unrecognised one, its ancestors) without keeping the
+    /// whole process table. A pid whose parent is this process (a recorder sidecar) is ours and
+    /// dropped, like our own pid.
+    ///
+    /// Every owner is reported as itself. A capture can sit in a host process that is not
+    /// recognised on its own (new Teams' WebView2 or module host), so for an unrecognised owner the
+    /// first recognised ancestor is added as well — the same rule as on macOS.
     fn session_owners(pids: &[u32], own_pid: u32) -> Vec<ProcessInfo> {
         if pids.is_empty() {
             return Vec::new();
         }
         let wanted: Vec<Pid> = pids.iter().map(|pid| Pid::from_u32(*pid)).collect();
         let mut system = System::new();
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&wanted),
-            false,
-            ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
-        );
+        refresh(&mut system, &wanted);
         let mut owners = Vec::new();
+        fn push(owners: &mut Vec<ProcessInfo>, info: ProcessInfo) {
+            if !owners.contains(&info) {
+                owners.push(info);
+            }
+        }
         for &pid in pids {
-            let process = system.process(Pid::from_u32(pid));
-            if process
-                .and_then(|process| process.parent())
-                .is_some_and(|parent| parent.as_u32() == own_pid)
-            {
+            let (info, parent) = describe(&system, pid);
+            if parent == Some(own_pid) {
                 continue;
             }
-            let executable = process
-                .and_then(|process| process.exe())
-                .map(|path| path.to_string_lossy().into_owned());
-            let name = process
-                .map(|process| process.name().to_string_lossy().into_owned())
-                .filter(|name| !name.is_empty())
-                .or_else(|| {
-                    executable
-                        .as_deref()
-                        .and_then(|path| Path::new(path).file_name())
-                        .and_then(|name| name.to_str())
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| format!("pid {pid}"));
-            owners.push(ProcessInfo {
-                pid: Some(pid),
-                name,
-                executable,
-                bundle_id: None,
+            let recognised = crate::process::source(&info).is_some();
+            push(&mut owners, info);
+            if recognised {
+                continue;
+            }
+            let ancestor = super::recognised_ancestor(pid, parent, own_pid, |ancestor| {
+                refresh(&mut system, &[Pid::from_u32(ancestor)]);
+                system
+                    .process(Pid::from_u32(ancestor))
+                    .is_some()
+                    .then(|| describe(&system, ancestor))
             });
+            if let Some(ancestor) = ancestor {
+                push(&mut owners, ancestor);
+            }
         }
         owners
     }
@@ -717,6 +782,53 @@ Source Output #18
         ];
         assert_eq!(owners_from_sessions(&sessions, 99), vec![30, 40]);
         assert!(owners_from_sessions(&[], 99).is_empty());
+    }
+
+    fn ancestry(parents: &[(u32, &str, Option<u32>)]) -> impl FnMut(u32) -> Option<(crate::ProcessInfo, Option<u32>)> + '_ {
+        move |pid| {
+            parents
+                .iter()
+                .find(|(candidate, _, _)| *candidate == pid)
+                .map(|(pid, name, parent)| {
+                    let mut info = owner(name);
+                    info.pid = Some(*pid);
+                    (info, *parent)
+                })
+        }
+    }
+
+    #[test]
+    fn unrecognised_owner_resolves_to_its_first_recognised_ancestor() {
+        // msedgewebview2.exe (50) → msedgewebview2.exe (40) → ms-teams.exe (30) → explorer.exe (20)
+        let tree = [
+            (40, "msedgewebview2.exe", Some(30)),
+            (30, "ms-teams.exe", Some(20)),
+            (20, "explorer.exe", Some(4)),
+        ];
+        let found = recognised_ancestor(50, Some(40), 99, ancestry(&tree)).unwrap();
+        assert_eq!((found.pid, found.name.as_str()), (Some(30), "ms-teams.exe"));
+    }
+
+    #[test]
+    fn ancestor_walk_is_bounded_and_stops_at_system_ourselves_and_cycles() {
+        // Teams sits five levels up: beyond the limit.
+        let deep = [
+            (40, "host.exe", Some(39)),
+            (39, "host.exe", Some(38)),
+            (38, "host.exe", Some(37)),
+            (37, "host.exe", Some(36)),
+            (36, "ms-teams.exe", None),
+        ];
+        assert_eq!(recognised_ancestor(50, Some(40), 99, ancestry(&deep)), None);
+        // System pid, ourselves, a cycle back to the session, a vanished parent, no parent.
+        let tree = [
+            (40, "host.exe", Some(4)),
+            (41, "host.exe", Some(99)),
+            (42, "host.exe", Some(50)),
+        ];
+        for parent in [Some(40), Some(41), Some(42), Some(77), None] {
+            assert_eq!(recognised_ancestor(50, parent, 99, ancestry(&tree)), None, "{parent:?}");
+        }
     }
 
     #[test]
