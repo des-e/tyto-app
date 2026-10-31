@@ -19,9 +19,17 @@ import ModelDownloadPrompt from './model-download-prompt'
 export const TOGGLE_SIDEBAR_EVENT = 'vibe:toggle-sidebar'
 export const SIDEBAR_STORAGE_KEY = 'vibe_sidebar_collapsed'
 
-/** Start inset that clears the macOS traffic lights; identical for header and sidebar so the toggle never moves. */
+/**
+ * Start inset that clears the macOS traffic lights with the same gap they keep between themselves
+ * (the last light ends at ~76 px); identical for header and sidebar so the toggle never moves.
+ */
 export function titlebarInset(): number {
-	return isMacOverlayTitlebar() ? 76 : 10
+	return isMacOverlayTitlebar() ? 88 : 10
+}
+
+/** Top offset that puts the toggle's centre on the traffic lights' centre (~25.5 px) on macOS. */
+export function titlebarToggleTop(): number {
+	return isMacOverlayTitlebar() ? 10 : 7
 }
 
 /** True in the real macOS app, where the titlebar is an overlay and traffic lights sit over our UI. */
@@ -123,7 +131,7 @@ export default function Layout({ children, sidebar, bottomBar }: LayoutProps) {
 			{/* Single toggle, fixed to the window so it never moves when the sidebar opens or closes. */}
 			{showSidebarToggle && (
 				// The window controls and the sidebar both live on the physical left, RTL included.
-				<div className="fixed z-50" style={{ left: titlebarInset(), top: 7 }}>
+				<div className="fixed z-50" style={{ left: titlebarInset(), top: titlebarToggleTop() }}>
 					<SidebarToggleButton />
 				</div>
 			)}
