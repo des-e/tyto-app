@@ -3,7 +3,10 @@
 // otherwise it hides real dead code.
 #![allow(dead_code)]
 
+pub mod audio_sink;
+pub mod disk;
 pub mod encoder;
 pub mod pacer;
 pub mod quality;
+pub mod segments;
 pub mod session;
