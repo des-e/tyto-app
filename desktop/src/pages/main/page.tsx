@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
+import { UpdaterContext } from '~/providers/updater'
 import Layout, { SIDEBAR_STORAGE_KEY, TOGGLE_SIDEBAR_EVENT } from '~/components/layout'
 import IdleHero from './components/idle-hero'
 import PlayerBar from './components/player-bar'
@@ -139,9 +140,27 @@ function Shell() {
 	)
 }
 
+/**
+ * Tells the updater when its window may open by itself: on this screen, with a model chosen (not
+ * during first-run setup) and while nothing transcribes, waits in the queue, records or downloads.
+ */
+function UpdatePromptGate() {
+	const { mode, recording, link, preference } = useSession()
+	const { setAutoPromptReady } = useContext(UpdaterContext)
+	const ready = Boolean(preference.modelPath) && mode !== 'working' && !recording.isRecording && !link.downloadingAudio
+
+	useEffect(() => {
+		setAutoPromptReady(ready)
+	}, [ready, setAutoPromptReady])
+	useEffect(() => () => setAutoPromptReady(false), [setAutoPromptReady])
+
+	return null
+}
+
 export default function MainPage() {
 	return (
 		<SessionProvider>
+			<UpdatePromptGate />
 			<Shell />
 		</SessionProvider>
 	)

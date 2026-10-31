@@ -20,5 +20,7 @@ export function downloadSizeLabel(downloaded: number, total: number | null, loca
 	const digits = total !== null && total < 10e6 ? 1 : 0
 	const mb = new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })
 	if (total === null) return m.updateWindowDownloaded({ size: mb.format(downloaded / 1e6) })
-	return m.setupSizeMb({ current: mb.format(downloaded / 1e6), total: mb.format(total / 1e6) })
+	// The last chunk can overshoot the announced size; never show «45 из 43».
+	const shown = Math.min(downloaded, total)
+	return m.setupSizeMb({ current: mb.format(shown / 1e6), total: mb.format(total / 1e6) })
 }

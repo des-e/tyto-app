@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useContext } from 'react'
+import { useContext, useEffect } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => {
@@ -12,6 +12,8 @@ const h = vi.hoisted(() => {
 		body: 'Исправлена ошибка при экспорте.' as string,
 		relaunch: vi.fn(),
 		install: vi.fn(async () => {}),
+		downloads: 0,
+		setErrorModal: vi.fn(),
 	}
 	return state
 })
@@ -25,6 +27,7 @@ vi.mock('@tauri-apps/plugin-updater', () => ({
 		body: h.body,
 		date: '',
 		download: (onEvent: (event: unknown) => void) => {
+			h.downloads += 1
 			h.onEvent = onEvent as never
 			return new Promise<void>((resolve) => {
 				h.release = resolve
@@ -35,7 +38,8 @@ vi.mock('@tauri-apps/plugin-updater', () => ({
 }))
 
 import { setLocale } from '~/paraglide/runtime.js'
-import { UpdaterContext, UpdaterProvider } from '~/providers/updater'
+import { UPDATE_PROMPTED_KEY, UpdaterContext, UpdaterProvider } from '~/providers/updater'
+import { ErrorModalContext } from '~/providers/error-modal'
 import { downloadSizeLabel } from '~/lib/tyto/format'
 import UpdateWindow from './update-window'
 
@@ -48,13 +52,27 @@ function Opener() {
 	)
 }
 
-function renderWindow() {
-	render(
-		<UpdaterProvider>
-			<Opener />
-			<UpdateWindow />
-		</UpdaterProvider>,
+/** Stands in for the main screen's gate (pages/main/page.tsx). */
+function Ready({ ready }: { ready: boolean }) {
+	const { setAutoPromptReady } = useContext(UpdaterContext)
+	useEffect(() => setAutoPromptReady(ready), [ready, setAutoPromptReady])
+	return null
+}
+
+function tree(ready?: boolean) {
+	return (
+		<ErrorModalContext.Provider value={{ state: { open: false, log: '' }, setState: h.setErrorModal } as never}>
+			<UpdaterProvider>
+				{ready !== undefined && <Ready ready={ready} />}
+				<Opener />
+				<UpdateWindow />
+			</UpdaterProvider>
+		</ErrorModalContext.Provider>
 	)
+}
+
+function renderWindow(ready?: boolean) {
+	return render(tree(ready))
 }
 
 async function openConfirm() {
@@ -72,6 +90,9 @@ beforeEach(() => {
 	h.onEvent = null
 	h.relaunch.mockReset()
 	h.install.mockClear()
+	h.downloads = 0
+	h.setErrorModal.mockReset()
+	localStorage.clear()
 })
 
 afterEach(cleanup)
@@ -140,6 +161,84 @@ describe('update window', () => {
 		expect(await screen.findByText('Скачано 18 МБ')).toBeTruthy()
 		expect(screen.queryByText(/ %$/)).toBeNull()
 	})
+
+	it('contentLength 0 counts as unknown size', async () => {
+		renderWindow()
+		await openConfirm()
+		fireEvent.click(await screen.findByText('Обновить'))
+		await screen.findByText('Скачиваю обновление')
+		act(() => {
+			h.onEvent?.({ event: 'Started', data: { contentLength: 0 } })
+			h.onEvent?.({ event: 'Progress', data: { chunkLength: 18_000_000 } })
+		})
+		expect(await screen.findByText('Скачано 18 МБ')).toBeTruthy()
+		expect(screen.queryByText(/ %$/)).toBeNull()
+	})
+
+	it('a double click on «Обновить» starts one download', async () => {
+		renderWindow()
+		await openConfirm()
+		const button = await screen.findByText('Обновить')
+		fireEvent.click(button)
+		fireEvent.click(button)
+		await screen.findByText('Скачиваю обновление')
+		expect(h.downloads).toBe(1)
+	})
+
+	it('a failed relaunch shows the error modal', async () => {
+		h.relaunch.mockRejectedValue(new Error('relaunch failed'))
+		renderWindow()
+		await openConfirm()
+		fireEvent.click(await screen.findByText('Обновить'))
+		await screen.findByText('Скачиваю обновление')
+		await act(async () => h.release?.())
+		fireEvent.click(await screen.findByText('Перезапустить'))
+		await waitFor(() => expect(h.setErrorModal).toHaveBeenCalledWith({ open: true, log: 'Error: relaunch failed' }))
+	})
+})
+
+describe('update window opens by itself', () => {
+	it('once the main screen is idle, and remembers the version', async () => {
+		renderWindow(true)
+		expect(await screen.findByText('Доступна версия 0.2.0')).toBeTruthy()
+		expect(localStorage.getItem(UPDATE_PROMPTED_KEY)).toBe('0.2.0')
+		fireEvent.click(screen.getByText('Позже'))
+		await waitFor(() => expect(screen.queryByTestId('update-window')).toBeNull())
+		// The update button stays.
+		expect((screen.getByText('open') as HTMLButtonElement).disabled).toBe(false)
+	})
+
+	it('not again for a version it already showed', async () => {
+		localStorage.setItem(UPDATE_PROMPTED_KEY, '0.2.0')
+		renderWindow(true)
+		await waitFor(() => expect((screen.getByText('open') as HTMLButtonElement).disabled).toBe(false))
+		expect(screen.queryByTestId('update-window')).toBeNull()
+	})
+
+	it('again for a newer version', async () => {
+		localStorage.setItem(UPDATE_PROMPTED_KEY, '0.1.9')
+		renderWindow(true)
+		expect(await screen.findByText('Доступна версия 0.2.0')).toBeTruthy()
+	})
+
+	it('waits while the app is busy, then opens when it frees up', async () => {
+		const view = renderWindow(false)
+		await waitFor(() => expect((screen.getByText('open') as HTMLButtonElement).disabled).toBe(false))
+		expect(screen.queryByTestId('update-window')).toBeNull()
+		view.rerender(tree(true))
+		expect(await screen.findByText('Доступна версия 0.2.0')).toBeTruthy()
+	})
+
+	it('does not reopen in the same session after «Позже»', async () => {
+		const view = renderWindow(true)
+		fireEvent.click(await screen.findByText('Позже'))
+		await waitFor(() => expect(screen.queryByTestId('update-window')).toBeNull())
+		localStorage.clear()
+		view.rerender(tree(false))
+		view.rerender(tree(true))
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		expect(screen.queryByTestId('update-window')).toBeNull()
+	})
 })
 
 describe('downloadSizeLabel', () => {
@@ -156,6 +255,10 @@ describe('downloadSizeLabel', () => {
 		expect(downloadSizeLabel(18e6, 43e6, 'en-US')).toBe('18 of 43 MB')
 		expect(downloadSizeLabel(18e6, null, 'en-US')).toBe('Downloaded 18 MB')
 		setLocale('ru-RU', { reload: false })
+	})
+
+	it('never shows more than the total', () => {
+		expect(downloadSizeLabel(45e6, 43e6, 'ru-RU')).toBe('43 из 43 МБ')
 	})
 
 	it('only what arrived when the total is unknown', () => {

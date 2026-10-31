@@ -13,6 +13,25 @@ export const devToolsEnabled = import.meta.env.DEV
 /** Steps of the one update window (components/update-window.tsx). `error` closes the window and opens the error modal. */
 export type UpdatePhase = 'idle' | 'confirm' | 'downloading' | 'installing' | 'done' | 'error'
 
+/** Version whose update window already opened by itself; the same version never opens it again. */
+export const UPDATE_PROMPTED_KEY = 'tyto.updatePrompted'
+
+function readPromptedVersion() {
+	try {
+		return localStorage.getItem(UPDATE_PROMPTED_KEY)
+	} catch {
+		return null
+	}
+}
+
+function writePromptedVersion(version: string) {
+	try {
+		localStorage.setItem(UPDATE_PROMPTED_KEY, version)
+	} catch {
+		/* private mode: the window still opened only once in this session */
+	}
+}
+
 /** What the fake (dev mode) update pretends to download. */
 export const FAKE_UPDATE_SIZE = 43e6
 const FAKE_DOWNLOAD_MS = 5000
@@ -44,6 +63,11 @@ type UpdaterContextType = {
 	/** «Позже»: closes the window, the update icon stays. */
 	dismissUpdate: () => void
 	relaunchApp: () => Promise<void>
+	/**
+	 * The main screen says whether the window may open by itself now: true only there, with a model
+	 * and with nothing transcribing, queued, recording or downloading. False everywhere else.
+	 */
+	setAutoPromptReady: (ready: boolean) => void
 }
 
 // Create the context
@@ -65,6 +89,7 @@ export const UpdaterContext = createContext<UpdaterContextType>({
 	startUpdate: async () => {},
 	dismissUpdate: () => {},
 	relaunchApp: async () => {},
+	setAutoPromptReady: () => {},
 })
 
 export function UpdaterProvider({ children }: { children: React.ReactNode }) {
@@ -85,8 +110,16 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 		}
 	})
 
+	/** Fake mode walked through to «Готово»: the icon goes away for this session, as after a real install. */
+	const [fakeDone, setFakeDone] = useState(false)
+	/** Set between «Обновить» and the end of the run, so a double click starts one download. */
+	const startingRef = useRef(false)
+	const [autoPromptReady, setAutoPromptReady] = useState(false)
+	const autoPromptedRef = useRef(false)
+
 	function setFakeUpdate(value: boolean) {
 		setFakeUpdateState(value)
+		setFakeDone(false)
 		try {
 			localStorage.setItem(FAKE_UPDATE_KEY, value ? '1' : '0')
 		} catch {
@@ -114,10 +147,26 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 		return () => fakeTimers.current.forEach(clearInterval)
 	}, [])
 
+	// Opens the window by itself once per version, only for a real update (the fake one waits for a
+	// click), and only when the main screen says nothing is running. If the app is busy when the
+	// check answers, this fires on the next idle moment of the same session.
+	useEffect(() => {
+		if (autoPromptedRef.current || !update || !autoPromptReady || phase !== 'idle') return
+		if (readPromptedVersion() === update.version) {
+			autoPromptedRef.current = true
+			return
+		}
+		autoPromptedRef.current = true
+		writePromptedVersion(update.version)
+		setPhase('confirm')
+	}, [update, autoPromptReady, phase])
+
 	function onDownloadEvent(downloadEvent: DownloadEvent) {
 		switch (downloadEvent.event) {
 			case 'Started': {
-				setTotal(downloadEvent.data.contentLength ?? null)
+				// Some servers send `contentLength: 0`; that means "unknown", not an empty file.
+				const length = downloadEvent.data.contentLength
+				setTotal(length && length > 0 ? length : null)
 				break
 			}
 			case 'Progress': {
@@ -180,6 +229,8 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 	}
 
 	async function startUpdate() {
+		if (phase !== 'confirm' || startingRef.current) return
+		startingRef.current = true
 		if (isFake) {
 			simulateUpdate()
 			return
@@ -192,25 +243,44 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 			// The window closes; the error modal carries the log.
 			setPhase('idle')
 			setErrorModal?.({ open: true, log: String(e) })
+		} finally {
+			startingRef.current = false
 		}
 	}
 
+	function finishWindow() {
+		startingRef.current = false
+		setAvailableUpdate(false)
+		if (isFake) setFakeDone(true)
+		setPhase('idle')
+	}
+
 	function dismissUpdate() {
-		if (phase === 'done') setAvailableUpdate(false)
+		if (phase === 'done') {
+			finishWindow()
+			return
+		}
 		setPhase('idle')
 	}
 
 	async function relaunchApp() {
 		console.info('relaunch....')
-		setAvailableUpdate(false)
-		setPhase('idle')
-		await process.relaunch()
+		// Dev mode: nothing was installed, so a relaunch would only restart the dev app.
+		const fake = isFake
+		finishWindow()
+		if (fake) return
+		try {
+			await process.relaunch()
+		} catch (e) {
+			console.error(e)
+			setErrorModal?.({ open: true, log: String(e) })
+		}
 	}
 
 	return (
 		<UpdaterContext.Provider
 			value={{
-				availableUpdate: availableUpdate || fakeUpdate,
+				availableUpdate: availableUpdate || (fakeUpdate && !fakeDone),
 				setAvailableUpdate,
 				fakeUpdate,
 				setFakeUpdate,
@@ -228,6 +298,7 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 				startUpdate,
 				dismissUpdate,
 				relaunchApp,
+				setAutoPromptReady,
 			}}>
 			{children}
 		</UpdaterContext.Provider>
