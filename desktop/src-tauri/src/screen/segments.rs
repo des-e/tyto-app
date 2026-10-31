@@ -183,8 +183,13 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
         return Err(FinalizeError::Empty);
     }
 
-    let video: Vec<String> = used.iter().filter_map(|s| s.video_file.clone()).collect();
-    let reencode_video = used.windows(2).any(|w| w[0].encoder != w[1].encoder);
+    let is_video = m.mode == Mode::Video;
+    let video: Vec<String> = if is_video {
+        used.iter().filter_map(|s| s.video_file.clone()).collect()
+    } else {
+        Vec::new()
+    };
+    let reencode_video = is_video && used.windows(2).any(|w| w[0].encoder != w[1].encoder);
 
     // A source goes into the mix only if every used segment has it: concat lists
     // of different sources must cover the same timeline, or the sources drift apart.
