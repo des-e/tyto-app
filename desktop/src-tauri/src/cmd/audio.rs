@@ -75,7 +75,7 @@ const LEVEL_SAMPLE_STRIDE: usize = 4;
 ///
 /// Everything here is atomic and allocation-free: the audio callback only does a few relaxed
 /// loads/stores, and once per 100ms one callback also performs the (non-blocking) `emit_to`.
-struct LevelMeter {
+pub(crate) struct LevelMeter {
     app_handle: AppHandle,
     started_at: Instant,
     /// Max level seen since the last emit, stored as `f32::to_bits` (monotonic for +0.0..=1.0).
@@ -84,7 +84,7 @@ struct LevelMeter {
 }
 
 impl LevelMeter {
-    fn new(app_handle: AppHandle) -> Self {
+    pub(crate) fn new(app_handle: AppHandle) -> Self {
         Self {
             app_handle,
             started_at: Instant::now(),
@@ -301,7 +301,10 @@ pub async fn start_record(app_handle: AppHandle, devices: Vec<AudioDevice>, reco
 }
 
 #[allow(unused_variables)]
-fn get_output_device_and_config(host: &cpal::Host, audio_device: &AudioDevice) -> Result<(Device, SupportedStreamConfig)> {
+pub(crate) fn get_output_device_and_config(
+    host: &cpal::Host,
+    audio_device: &AudioDevice,
+) -> Result<(Device, SupportedStreamConfig)> {
     // On macOS, use the default output device directly — cpal's loopback support
     // requires this path to build an input stream from an output device.
     #[cfg(target_os = "macos")]
@@ -357,6 +360,56 @@ fn build_input_stream(
         cpal::SampleFormat::I16 => build_input_stream_typed::<i16>(device, config, writer, meter),
         cpal::SampleFormat::I32 => build_input_stream_typed::<i32>(device, config, writer, meter),
         cpal::SampleFormat::F32 => build_input_stream_typed::<f32>(device, config, writer, meter),
+        sample_format => bail!("Unsupported sample format '{}'", sample_format),
+    }
+}
+
+fn build_capture_stream_typed<T, F>(
+    device: &Device,
+    config: SupportedStreamConfig,
+    mut on_data: F,
+    meter: Arc<LevelMeter>,
+) -> Result<Stream>
+where
+    T: SizedSample,
+    f32: FromSample<T>,
+    F: FnMut(&[f32]) + Send + 'static,
+{
+    // Reused between callbacks: the conversion allocates only when a buffer grows.
+    let mut converted: Vec<f32> = Vec::new();
+    let stream = device.build_input_stream(
+        config.into(),
+        move |data: &[T], _: &_| {
+            meter.push(buffer_peak(data));
+            converted.clear();
+            converted.extend(data.iter().map(|sample| f32::from_sample(*sample)));
+            on_data(&converted);
+        },
+        |err| tracing::error!("An error occurred on capture stream: {}", err),
+        None,
+    )?;
+    Ok(stream)
+}
+
+/// Capture stream for the screen recorder: any device format arrives as interleaved f32.
+/// `start_record` keeps its own path (`build_input_stream`).
+pub(crate) fn build_capture_stream(
+    device: &Device,
+    config: SupportedStreamConfig,
+    on_data: impl FnMut(&[f32]) + Send + 'static,
+    meter: Arc<LevelMeter>,
+) -> Result<Stream> {
+    match config.sample_format() {
+        cpal::SampleFormat::I8 => build_capture_stream_typed::<i8, _>(device, config, on_data, meter),
+        cpal::SampleFormat::I16 => build_capture_stream_typed::<i16, _>(device, config, on_data, meter),
+        cpal::SampleFormat::I32 => build_capture_stream_typed::<i32, _>(device, config, on_data, meter),
+        cpal::SampleFormat::I64 => build_capture_stream_typed::<i64, _>(device, config, on_data, meter),
+        cpal::SampleFormat::U8 => build_capture_stream_typed::<u8, _>(device, config, on_data, meter),
+        cpal::SampleFormat::U16 => build_capture_stream_typed::<u16, _>(device, config, on_data, meter),
+        cpal::SampleFormat::U32 => build_capture_stream_typed::<u32, _>(device, config, on_data, meter),
+        cpal::SampleFormat::U64 => build_capture_stream_typed::<u64, _>(device, config, on_data, meter),
+        cpal::SampleFormat::F32 => build_capture_stream_typed::<f32, _>(device, config, on_data, meter),
+        cpal::SampleFormat::F64 => build_capture_stream_typed::<f64, _>(device, config, on_data, meter),
         sample_format => bail!("Unsupported sample format '{}'", sample_format),
     }
 }

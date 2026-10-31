@@ -764,5 +764,9 @@
 	"tytoDeleteWithFile": "Удалить с файлом",
 	"tytoKeepFile": "Оставить файл",
 	"tytoCancel": "Отмена",
-	"tytoDeleteProjectBody": "Удалить «{name}»? Исходный файл останется на месте."
+	"tytoDeleteProjectBody": "Удалить «{name}»? Исходный файл останется на месте.",
+	"tytoRecordingTooShort": "Запись слишком короткая, сохранять нечего",
+	"tytoLowDiskStopped": "Мало места на диске. Запись остановлена и сохранена",
+	"tytoRecordingPause": "Пауза",
+	"tytoRecordingResume": "Продолжить"
 }

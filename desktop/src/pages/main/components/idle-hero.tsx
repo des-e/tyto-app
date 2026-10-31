@@ -1,6 +1,6 @@
 import { listen } from '@tauri-apps/api/event'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Link2, Mic, Plus, Square, X } from 'lucide-react'
+import { Link2, Mic, Pause, Play, Plus, Square, X } from 'lucide-react'
 import { siFacebook, siInstagram, siTiktok, siX, siYoutube } from 'simple-icons'
 import { useEffect, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
@@ -95,10 +95,19 @@ function RecordPanel() {
 					<LevelMeter />
 					<span className="font-mono text-2xl tracking-tight tabular-nums">{formatElapsed(recordElapsed)}</span>
 				</div>
-				<Button onClick={() => recording.stopRecord()} className="h-10 w-full">
-					<Square className="h-3.5 w-3.5 fill-current" />
-					{m.stopRecording()}
-				</Button>
+				<div className="flex w-full gap-2">
+					<Button
+						variant="secondary"
+						onClick={() => (recording.isPaused ? recording.resumeRecord() : recording.pauseRecord())}
+						className="h-10 flex-1">
+						{recording.isPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
+						{recording.isPaused ? m.tytoRecordingResume() : m.tytoRecordingPause()}
+					</Button>
+					<Button onClick={() => recording.stopRecord()} className="h-10 flex-1">
+						<Square className="h-3.5 w-3.5 fill-current" />
+						{m.stopRecording()}
+					</Button>
+				</div>
 			</div>
 		)
 	}

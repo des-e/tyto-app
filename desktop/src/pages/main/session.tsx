@@ -11,6 +11,7 @@ import { pathToNamedPath } from '~/lib/fs'
 import { cleanupPartialDownloads, listInstalledModels, type InstalledModel } from '~/lib/model'
 import { autoProjectName } from '~/lib/project-name'
 import { notifyTranscriptsChanged, saveTranscript, TRANSCRIPT_VERSION, type TranscriptRecord } from '~/lib/transcripts-store'
+import { onRecordingFailed, onRecordingFinished, onRecordingState } from '~/lib/tyto/screen-recording'
 import type { NamedPath, ProjectSource } from '~/lib/types'
 import { useConfirmExit } from '~/lib/use-confirm-exit'
 import { hotkeyRecordingActive } from '~/providers/hotkey'
@@ -143,19 +144,82 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 		if (recordingShortcut.isShortcutRecording) setPanel('record')
 	}, [recordingShortcut.isShortcutRecording])
 
+	// The recorder's own clock (once a second and on every change): pauses are not counted.
 	useEffect(() => {
-		if (!recording.isRecording) {
-			setRecordElapsed(0)
-			return
-		}
 		setRecordElapsed(0)
-		const startedAt = Date.now()
-		const timer = window.setInterval(() => setRecordElapsed(Math.floor((Date.now() - startedAt) / 1000)), 500)
-		return () => window.clearInterval(timer)
+		if (!recording.isRecording) return
+		const unlisten = onRecordingState((state) => setRecordElapsed(Math.floor(state.activeMs / 1000)))
+		return () => {
+			unlisten.then((fn) => fn())
+		}
 	}, [recording.isRecording])
 
-	// A recording becomes a durable project first. Transcription is an optional second step which
-	// updates that same project, so a failed/disabled transcription never costs the user the audio.
+	// A recording is saved in `Записи/` and the project points at it (no copy). It stays
+	// «Не расшифровано» until transcribed; audio may start that on its own, video never does.
+	useEffect(() => {
+		const unlistenFinished = onRecordingFinished(async (payload) => {
+			recording.setIsRecording(false)
+			setPanel('none')
+			if (payload.stopReason === 'low_disk') toast.warning(m.tytoLowDiskStopped(), { position: 'bottom-center' })
+			if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
+
+			const { preference: current, hydrate, transcribeJob } = recordingCompletionRef.current
+			const name = autoProjectName(payload.name, 'record')
+			const createdAt = new Date()
+			const saved = await saveTranscript({
+				name,
+				sourcePath: payload.path,
+				projectsPath: current.projectsPath,
+				copyMedia: false,
+				durationSeconds: payload.durationSeconds,
+				segments: [],
+				language: current.modelOptions.lang,
+				modelPath: current.modelPath,
+				createdAt,
+			})
+			if (!saved) {
+				const message = `Failed to save recording project; the recording remains at ${payload.path}`
+				console.error(message)
+				toast.error(m.error(), { description: message, position: 'bottom-center' })
+				return
+			}
+
+			const record: TranscriptRecord = {
+				version: TRANSCRIPT_VERSION,
+				name,
+				sourcePath: saved.mediaPath,
+				createdAt: createdAt.toISOString(),
+				language: current.modelOptions.lang,
+				modelPath: current.modelPath,
+				durationSeconds: payload.durationSeconds,
+				segments: [],
+			}
+			const jobId = hydrate(record, saved.recordPath, saved.mediaPath, 'record')
+			notifyTranscriptsChanged()
+			if (!payload.hasVideo && current.autoTranscribeAfterRecording && jobId) transcribeJob(jobId)
+		})
+		const unlistenFailed = onRecordingFailed((payload) => {
+			recording.setIsRecording(false)
+			setPanel('none')
+			// Decided by the code: the text comes from Rust and is not localized.
+			if (payload.code === 'too_short') {
+				toast.warning(m.tytoRecordingTooShort(), { position: 'bottom-center' })
+				return
+			}
+			const message = payload.message || m.error()
+			toast.error(m.error(), { description: message, position: 'bottom-center' })
+			setErrorModal?.({ log: message, open: true })
+		})
+		return () => {
+			unlistenFinished.then((fn) => fn())
+			unlistenFailed.then((fn) => fn())
+		}
+	}, [recording.setIsRecording, setErrorModal])
+
+	// The old `start_record` path (dictation only now; dictation handles its own result, see
+	// `hotkeyRecordingActive`). A recording becomes a durable project first. Transcription is an
+	// optional second step which updates that same project, so a failed/disabled transcription
+	// never costs the user the audio.
 	useEffect(() => {
 		const unlisten: Promise<UnlistenFn> = listen<{ path: string; name: string; warning?: string }>('record_finish', async ({ payload }) => {
 			if (hotkeyRecordingActive) return

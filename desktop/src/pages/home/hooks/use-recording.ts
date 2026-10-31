@@ -1,4 +1,3 @@
-import { emit } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { type SetStateAction, useContext, useEffect, useState } from 'react'
 import type { AudioDevice } from '~/lib/audio'
@@ -6,6 +5,18 @@ import { CONFIG_KEYS } from '~/lib/config-keys'
 import { usePersisted } from '~/lib/config-store'
 import { KEEP_AWAKE, startKeepAwake, stopKeepAwake } from '~/lib/keep-awake'
 import { ensureSystemAudioPermission } from '~/lib/permissions'
+import { recordingsFolder } from '~/lib/tyto/media-path'
+import {
+	type CaptureTarget,
+	onRecordingFailed,
+	onRecordingFinished,
+	onRecordingState,
+	pauseRecording,
+	type RecordingMode,
+	resumeRecording,
+	startRecording,
+	stopRecording,
+} from '~/lib/tyto/screen-recording'
 import { ErrorModalContext } from '~/providers/error-modal'
 import { usePreferenceProvider } from '~/providers/preference'
 
@@ -18,6 +29,7 @@ export function useRecording(onBeforeStart: () => void) {
 	const [inputDevice, setInputDevice] = useState<AudioDevice | null>(null)
 	const [outputDevice, setOutputDevice] = useState<AudioDevice | null>(null)
 	const [isRecording, setIsRecording] = useState(false)
+	const [isPaused, setIsPaused] = useState(false)
 	const [recordingName, setRecordingName] = useState('')
 
 	function setInputDeviceAndSave(value: SetStateAction<AudioDevice | null>) {
@@ -53,16 +65,38 @@ export function useRecording(onBeforeStart: () => void) {
 		if (preference.homeTab === 'record') loadAudioDevices()
 	}, [preference.homeTab])
 
-	async function startRecord() {
+	// The recorder is one per app: a recording started by the shortcut or the meeting prompt pauses here too.
+	useEffect(() => {
+		const end = () => {
+			stopKeepAwake(KEEP_AWAKE.record)
+			setIsPaused(false)
+		}
+		const unlisteners = [
+			onRecordingState((state) => setIsPaused(state.status === 'paused')),
+			onRecordingFinished(end),
+			onRecordingFailed(end),
+		]
+		return () => {
+			for (const unlisten of unlisteners) unlisten.then((dispose) => dispose())
+		}
+	}, [])
+
+	async function startRecord(mode: RecordingMode = 'audio', target?: CaptureTarget) {
 		if (outputDevice && !(await ensureSystemAudioPermission())) return
 		startKeepAwake(KEEP_AWAKE.record)
 		onBeforeStart()
 		setIsRecording(true)
+		setIsPaused(false)
 		const selectedDevices = [inputDevice, outputDevice].filter((device): device is AudioDevice => device !== null)
 		try {
-			await invoke('start_record', {
+			await startRecording({
+				mode,
+				target: target ?? null,
 				devices: selectedDevices,
-				recordingName: recordingName.trim() || null,
+				recordingsDir: await recordingsFolder(preference.projectsPath),
+				// The quality setting arrives with the video recording settings.
+				quality: 'good',
+				name: recordingName.trim() || null,
 			})
 		} catch (error) {
 			stopKeepAwake(KEEP_AWAKE.record)
@@ -72,9 +106,25 @@ export function useRecording(onBeforeStart: () => void) {
 		}
 	}
 
+	async function pauseRecord() {
+		try {
+			await pauseRecording()
+		} catch (error) {
+			console.error('pauseRecord error: ', error)
+		}
+	}
+
+	async function resumeRecord() {
+		try {
+			await resumeRecording()
+		} catch (error) {
+			console.error('resumeRecord error: ', error)
+		}
+	}
+
 	async function stopRecord() {
 		try {
-			await emit('stop_record')
+			await stopRecording()
 		} catch (error) {
 			stopKeepAwake(KEEP_AWAKE.record)
 			setIsRecording(false)
@@ -90,11 +140,14 @@ export function useRecording(onBeforeStart: () => void) {
 		outputDevice,
 		isRecording,
 		setIsRecording,
+		isPaused,
 		recordingName,
 		setRecordingName,
 		setInputDevice: setInputDeviceAndSave,
 		setOutputDevice: setOutputDeviceAndSave,
 		startRecord,
+		pauseRecord,
+		resumeRecord,
 		stopRecord,
 	}
 }

@@ -764,5 +764,9 @@
 	"tytoDeleteWithFile": "Delete with file",
 	"tytoKeepFile": "Keep file",
 	"tytoCancel": "Cancel",
-	"tytoDeleteProjectBody": "Delete “{name}”? The original file stays where it is."
+	"tytoDeleteProjectBody": "Delete “{name}”? The original file stays where it is.",
+	"tytoRecordingTooShort": "The recording is too short, nothing to save",
+	"tytoLowDiskStopped": "Low disk space. The recording was stopped and saved",
+	"tytoRecordingPause": "Pause",
+	"tytoRecordingResume": "Resume"
 }

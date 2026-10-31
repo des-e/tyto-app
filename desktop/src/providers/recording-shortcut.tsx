@@ -9,8 +9,11 @@ import { usePersisted } from '~/lib/config-store'
 import { getDefaultRecordingShortcut } from '~/lib/config'
 import type { MeetingRecordingOptions } from '~/lib/meeting-prompt'
 import { ensureSystemAudioPermission } from '~/lib/permissions'
+import { recordingsFolder } from '~/lib/tyto/media-path'
+import { onRecordingFailed, onRecordingFinished, startRecording as startSegmentedRecording, stopRecording as stopSegmentedRecording } from '~/lib/tyto/screen-recording'
 import { m } from '~/paraglide/messages.js'
 import { useHotkeyProvider } from './hotkey'
+import { usePreferenceProvider } from './preference'
 
 interface RecordingShortcutContextValue {
 	recordingShortcutEnabled: boolean
@@ -38,6 +41,8 @@ function errorDescription(error: unknown) {
 
 export function RecordingShortcutProvider({ children }: { children: ReactNode }) {
 	const dictation = useHotkeyProvider()
+	const preference = usePreferenceProvider()
+	const projectsPathRef = useRef(preference.projectsPath)
 	const dictationRecordingRef = useRef(dictation.isHotkeyRecording)
 	const [recordingShortcutEnabled, setRecordingShortcutEnabled] = usePersisted(CONFIG_KEYS.recordingShortcutEnabled, false)
 	const [recordingShortcut, setRecordingShortcut] = usePersisted(CONFIG_KEYS.recordingShortcut, getDefaultRecordingShortcut())
@@ -54,6 +59,10 @@ export function RecordingShortcutProvider({ children }: { children: ReactNode })
 	useEffect(() => {
 		dictationRecordingRef.current = dictation.isHotkeyRecording
 	}, [dictation.isHotkeyRecording])
+
+	useEffect(() => {
+		projectsPathRef.current = preference.projectsPath
+	}, [preference.projectsPath])
 
 	const startRecording = useCallback(async (options: MeetingRecordingOptions = { microphone: true, systemAudio: false }) => {
 		if (normalRecordingActiveRef.current || startingRef.current || stoppingRef.current) return false
@@ -73,7 +82,13 @@ export function RecordingShortcutProvider({ children }: { children: ReactNode })
 				(device): device is AudioDevice => device != null,
 			)
 			if (selectedDevices.length === 0) throw new Error(m.noDefaultMicrophone())
-			await invoke('start_record', { devices: selectedDevices, recordingName: null })
+			await startSegmentedRecording({
+				mode: 'audio',
+				devices: selectedDevices,
+				recordingsDir: await recordingsFolder(projectsPathRef.current),
+				quality: 'good',
+				name: null,
+			})
 			recordingRef.current = true
 			normalRecordingActiveRef.current = true
 			setIsShortcutRecording(true)
@@ -91,7 +106,7 @@ export function RecordingShortcutProvider({ children }: { children: ReactNode })
 		if (!normalRecordingActiveRef.current || stoppingRef.current) return
 		stoppingRef.current = true
 		try {
-			await emit('stop_record')
+			await stopSegmentedRecording()
 		} catch (error) {
 			stoppingRef.current = false
 			console.error('Recording shortcut failed to stop:', error)
@@ -117,8 +132,9 @@ export function RecordingShortcutProvider({ children }: { children: ReactNode })
 			recordingRef.current = false
 			setIsShortcutRecording(false)
 		}
-		const unlistenFinish = listen('record_finish', resetRecording)
-		const unlistenError = listen('record_error', resetRecording)
+		// Dictation still ends with `record_finish`; it must not reset this recording.
+		const unlistenFinish = onRecordingFinished(resetRecording)
+		const unlistenError = onRecordingFailed(resetRecording)
 		return () => {
 			unlistenFinish.then((dispose) => dispose())
 			unlistenError.then((dispose) => dispose())

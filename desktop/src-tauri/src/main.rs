@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
     let mut builder = tauri::Builder::default()
         .manage(tray::TrayState::default())
         .manage(keepawake::KeepAwake::new())
+        .manage(screen::recorder::RecorderRuntime::default())
         .manage(tokio::sync::Mutex::<Option<handoff::HandoffState>>::new(None))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
@@ -142,6 +143,11 @@ async fn main() -> Result<()> {
             cmd::files::get_default_projects_path,
             cmd::audio::get_audio_devices,
             cmd::audio::start_record,
+            screen::commands::recording_start,
+            screen::commands::recording_pause,
+            screen::commands::recording_resume,
+            screen::commands::recording_stop,
+            screen::commands::recording_state,
             cmd::app::get_models_folder,
             cmd::app::get_logs_folder,
             cmd::app::show_log_path,

@@ -178,6 +178,12 @@ impl SegmentedWavSink {
     pub fn is_open(&self) -> bool {
         self.open.is_some()
     }
+
+    /// The open segment stopped taking samples (write error or WAV size limit):
+    /// the recorder rotates to a new segment so the rest is not lost.
+    pub fn has_failed(&self) -> bool {
+        self.open.as_ref().is_some_and(|seg| seg.failed || seg.full)
+    }
 }
 
 #[cfg(test)]
@@ -269,7 +275,9 @@ mod tests {
         let t0 = Instant::now();
         sink.open(&path, t0).unwrap();
         sink.write(&[0.5; 100], t0);
+        assert!(!sink.has_failed());
         sink.open.as_mut().unwrap().failed = true;
+        assert!(sink.has_failed());
         sink.write(&[0.5; 100], t0 + Duration::from_millis(100));
         let rec = sink.close(1_000).unwrap().unwrap();
         assert_eq!((rec.frames, rec.captured_frames, rec.target_ms), (100, 100, 1_000));

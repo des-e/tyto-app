@@ -18,6 +18,10 @@ const RU: Record<string, string> = {
 	tytoKeepFile: 'Оставить файл',
 	tytoCancel: 'Отмена',
 	tytoDeleteProjectBody: 'Удалить «{name}»? Исходный файл останется на месте.',
+	tytoRecordingTooShort: 'Запись слишком короткая, сохранять нечего',
+	tytoLowDiskStopped: 'Мало места на диске. Запись остановлена и сохранена',
+	tytoRecordingPause: 'Пауза',
+	tytoRecordingResume: 'Продолжить',
 }
 
 const KEYS = [
@@ -29,6 +33,10 @@ const KEYS = [
 	'tytoKeepFile',
 	'tytoCancel',
 	'tytoDeleteProjectBody',
+	'tytoRecordingTooShort',
+	'tytoLowDiskStopped',
+	'tytoRecordingPause',
+	'tytoRecordingResume',
 ]
 
 describe('тексты записи экрана', () => {
