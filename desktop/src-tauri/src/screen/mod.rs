@@ -4,4 +4,6 @@
 #![allow(dead_code)]
 
 pub mod encoder;
+pub mod pacer;
 pub mod quality;
+pub mod session;
