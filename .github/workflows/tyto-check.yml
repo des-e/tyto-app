@@ -31,7 +31,8 @@ env:
     CARGO_PROFILE_DEV_DEBUG: 0
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
+    # A push must not cancel a running manual bundle build, so the event is part of the group.
+    group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
     cancel-in-progress: true
 
 jobs:

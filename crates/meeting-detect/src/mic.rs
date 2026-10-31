@@ -54,7 +54,11 @@ fn parse_pactl_json(input: &str) -> Option<MicUsage> {
             }
         }
     }
-    Some(MicUsage { active, processes })
+    Some(MicUsage {
+        active,
+        processes,
+        owners_known: true,
+    })
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -121,7 +125,11 @@ fn parse_pactl_text(input: &str) -> Option<MicUsage> {
             processes.push(process);
         }
     }
-    Some(MicUsage { active, processes })
+    Some(MicUsage {
+        active,
+        processes,
+        owners_known: true,
+    })
 }
 
 #[cfg(any(target_os = "windows", test))]
@@ -230,6 +238,7 @@ mod platform {
         MicUsage {
             active: !processes.is_empty(),
             processes,
+            owners_known: true,
         }
     }
 }
@@ -262,26 +271,148 @@ mod platform {
 }
 
 #[cfg(target_os = "macos")]
+pub(crate) use platform::input_owner_pids;
+
+#[cfg(target_os = "macos")]
 mod platform {
-    use crate::MicUsage;
+    use crate::{MicUsage, ProcessInfo};
     use coreaudio_sys::{
         kAudioDevicePropertyDeviceIsRunningSomewhere, kAudioHardwarePropertyDefaultInputDevice, kAudioObjectPropertyElementMain,
         kAudioObjectPropertyScopeGlobal, kAudioObjectSystemObject, AudioDeviceID, AudioObjectGetPropertyData,
-        AudioObjectPropertyAddress,
+        AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectPropertyAddress,
     };
     use std::{ffi::c_void, mem::size_of, ptr};
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
-    unsafe fn property<T: Copy>(object: u32, selector: u32, value: &mut T) -> bool {
-        let address = AudioObjectPropertyAddress {
+    /// AudioHardware.h selectors from macOS 14.2. Spelled out here so the build does not depend on
+    /// the SDK that `coreaudio-sys` generated its bindings against.
+    const fn four_cc(code: &[u8; 4]) -> u32 {
+        u32::from_be_bytes(*code)
+    }
+    const PROCESS_OBJECT_LIST: u32 = four_cc(b"prs#");
+    const PROCESS_PID: u32 = four_cc(b"ppid");
+    const PROCESS_IS_RUNNING_INPUT: u32 = four_cc(b"piri");
+    /// How far up the parent chain an unrecognised owner (a browser's audio helper) is followed.
+    const MAX_ANCESTORS: usize = 4;
+
+    fn address(selector: u32) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress {
             mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain,
-        };
+        }
+    }
+
+    unsafe fn property<T: Copy>(object: u32, selector: u32, value: &mut T) -> bool {
+        let address = address(selector);
         let mut size = size_of::<T>() as u32;
         unsafe {
             AudioObjectGetPropertyData(object, &address, 0, ptr::null(), &mut size, value as *mut T as *mut c_void) == 0
                 && size as usize == size_of::<T>()
         }
+    }
+
+    /// Pids of every process currently taking audio input, from the CoreAudio process objects.
+    /// `None` when the OS does not have that list (macOS before 14.2).
+    pub(crate) fn input_owner_pids() -> Option<Vec<u32>> {
+        let address = address(PROCESS_OBJECT_LIST);
+        let mut size = 0_u32;
+        if unsafe { AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &address, 0, ptr::null(), &mut size) } != 0 {
+            return None;
+        }
+        let mut objects: Vec<AudioObjectID> = vec![0; size as usize / size_of::<AudioObjectID>()];
+        if !objects.is_empty() {
+            let mut size = (objects.len() * size_of::<AudioObjectID>()) as u32;
+            let status = unsafe {
+                AudioObjectGetPropertyData(
+                    kAudioObjectSystemObject,
+                    &address,
+                    0,
+                    ptr::null(),
+                    &mut size,
+                    objects.as_mut_ptr().cast::<c_void>(),
+                )
+            };
+            if status != 0 {
+                return None;
+            }
+            objects.truncate(size as usize / size_of::<AudioObjectID>());
+        }
+
+        let mut pids = Vec::new();
+        for object in objects {
+            let mut running: u32 = 0;
+            if !unsafe { property(object, PROCESS_IS_RUNNING_INPUT, &mut running) } || running == 0 {
+                continue;
+            }
+            let mut pid: i32 = 0;
+            if !unsafe { property(object, PROCESS_PID, &mut pid) } {
+                continue;
+            }
+            if let Ok(pid) = u32::try_from(pid) {
+                if pid > 0 && !pids.contains(&pid) {
+                    pids.push(pid);
+                }
+            }
+        }
+        Some(pids)
+    }
+
+    /// Identity of one pid, plus its parent pid. Apps come from `NSRunningApplication`; anything
+    /// else (helpers, command-line tools) from the process table.
+    fn identify(system: &mut System, pid: u32) -> (ProcessInfo, Option<u32>) {
+        let sys_pid = Pid::from_u32(pid);
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[sys_pid]),
+            false,
+            ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+        );
+        let process = system.process(sys_pid);
+        let parent = process.and_then(|process| process.parent()).map(|parent| parent.as_u32());
+        let info = crate::process::application_info(pid).unwrap_or_else(|| ProcessInfo {
+            pid: Some(pid),
+            name: process
+                .map(|process| process.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| format!("pid {pid}")),
+            executable: process
+                .and_then(|process| process.exe())
+                .map(|path| path.to_string_lossy().into_owned()),
+            bundle_id: None,
+        });
+        (info, parent)
+    }
+
+    /// Every owner is reported as itself. A browser captures the microphone from a helper process
+    /// that is not recognised on its own, so for an unrecognised owner the first recognised
+    /// ancestor (the browser that owns the Meet window) is added as well.
+    fn owners(pids: &[u32]) -> Vec<ProcessInfo> {
+        let mut system = System::new();
+        let mut processes: Vec<ProcessInfo> = Vec::new();
+        fn push(processes: &mut Vec<ProcessInfo>, info: ProcessInfo) {
+            if !processes.contains(&info) {
+                processes.push(info);
+            }
+        }
+        for &pid in pids {
+            let (info, mut parent) = identify(&mut system, pid);
+            let recognised = crate::process::source(&info).is_some();
+            push(&mut processes, info);
+            if recognised {
+                continue;
+            }
+            for _ in 0..MAX_ANCESTORS {
+                let Some(ancestor) = parent.filter(|pid| *pid > 1) else {
+                    break;
+                };
+                let (info, next) = identify(&mut system, ancestor);
+                if crate::process::source(&info).is_some() {
+                    push(&mut processes, info);
+                    break;
+                }
+                parent = next;
+            }
+        }
+        processes
     }
 
     pub(super) fn current_usage() -> MicUsage {
@@ -298,9 +429,21 @@ mod platform {
         }
         let mut running: u32 = 0;
         let active = unsafe { property(device, kAudioDevicePropertyDeviceIsRunningSomewhere, &mut running) } && running != 0;
+        if !active {
+            return MicUsage::default();
+        }
+        let pids = super::input_owner_pids();
+        let owners_known = pids.is_some();
+        let processes = match pids {
+            Some(pids) if !pids.is_empty() => owners(&pids),
+            // Older macOS, or an owner the list does not show: the caller falls back to the
+            // running known apps, as before.
+            _ => Vec::new(),
+        };
         MicUsage {
             active,
-            processes: Vec::new(),
+            processes,
+            owners_known,
         }
     }
 }

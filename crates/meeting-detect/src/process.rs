@@ -133,10 +133,55 @@ mod platform {
 }
 
 #[cfg(target_os = "macos")]
+pub(crate) use platform::application_info;
+
+#[cfg(target_os = "macos")]
 mod platform {
     use crate::ProcessInfo;
-    use objc2::rc::autoreleasepool;
-    use objc2_app_kit::NSWorkspace;
+    use objc2::rc::{autoreleasepool, Retained};
+    use objc2::ClassType;
+    use objc2_app_kit::{NSRunningApplication, NSWorkspace};
+
+    fn info(application: &NSRunningApplication) -> ProcessInfo {
+        let executable = application
+            .executableURL()
+            .and_then(|url| url.path())
+            .map(|path| path.to_string());
+        let bundle_id = application.bundleIdentifier().map(|id| id.to_string());
+        let name = application
+            .localizedName()
+            .map(|name| name.to_string())
+            .or_else(|| {
+                executable.as_deref().and_then(|path| {
+                    std::path::Path::new(path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .map(str::to_owned)
+                })
+            })
+            .or_else(|| bundle_id.clone())
+            .unwrap_or_default();
+        // The generated method is feature-gated on AppKit's optional `libc` feature;
+        // the Objective-C ABI is still a plain signed process identifier.
+        let raw_pid: i32 = unsafe { objc2::msg_send![application, processIdentifier] };
+        ProcessInfo {
+            pid: u32::try_from(raw_pid).ok().filter(|pid| *pid > 0),
+            name,
+            executable,
+            bundle_id,
+        }
+    }
+
+    /// The app behind `pid`, or `None` when it is not an app (a helper or command-line tool).
+    pub(crate) fn application_info(pid: u32) -> Option<ProcessInfo> {
+        let raw_pid = i32::try_from(pid).ok()?;
+        autoreleasepool(|_| {
+            // Same `libc` feature gate as `processIdentifier` above.
+            let application: Option<Retained<NSRunningApplication>> =
+                unsafe { objc2::msg_send![NSRunningApplication::class(), runningApplicationWithProcessIdentifier: raw_pid] };
+            application.map(|application| info(&application))
+        })
+    }
 
     pub(super) fn running_candidates() -> Vec<ProcessInfo> {
         // `runningApplications` is explicitly thread-safe and returns an atomic snapshot, so the
@@ -147,36 +192,8 @@ mod platform {
             workspace
                 .runningApplications()
                 .iter()
-                .filter_map(|application| {
-                    let executable = application
-                        .executableURL()
-                        .and_then(|url| url.path())
-                        .map(|path| path.to_string());
-                    let bundle_id = application.bundleIdentifier().map(|id| id.to_string());
-                    let name = application
-                        .localizedName()
-                        .map(|name| name.to_string())
-                        .or_else(|| {
-                            executable.as_deref().and_then(|path| {
-                                std::path::Path::new(path)
-                                    .file_name()
-                                    .and_then(|name| name.to_str())
-                                    .map(str::to_owned)
-                            })
-                        })
-                        .or_else(|| bundle_id.clone())
-                        .unwrap_or_default();
-                    // The generated method is feature-gated on AppKit's optional `libc` feature;
-                    // the Objective-C ABI is still a plain signed process identifier.
-                    let raw_pid: i32 = unsafe { objc2::msg_send![&*application, processIdentifier] };
-                    let info = ProcessInfo {
-                        pid: u32::try_from(raw_pid).ok().filter(|pid| *pid > 0),
-                        name,
-                        executable,
-                        bundle_id,
-                    };
-                    super::source(&info).is_some().then_some(info)
-                })
+                .map(|application| info(&application))
+                .filter(|info| super::source(info).is_some())
                 .collect()
         })
     }

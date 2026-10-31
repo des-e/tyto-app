@@ -72,8 +72,61 @@ pub(crate) struct ProcessInfo {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct MicUsage {
     pub(crate) active: bool,
-    /// Empty when the OS exposes microphone activity but not its owner (notably macOS).
+    /// Empty when the OS exposes microphone activity but not its owner (older macOS).
     pub(crate) processes: Vec<ProcessInfo>,
+    /// Whether the OS could name the microphone owners at all. On macOS this is true only when the
+    /// CoreAudio process list (macOS 14.2+) answered.
+    pub(crate) owners_known: bool,
+}
+
+/// One top-level on-screen window, as the OS reports it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct WindowInfo {
+    /// `HWND` on Windows, `CGWindowID` on macOS.
+    pub id: u64,
+    pub pid: u32,
+    /// May be empty: windows without a title are returned too, the consumer filters.
+    pub title: String,
+    pub process_name: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Visible top-level windows of every process (Windows and macOS; empty elsewhere).
+///
+/// Window titles are personal data: callers must not log them unless the user opted in.
+pub fn visible_windows() -> Vec<WindowInfo> {
+    window_title::visible_windows()
+}
+
+/// A raw snapshot used to learn how new meeting apps look to the OS.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ProbeReport {
+    pub mic_active: bool,
+    pub owners_known: bool,
+    /// `name | exe | bundle_id` of every microphone owner, known meeting app or not.
+    pub mic_owners: Vec<String>,
+    pub windows: Vec<WindowInfo>,
+}
+
+/// Read the microphone owners and the visible windows in one go.
+pub fn probe() -> ProbeReport {
+    let usage = mic::current_usage();
+    ProbeReport {
+        mic_active: usage.active,
+        owners_known: usage.owners_known,
+        mic_owners: usage.processes.iter().map(owner_line).collect(),
+        windows: visible_windows(),
+    }
+}
+
+fn owner_line(info: &ProcessInfo) -> String {
+    format!(
+        "{} | {} | {}",
+        info.name,
+        info.executable.as_deref().unwrap_or("-"),
+        info.bundle_id.as_deref().unwrap_or("-")
+    )
 }
 
 /// Whether the OS lets this app read other windows' titles — how a browser meeting is recognised.
@@ -380,6 +433,37 @@ mod tests {
             executable: None,
             bundle_id: None,
         }
+    }
+
+    #[test]
+    fn probe_report_serializes_owner_and_window_lists() {
+        let report = ProbeReport {
+            mic_active: true,
+            owners_known: true,
+            mic_owners: vec!["telemost.exe | C:\\x\\telemost.exe | -".into()],
+            windows: vec![WindowInfo {
+                id: 7,
+                pid: 42,
+                title: "Встреча".into(),
+                process_name: "telemost.exe".into(),
+                width: 800,
+                height: 600,
+            }],
+        };
+        let json = serde_json::to_string(&report).unwrap();
+        assert!(json.contains("\"owners_known\":true") && json.contains("Встреча"));
+    }
+
+    #[test]
+    fn owner_line_marks_missing_fields() {
+        let mut info = process("Telemost");
+        assert_eq!(owner_line(&info), "Telemost | - | -");
+        info.executable = Some("/Applications/Telemost.app/Contents/MacOS/Telemost".into());
+        info.bundle_id = Some("ru.yandex.telemost".into());
+        assert_eq!(
+            owner_line(&info),
+            "Telemost | /Applications/Telemost.app/Contents/MacOS/Telemost | ru.yandex.telemost"
+        );
     }
 
     #[test]

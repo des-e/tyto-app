@@ -1,7 +1,18 @@
-use crate::ProcessInfo;
+use crate::{ProcessInfo, WindowInfo};
 
 pub(crate) fn meet_process(browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
     platform::meet_process(browsers)
+}
+
+pub(crate) fn visible_windows() -> Vec<WindowInfo> {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        platform::visible_windows()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        Vec::new()
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -22,10 +33,81 @@ fn matching_browser(browsers: &[ProcessInfo], pid: u32, title: &str) -> Option<P
 #[cfg(target_os = "windows")]
 mod platform {
     use super::matching_browser;
-    use crate::ProcessInfo;
+    use crate::{ProcessInfo, WindowInfo};
+    use std::ffi::c_void;
+    use std::mem::size_of;
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
     use windows::core::BOOL;
-    use windows::Win32::Foundation::{HWND, LPARAM};
-    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible};
+    use windows::Win32::Foundation::{HWND, LPARAM, RECT};
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    fn window_text(window: HWND) -> String {
+        let mut buffer = [0_u16; 1024];
+        let length = unsafe { GetWindowTextW(window, &mut buffer) };
+        if length <= 0 {
+            return String::new();
+        }
+        String::from_utf16_lossy(&buffer[..length as usize])
+    }
+
+    /// Windows on another virtual desktop, or suspended UWP frames, are "visible" but cloaked.
+    fn is_cloaked(window: HWND) -> bool {
+        let mut cloaked: u32 = 0;
+        let read = unsafe {
+            DwmGetWindowAttribute(
+                window,
+                DWMWA_CLOAKED,
+                (&mut cloaked as *mut u32).cast::<c_void>(),
+                size_of::<u32>() as u32,
+            )
+        };
+        read.is_ok() && cloaked != 0
+    }
+
+    unsafe extern "system" fn collect_window(window: HWND, parameter: LPARAM) -> BOOL {
+        let windows = unsafe { &mut *(parameter.0 as *mut Vec<WindowInfo>) };
+        if !unsafe { IsWindowVisible(window) }.as_bool() || is_cloaked(window) {
+            return BOOL(1);
+        }
+        let mut rect = RECT::default();
+        if unsafe { GetWindowRect(window, &mut rect) }.is_err() {
+            return BOOL(1);
+        }
+        let mut pid = 0;
+        unsafe { GetWindowThreadProcessId(window, Some(&mut pid)) };
+        windows.push(WindowInfo {
+            id: window.0 as usize as u64,
+            pid,
+            title: window_text(window),
+            process_name: String::new(),
+            width: u32::try_from(rect.right.saturating_sub(rect.left)).unwrap_or(0),
+            height: u32::try_from(rect.bottom.saturating_sub(rect.top)).unwrap_or(0),
+        });
+        BOOL(1)
+    }
+
+    pub(super) fn visible_windows() -> Vec<WindowInfo> {
+        let mut windows: Vec<WindowInfo> = Vec::new();
+        let parameter = LPARAM((&mut windows as *mut Vec<WindowInfo>) as isize);
+        // The callback never stops early, so a failure here is a genuine API error; whatever was
+        // collected before it is still returned.
+        let _ = unsafe { EnumWindows(Some(collect_window), parameter) };
+
+        let mut pids: Vec<Pid> = windows.iter().map(|window| Pid::from_u32(window.pid)).collect();
+        pids.sort_unstable();
+        pids.dedup();
+        let mut system = System::new();
+        system.refresh_processes_specifics(ProcessesToUpdate::Some(&pids), true, ProcessRefreshKind::nothing());
+        for window in &mut windows {
+            if let Some(process) = system.process(Pid::from_u32(window.pid)) {
+                window.process_name = process.name().to_string_lossy().into_owned();
+            }
+        }
+        windows
+    }
 
     struct Search<'a> {
         browsers: &'a [ProcessInfo],
@@ -160,21 +242,81 @@ mod platform {
 #[cfg(target_os = "macos")]
 mod platform {
     use super::matching_browser;
-    use crate::ProcessInfo;
+    use crate::{ProcessInfo, WindowInfo};
     use core_foundation::base::{CFType, TCFType};
     use core_foundation::dictionary::CFDictionary;
     use core_foundation::number::CFNumber;
     use core_foundation::string::{CFString, CFStringRef};
     use core_graphics::access::ScreenCaptureAccess;
     use core_graphics::window::{
-        copy_window_info, kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly, kCGWindowName,
-        kCGWindowOwnerPID,
+        copy_window_info, kCGNullWindowID, kCGWindowBounds, kCGWindowLayer, kCGWindowListExcludeDesktopElements,
+        kCGWindowListOptionOnScreenOnly, kCGWindowName, kCGWindowNumber, kCGWindowOwnerName, kCGWindowOwnerPID,
     };
     use std::ffi::c_void;
 
     fn value(dictionary: &CFDictionary, key: CFStringRef) -> Option<CFType> {
         let raw = *dictionary.find(key.cast::<c_void>())?;
         Some(unsafe { CFType::wrap_under_get_rule(raw.cast()) })
+    }
+
+    fn number(dictionary: &CFDictionary, key: CFStringRef) -> Option<CFNumber> {
+        value(dictionary, key)?.downcast::<CFNumber>()
+    }
+
+    fn string(dictionary: &CFDictionary, key: CFStringRef) -> Option<String> {
+        Some(value(dictionary, key)?.downcast::<CFString>()?.to_string())
+    }
+
+    /// `kCGWindowBounds` is a CGRect dictionary: `X`, `Y`, `Width`, `Height`.
+    fn size(dictionary: &CFDictionary) -> (u32, u32) {
+        let Some(bounds) = value(dictionary, unsafe { kCGWindowBounds }).and_then(|bounds| bounds.downcast::<CFDictionary>())
+        else {
+            return (0, 0);
+        };
+        let side = |name: &'static str| {
+            let key = CFString::from_static_string(name);
+            number(&bounds, key.as_concrete_TypeRef())
+                .and_then(|value| value.to_f64())
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .map_or(0, |value| value.round().min(f64::from(u32::MAX)) as u32)
+        };
+        (side("Width"), side("Height"))
+    }
+
+    fn window_info(dictionary: &CFDictionary) -> Option<WindowInfo> {
+        // Layer 0 is ordinary application windows; menus, the Dock and overlays sit above it.
+        if number(dictionary, unsafe { kCGWindowLayer })?.to_i64()? != 0 {
+            return None;
+        }
+        let id = u64::try_from(number(dictionary, unsafe { kCGWindowNumber })?.to_i64()?).ok()?;
+        let pid = u32::try_from(number(dictionary, unsafe { kCGWindowOwnerPID })?.to_i64()?).ok()?;
+        let (width, height) = size(dictionary);
+        Some(WindowInfo {
+            id,
+            pid,
+            // Without the Screen Recording permission titles are simply absent.
+            title: string(dictionary, unsafe { kCGWindowName }).unwrap_or_default(),
+            process_name: string(dictionary, unsafe { kCGWindowOwnerName }).unwrap_or_default(),
+            width,
+            height,
+        })
+    }
+
+    pub(super) fn visible_windows() -> Vec<WindowInfo> {
+        let Some(windows) = copy_window_info(
+            kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+            kCGNullWindowID,
+        ) else {
+            return Vec::new();
+        };
+        windows
+            .get_all_values()
+            .into_iter()
+            .filter_map(|raw| {
+                let object = unsafe { CFType::wrap_under_get_rule(raw.cast()) };
+                window_info(&object.downcast::<CFDictionary>()?)
+            })
+            .collect()
     }
 
     fn window_identity(dictionary: &CFDictionary) -> Option<(u32, String)> {

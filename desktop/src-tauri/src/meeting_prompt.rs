@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::sync::mpsc::{self, RecvTimeoutError, TryRecvError};
 use std::sync::Mutex;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::webview::PageLoadEvent;
 use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_store::StoreExt;
@@ -40,6 +40,9 @@ const TOP_MARGIN: f64 = MARGIN;
 /// Idle cadence only. The detector polls itself faster while the microphone signal is changing,
 /// so a meeting surfaces within roughly a second of the call opening the microphone.
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
+/// `TYTO_MEETING_PROBE=1` logs raw microphone owners and windows, to learn new meeting apps.
+const PROBE_ENV: &str = "TYTO_MEETING_PROBE";
+const PROBE_INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MeetingPromptPayload {
@@ -299,6 +302,9 @@ fn start_worker(app: &tauri::AppHandle) -> Result<(), String> {
         .name("meeting-prompt".into())
         .spawn(move || {
             let detector = meeting_detect::watch(POLL_INTERVAL);
+            // Window titles are personal, so the probe runs only when asked for explicitly.
+            let probe_enabled = std::env::var(PROBE_ENV).is_ok_and(|value| value == "1");
+            let mut last_probe: Option<Instant> = None;
             loop {
                 match stop_receiver.try_recv() {
                     Ok(()) | Err(TryRecvError::Disconnected) => break,
@@ -308,6 +314,13 @@ fn start_worker(app: &tauri::AppHandle) -> Result<(), String> {
                     Ok(state) => apply_detection(&worker_app, state),
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => break,
+                }
+                if probe_enabled && last_probe.is_none_or(|probed| probed.elapsed() >= PROBE_INTERVAL) {
+                    last_probe = Some(Instant::now());
+                    let report = meeting_detect::probe();
+                    if report.mic_active {
+                        tracing::info!(target: "vibe::meeting_probe", report = ?report);
+                    }
                 }
             }
             drop(detector);
