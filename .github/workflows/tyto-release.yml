@@ -1,0 +1,98 @@
+name: Tyto Release
+
+# Tyto build: Windows x64 (NSIS) and macOS universal (dmg), unsigned
+# (ad-hoc on macOS). Based on upstream release.yml, which stays untouched.
+
+on:
+    workflow_dispatch:
+
+jobs:
+    publish-tauri:
+        timeout-minutes: 120
+        permissions:
+            contents: write
+            id-token: write
+            attestations: write
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "windows-latest"
+                      args: "--target x86_64-pc-windows-msvc"
+                    - platform: "macos-latest"
+                      args: "--target universal-apple-darwin"
+
+        runs-on: ${{ matrix.platform }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: setup pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  package_json_file: desktop/package.json
+
+            - name: setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+                  cache-dependency-path: desktop/pnpm-lock.yaml
+
+            - name: setup uv
+              uses: astral-sh/setup-uv@v5
+
+            - name: setup chore
+              uses: getchore/setup-chore@v1
+              with:
+                  version: v1.6.0
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+
+            - name: Install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+            - name: Install frontend dependencies
+              run: pnpm install
+              working-directory: ./desktop
+
+            - name: Fetch the sidecars (Windows x64)
+              if: runner.os == 'Windows'
+              run: chore setup x86_64-pc-windows-msvc
+
+            - name: Fetch the sidecars (macOS arm64 + x86_64)
+              if: runner.os == 'macOS'
+              run: |
+                  chore setup aarch64-apple-darwin
+                  chore setup x86_64-apple-darwin
+
+            - name: make-universal-sidecars
+              if: runner.os == 'macOS'
+              run: bash scripts/tyto/make-universal-sidecars.sh desktop/src-tauri/binaries
+
+            - name: Build
+              uses: tauri-apps/tauri-action@v0
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+                  # Tauri Updater (Tyto's own key)
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+              with:
+                  tagName: v__VERSION__ # the action replaces __VERSION__ with the app version.
+                  releaseName: "Tyto v__VERSION__"
+                  releaseBody: "Установка: https://github.com/des-e/tyto/blob/main/docs/install.md — программа не подписана, при первом запуске нужно разрешить её открыть."
+                  prerelease: true
+                  args: ${{ matrix.args }} --config src-tauri/tauri.tyto.conf.json
+                  projectPath: "./desktop"
+                  tauriScript: pnpm exec tauri
+
+            # The Cargo workspace root is the repo root, so bundles land in
+            # target/<triple>/release/bundle/, not desktop/src-tauri/target/.
+            - name: Attest build provenance
+              uses: actions/attest-build-provenance@v2
+              with:
+                  subject-path: |
+                      target/**/bundle/**/*.exe
+                      target/**/bundle/**/*.dmg

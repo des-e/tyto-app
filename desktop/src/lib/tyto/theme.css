@@ -1,0 +1,1481 @@
+/*
+ * Tyto theme: strict minimalism over Vibe's layout.
+ *
+ * Loaded once from bootstrap.tsx right after the upstream globals.css, so these unlayered rules win
+ * over both the upstream tokens and Tailwind's layered utilities. Kept in its own file so upstream
+ * merges of globals.css stay conflict-free.
+ *
+ * The single accent IS the foreground colour: black in light, white in dark. No blue anywhere.
+ * Both blocks below must override exactly the same tokens (theme.test.ts checks it): the light block
+ * comes after upstream's `.dark`, so a token set only here would leak into the dark theme.
+ */
+
+:root {
+	--radius: 0.5rem;
+
+	--background: #ffffff;
+	--foreground: #0a0a0a;
+	--card: #ffffff;
+	--card-foreground: #0a0a0a;
+	--popover: #ffffff;
+	--popover-foreground: #0a0a0a;
+	--primary: #0a0a0a;
+	--primary-foreground: #ffffff;
+	--secondary: #f5f5f5;
+	--secondary-foreground: #0a0a0a;
+	--muted: #f5f5f5;
+	--muted-foreground: #6b6b6b;
+	--accent: #f5f5f5;
+	--accent-foreground: #0a0a0a;
+	--border: #e5e5e5;
+	--input: #e5e5e5;
+	--ring: rgb(10 10 10 / 0.35);
+
+	--aurora-1: #0a0a0a;
+	--aurora-2: #525252;
+	--aurora-3: #a3a3a3;
+	--aurora-4: #d4d4d4;
+	--chart-5: #737373;
+
+	--sidebar: #fafafa;
+	--sidebar-foreground: #0a0a0a;
+	--sidebar-primary: #0a0a0a;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: #f0f0f0;
+	--sidebar-accent-foreground: #0a0a0a;
+	--sidebar-border: #ededed;
+	--sidebar-ring: rgb(10 10 10 / 0.35);
+
+	--shadow-2xs: none;
+	--shadow-xs: none;
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04);
+	--shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+	--shadow-md: 0 4px 12px rgb(0 0 0 / 0.05);
+	--shadow-lg: 0 8px 24px rgb(0 0 0 / 0.07);
+	--shadow-xl: 0 12px 32px rgb(0 0 0 / 0.08);
+	--shadow-2xl: 0 16px 48px rgb(0 0 0 / 0.1);
+
+	--tyto-selected-muted: rgb(255 255 255 / 0.62);
+	--tyto-selected-tint: rgb(255 255 255 / 0.16);
+	--tyto-line2: #d4d4d4;
+	--tyto-disabled-fg: #6b6b6b;
+	/* Placeholder text (e.g. the «Темы» tab): fainter than muted, still 3.4:1 on the background. */
+	--tyto-faint: #8c8c8c;
+	--tyto-danger: #b4453c;
+	/* Progress tracks and unplayed timeline pieces: >= 3:1 on the page and the sidebar (WCAG 1.4.11). */
+	--tyto-track: #8a8a8a;
+}
+
+.dark {
+	--radius: 0.5rem;
+
+	--background: #0b0b0c;
+	--foreground: #ededed;
+	--card: #111113;
+	--card-foreground: #ededed;
+	--popover: #141416;
+	--popover-foreground: #ededed;
+	--primary: #ededed;
+	--primary-foreground: #0b0b0c;
+	--secondary: #17171a;
+	--secondary-foreground: #ededed;
+	--muted: #17171a;
+	--muted-foreground: #84848c;
+	--accent: #1c1c20;
+	--accent-foreground: #ededed;
+	--border: #1f1f22;
+	--input: #2a2a2f;
+	--ring: rgb(237 237 237 / 0.4);
+
+	--aurora-1: #ededed;
+	--aurora-2: #a1a1aa;
+	--aurora-3: #6b6b72;
+	--aurora-4: #3f3f46;
+	--chart-5: #8a8a90;
+
+	--sidebar: #111113;
+	--sidebar-foreground: #ededed;
+	--sidebar-primary: #ededed;
+	--sidebar-primary-foreground: #0b0b0c;
+	--sidebar-accent: #1c1c20;
+	--sidebar-accent-foreground: #ededed;
+	--sidebar-border: #1f1f22;
+	--sidebar-ring: rgb(237 237 237 / 0.4);
+
+	--shadow-2xs: none;
+	--shadow-xs: none;
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+	--shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+	--shadow-md: 0 4px 12px rgb(0 0 0 / 0.4);
+	--shadow-lg: 0 8px 24px rgb(0 0 0 / 0.45);
+	--shadow-xl: 0 12px 32px rgb(0 0 0 / 0.5);
+	--shadow-2xl: 0 16px 48px rgb(0 0 0 / 0.55);
+
+	--tyto-selected-muted: rgb(11 11 12 / 0.6);
+	--tyto-selected-tint: rgb(11 11 12 / 0.14);
+	--tyto-line2: #34343a;
+	--tyto-disabled-fg: #8a8a90;
+	--tyto-faint: #66666e;
+	/* Upstream's dark --destructive (#c4655c) gives white text only 3.9:1, so the button plate keeps the deeper red. */
+	--tyto-danger: #b4453c;
+	--tyto-track: #66666e;
+}
+
+/* Sidebar surface. On macOS vibrancy the sidebar stays see-through, as upstream intends. */
+html:not(.mac-vibrancy) .tyto-sidebar {
+	background-color: var(--sidebar);
+}
+
+.tyto-sidebar {
+	border-color: var(--sidebar-border);
+}
+
+/*
+ * Selected state: always a solid foreground plate with inverted text. Covers the explicit class
+ * plus the selection markup upstream already uses (radio groups, Radix tabs), so screens need no edits.
+ */
+.tyto-selected,
+[role='radiogroup'] [role='radio'][aria-checked='true'],
+[role='tab'][data-state='active'] {
+	background-color: var(--foreground);
+	color: var(--background);
+	border-color: var(--foreground);
+	box-shadow: none;
+}
+
+:is(.tyto-selected, [role='radiogroup'] [role='radio'][aria-checked='true'], [role='tab'][data-state='active'])
+	:is(.text-foreground, .text-primary, .text-card-foreground) {
+	color: inherit;
+}
+
+:is(.tyto-selected, [role='radiogroup'] [role='radio'][aria-checked='true'], [role='tab'][data-state='active']) .text-muted-foreground {
+	color: var(--tyto-selected-muted);
+}
+
+:is(.tyto-selected, [role='radiogroup'] [role='radio'][aria-checked='true'], [role='tab'][data-state='active'])
+	:is([class*='bg-primary/'], [class*='bg-background/'], [class*='bg-muted']) {
+	background-color: var(--tyto-selected-tint);
+}
+
+/* Inter everywhere; numbers that must line up (timestamps, player times, percentages) are tabular Inter. */
+.tabular-nums,
+.font-mono.tabular-nums {
+	font-family: var(--font-sans);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Aurora surfaces become monochrome: the drop-zone drag feedback is a quiet tint, bars are ink. */
+.aurora {
+	background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+	background-image: none;
+	filter: none;
+}
+
+.aurora::after {
+	display: none;
+}
+
+.aurora-bar,
+.progress-aurora > * {
+	background-color: var(--foreground);
+	background-image: none;
+	filter: none;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+/*
+ * Shape, spacing, type and motion tokens. Theme-independent, so they live outside the colour blocks
+ * above (which must stay symmetric). Values: docs/design/2026-10-25-tyto-visual-language.md, «Токены».
+ */
+html {
+	--tyto-r-xs: 4px;
+	--tyto-r-sm: 6px;
+	--tyto-r-md: 8px;
+	--tyto-r-lg: 12px;
+
+	--tyto-sp-2: 2px;
+	--tyto-sp-4: 4px;
+	--tyto-sp-8: 8px;
+	--tyto-sp-12: 12px;
+	--tyto-sp-16: 16px;
+	--tyto-sp-24: 24px;
+	--tyto-sp-32: 32px;
+	--tyto-sp-48: 48px;
+
+	/* Bottom bars: the sidebar footer and the player share this height and one top line. */
+	--tyto-bar-h: 56px;
+
+	--tyto-fs-screen: 28px;
+	--tyto-fs-doc: 26px;
+	--tyto-fs-settings: 22px;
+	--tyto-fs-dialog: 17px;
+	--tyto-fs-meeting: 15px;
+	--tyto-fs-ui: 14px;
+	--tyto-fs-meta: 13px;
+	--tyto-fs-eyebrow: 12px;
+
+	--tyto-ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Type scale. Titles are 600 with tight tracking; everything else is 400, buttons 500. */
+.tyto-title-screen {
+	font-size: 28px;
+	line-height: 1.15;
+	font-weight: 600;
+	letter-spacing: -0.03em;
+}
+
+.tyto-title-doc {
+	font-size: 26px;
+	line-height: 1.15;
+	font-weight: 600;
+	letter-spacing: -0.025em;
+}
+
+.tyto-title-settings {
+	font-size: 22px;
+	line-height: 1.2;
+	font-weight: 600;
+	letter-spacing: -0.025em;
+}
+
+.tyto-title-dialog {
+	font-size: 17px;
+	line-height: 1.2;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+}
+
+.tyto-text-meeting {
+	font-size: 15px;
+	line-height: 1.65;
+	font-weight: 400;
+}
+
+.tyto-text-meta {
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--muted-foreground);
+}
+
+/*
+ * Group labels in normal case: 12px, 500, muted, no tracking. Also rewrites upstream's `.eyebrow` /
+ * `.app-kicker` and the inline 11px caps labels Vibe repeats across screens (`uppercase` +
+ * `tracking-[0.08em]`), so no upstream file needs editing. Colour is set only on the named classes:
+ * the inline labels keep their own (some change colour on hover).
+ */
+.tyto-eyebrow,
+.eyebrow,
+.app-kicker,
+.uppercase[class*='tracking-[0.'] {
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: 12px;
+	line-height: 1.2;
+	font-weight: 500;
+}
+
+.tyto-eyebrow,
+.eyebrow,
+.app-kicker {
+	color: var(--muted-foreground);
+}
+
+/* Thin icons: lucide draws with stroke-width 2 as an attribute, which a CSS property overrides. */
+svg.lucide {
+	stroke-width: 1.5;
+}
+
+/*
+ * Toasts: one-line inverted plate with its action as bold text, bottom centre of the main area
+ * (the sidebar publishes half its width as --tyto-main-x), lifted above the player bar via the
+ * offset in sonner.tsx. Selectors are one step more specific than sonner's own injected styles.
+ */
+:root [data-sonner-toaster][data-x-position='center'] {
+	left: calc(50% + var(--tyto-main-x, 0px));
+}
+
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+	gap: 12px;
+	padding: 8px 12px 8px 16px;
+	border: none;
+	border-radius: var(--tyto-r-md);
+	background: var(--foreground);
+	color: var(--background);
+	font-size: 13px;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+	font-weight: 500;
+	line-height: 1.45;
+}
+
+/* A failure must not look like a success: the error icon is red (>= 3:1 on both plates). */
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'][data-type='error'] [data-icon] {
+	color: var(--tyto-danger);
+}
+
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
+	color: var(--tyto-selected-muted);
+}
+
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+	height: auto;
+	padding: 0 4px;
+	border-radius: var(--tyto-r-xs);
+	background: transparent;
+	color: inherit;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button][data-cancel] {
+	color: var(--tyto-selected-muted);
+	font-weight: 500;
+}
+
+:root [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+	background: var(--foreground);
+	color: var(--background);
+	border-color: var(--tyto-selected-tint);
+}
+
+/* The owl blinks once (OwlMark `blink`): eyelids close from the middle and open again. */
+@keyframes tyto-owl-blink {
+	0%,
+	100% {
+		transform: scaleY(0);
+	}
+	50% {
+		transform: scaleY(1);
+	}
+}
+
+.tyto-owl-lid {
+	transform: scaleY(0);
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: tyto-owl-blink 260ms var(--tyto-ease) 1 both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tyto-owl-lid {
+		animation: none;
+	}
+}
+
+/*
+ * The walking owl of the first run (OwlWalk). The track is the strip minus the owl's width, so
+ * translateX(100%) of the mover puts the owl flush with the right edge. The owl faces right on the
+ * way there and is mirrored with scaleX(-1) on the way back. Transform only.
+ *
+ * Ground speed = stride (no sliding). The owl is drawn 40 px wide from a 600-unit viewBox, so
+ * 1 unit = 40 / 600 = 0.0667 px. A foot swings from translateX(-40) to translateX(80) in one step:
+ * 120 units = 8 px. A step lasts 0.4 s, so the planted foot moves back 8 px / 0.4 s = 20 px/s
+ * relative to the body, and the body must move forward at the same 20 px/s.
+ * On a ~400 px strip the track is ~360 px (400 - 40): one pass = 360 / 20 = 18 s.
+ * The mover is linear (constant speed) and stands still 2 s at each edge (turning in the middle):
+ * cycle = 2 * (18 s + 2 s) = 40 s.
+ * The legs and the bob run on the same 40 s timeline: one step = 1% of it, keyframes alternate
+ * the two foot poses only inside the walking segments (45 steps each) and sit at rest (feet down,
+ * body level) during the stands. Percentages: stand 0-2.5%, walk 2.5-47.5% (45% = 18 s),
+ * stand 47.5-52.5%, walk back 52.5-97.5%, stand 97.5-100%. On a wider/narrower strip the speed
+ * changes with the width (a fixed 40 s cycle), within roughly +-25% for 300-500 px.
+ */
+@keyframes tyto-owl-walk-x {
+	0%,
+	2.5% {
+		transform: translateX(0);
+	}
+	47.5%,
+	52.5% {
+		transform: translateX(100%);
+	}
+	97.5%,
+	100% {
+		transform: translateX(0);
+	}
+}
+
+/* The flip happens at 50%, in the middle of the stand at the right edge, and at 0% on the left. */
+@keyframes tyto-owl-walk-face {
+	0% {
+		transform: scaleX(1);
+	}
+	50% {
+		transform: scaleX(-1);
+	}
+}
+
+@keyframes tyto-owl-walk-bob {
+	0%,
+	2.5%,
+	47.5%,
+	52.5%,
+	97.5%,
+	100% {
+		transform: translateY(0);
+	}
+
+	3.5%,
+	5.5%,
+	7.5%,
+	9.5%,
+	11.5%,
+	13.5%,
+	15.5%,
+	17.5%,
+	19.5%,
+	21.5%,
+	23.5%,
+	25.5%,
+	27.5%,
+	29.5%,
+	31.5%,
+	33.5%,
+	35.5%,
+	37.5%,
+	39.5%,
+	41.5%,
+	43.5%,
+	45.5%,
+	53.5%,
+	55.5%,
+	57.5%,
+	59.5%,
+	61.5%,
+	63.5%,
+	65.5%,
+	67.5%,
+	69.5%,
+	71.5%,
+	73.5%,
+	75.5%,
+	77.5%,
+	79.5%,
+	81.5%,
+	83.5%,
+	85.5%,
+	87.5%,
+	89.5%,
+	91.5%,
+	93.5%,
+	95.5% {
+		transform: translateY(0);
+	}
+
+	4.5%,
+	6.5%,
+	8.5%,
+	10.5%,
+	12.5%,
+	14.5%,
+	16.5%,
+	18.5%,
+	20.5%,
+	22.5%,
+	24.5%,
+	26.5%,
+	28.5%,
+	30.5%,
+	32.5%,
+	34.5%,
+	36.5%,
+	38.5%,
+	40.5%,
+	42.5%,
+	44.5%,
+	46.5%,
+	54.5%,
+	56.5%,
+	58.5%,
+	60.5%,
+	62.5%,
+	64.5%,
+	66.5%,
+	68.5%,
+	70.5%,
+	72.5%,
+	74.5%,
+	76.5%,
+	78.5%,
+	80.5%,
+	82.5%,
+	84.5%,
+	86.5%,
+	88.5%,
+	90.5%,
+	92.5%,
+	94.5%,
+	96.5% {
+		transform: translateY(-14px);
+	}
+}
+
+@keyframes tyto-owl-walk-step-a {
+	0%,
+	2.5%,
+	47.5%,
+	52.5%,
+	97.5%,
+	100% {
+		transform: translate(0, 0) rotate(0deg);
+	}
+
+	3.5%,
+	5.5%,
+	7.5%,
+	9.5%,
+	11.5%,
+	13.5%,
+	15.5%,
+	17.5%,
+	19.5%,
+	21.5%,
+	23.5%,
+	25.5%,
+	27.5%,
+	29.5%,
+	31.5%,
+	33.5%,
+	35.5%,
+	37.5%,
+	39.5%,
+	41.5%,
+	43.5%,
+	45.5%,
+	53.5%,
+	55.5%,
+	57.5%,
+	59.5%,
+	61.5%,
+	63.5%,
+	65.5%,
+	67.5%,
+	69.5%,
+	71.5%,
+	73.5%,
+	75.5%,
+	77.5%,
+	79.5%,
+	81.5%,
+	83.5%,
+	85.5%,
+	87.5%,
+	89.5%,
+	91.5%,
+	93.5%,
+	95.5% {
+		transform: translate(-40px, 0) rotate(10deg);
+	}
+
+	4.5%,
+	6.5%,
+	8.5%,
+	10.5%,
+	12.5%,
+	14.5%,
+	16.5%,
+	18.5%,
+	20.5%,
+	22.5%,
+	24.5%,
+	26.5%,
+	28.5%,
+	30.5%,
+	32.5%,
+	34.5%,
+	36.5%,
+	38.5%,
+	40.5%,
+	42.5%,
+	44.5%,
+	46.5%,
+	54.5%,
+	56.5%,
+	58.5%,
+	60.5%,
+	62.5%,
+	64.5%,
+	66.5%,
+	68.5%,
+	70.5%,
+	72.5%,
+	74.5%,
+	76.5%,
+	78.5%,
+	80.5%,
+	82.5%,
+	84.5%,
+	86.5%,
+	88.5%,
+	90.5%,
+	92.5%,
+	94.5%,
+	96.5% {
+		transform: translate(80px, -22px) rotate(-12deg);
+	}
+}
+
+@keyframes tyto-owl-walk-step-b {
+	0%,
+	2.5%,
+	47.5%,
+	52.5%,
+	97.5%,
+	100% {
+		transform: translate(0, 0) rotate(0deg);
+	}
+
+	3.5%,
+	5.5%,
+	7.5%,
+	9.5%,
+	11.5%,
+	13.5%,
+	15.5%,
+	17.5%,
+	19.5%,
+	21.5%,
+	23.5%,
+	25.5%,
+	27.5%,
+	29.5%,
+	31.5%,
+	33.5%,
+	35.5%,
+	37.5%,
+	39.5%,
+	41.5%,
+	43.5%,
+	45.5%,
+	53.5%,
+	55.5%,
+	57.5%,
+	59.5%,
+	61.5%,
+	63.5%,
+	65.5%,
+	67.5%,
+	69.5%,
+	71.5%,
+	73.5%,
+	75.5%,
+	77.5%,
+	79.5%,
+	81.5%,
+	83.5%,
+	85.5%,
+	87.5%,
+	89.5%,
+	91.5%,
+	93.5%,
+	95.5% {
+		transform: translate(80px, -22px) rotate(-12deg);
+	}
+
+	4.5%,
+	6.5%,
+	8.5%,
+	10.5%,
+	12.5%,
+	14.5%,
+	16.5%,
+	18.5%,
+	20.5%,
+	22.5%,
+	24.5%,
+	26.5%,
+	28.5%,
+	30.5%,
+	32.5%,
+	34.5%,
+	36.5%,
+	38.5%,
+	40.5%,
+	42.5%,
+	44.5%,
+	46.5%,
+	54.5%,
+	56.5%,
+	58.5%,
+	60.5%,
+	62.5%,
+	64.5%,
+	66.5%,
+	68.5%,
+	70.5%,
+	72.5%,
+	74.5%,
+	76.5%,
+	78.5%,
+	80.5%,
+	82.5%,
+	84.5%,
+	86.5%,
+	88.5%,
+	90.5%,
+	92.5%,
+	94.5%,
+	96.5% {
+		transform: translate(-40px, 0) rotate(10deg);
+	}
+}
+
+.tyto-owl-walk {
+	position: relative;
+	height: 56px;
+	overflow: hidden;
+	color: var(--foreground);
+}
+
+.tyto-owl-walk-track {
+	position: absolute;
+	left: 0;
+	bottom: 4px;
+	width: calc(100% - 40px);
+	height: 48px;
+}
+
+.tyto-owl-walk-mover {
+	width: 100%;
+	height: 100%;
+	animation: tyto-owl-walk-x 40s linear infinite;
+}
+
+.tyto-owl-walk-owl {
+	display: block;
+	animation: tyto-owl-walk-face 40s step-end infinite;
+}
+
+.tyto-owl-walk-body {
+	animation: tyto-owl-walk-bob 40s ease-in-out infinite;
+}
+
+.tyto-owl-walk-foot {
+	transform-box: view-box;
+}
+
+.tyto-owl-walk-foot-back {
+	transform-origin: 475px 795px;
+	animation: tyto-owl-walk-step-a 40s ease-in-out infinite;
+}
+
+.tyto-owl-walk-foot-front {
+	transform-origin: 575px 795px;
+	animation: tyto-owl-walk-step-b 40s ease-in-out infinite;
+}
+
+/* Stopped (no connection): the owl stands where it was, feet down, facing the way it walked. */
+.tyto-owl-walk[data-walking='false'] :is(.tyto-owl-walk-body, .tyto-owl-walk-foot) {
+	animation: none;
+}
+
+.tyto-owl-walk[data-walking='false'] :is(.tyto-owl-walk-mover, .tyto-owl-walk-owl) {
+	animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tyto-owl-walk :is(.tyto-owl-walk-mover, .tyto-owl-walk-owl, .tyto-owl-walk-body, .tyto-owl-walk-foot) {
+		animation: none;
+	}
+
+	.tyto-owl-walk-mover {
+		transform: translateX(50%);
+	}
+}
+
+/*
+ * Transcript as a script (lib/tyto/script-line.tsx, difference 6). The time sits in a 64 px gutter,
+ * 12 px from the text, and shows «▶ 01:32» on hover. The name is shown once per series; lines of one
+ * speaker are 4 px apart (the list gap), a new speaker starts 20 + 4 px lower. The current line gets a
+ * 2 px rule at its start edge. No grey plates.
+ */
+.tyto-script-doc > :is(button, input, p),
+.tyto-script-doc > .animate-pulse {
+	margin-inline-start: 76px;
+	max-width: calc(100% - 76px);
+}
+
+.tyto-script-line {
+	position: relative;
+	display: grid;
+	grid-template-columns: 64px minmax(0, 1fr);
+	column-gap: var(--tyto-sp-12);
+}
+
+.tyto-script-line[data-gap='speaker'] {
+	padding-top: 20px;
+}
+
+.tyto-script-gutter {
+	display: flex;
+	justify-content: flex-end;
+	align-items: flex-start;
+}
+
+.tyto-script-time {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tyto-sp-4);
+	height: 20px;
+	margin-top: 3px;
+	padding: 0 var(--tyto-sp-2);
+	border-radius: var(--tyto-r-xs);
+	font-size: 12px;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted-foreground);
+	cursor: pointer;
+	user-select: none;
+	transition: color 150ms var(--tyto-ease);
+}
+
+/* With a name above the line, the time lines up with the name instead. */
+.tyto-script-line:has(.tyto-script-who > *) .tyto-script-time {
+	margin-top: 0;
+}
+
+.tyto-script-time:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: 2px;
+}
+
+.tyto-script-play {
+	width: 11px;
+	height: 11px;
+	fill: currentColor;
+	stroke: none;
+	opacity: 0;
+	transition: opacity 150ms var(--tyto-ease);
+}
+
+.tyto-script-line:hover .tyto-script-time,
+.tyto-script-time:focus-visible,
+.tyto-script-line[data-active='true'] .tyto-script-time {
+	color: var(--foreground);
+}
+
+.tyto-script-line[data-active='true'] .tyto-script-time {
+	font-weight: 500;
+}
+
+.tyto-script-line:hover .tyto-script-play,
+.tyto-script-time:focus-visible .tyto-script-play {
+	opacity: 1;
+}
+
+.tyto-script-who {
+	display: flex;
+	margin-bottom: var(--tyto-sp-4);
+}
+
+.tyto-script-who:empty {
+	display: none;
+}
+
+.tyto-script-text {
+	position: relative;
+	max-width: 640px;
+}
+
+.tyto-script-text::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: calc(-1 * var(--tyto-sp-12));
+	top: 5px;
+	bottom: 5px;
+	width: 2px;
+	border-radius: 2px;
+	background: var(--foreground);
+	opacity: 0;
+	transition: opacity 200ms var(--tyto-ease);
+}
+
+.tyto-script-line[data-active='true'] .tyto-script-text::before {
+	opacity: 1;
+}
+
+/* A line inside a series can still be moved to another speaker: the chip appears on hover only. */
+.tyto-script-aside {
+	position: absolute;
+	top: 0;
+	inset-inline-end: 0;
+	max-width: 40%;
+	padding-inline-start: var(--tyto-sp-8);
+	background: var(--background);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 150ms var(--tyto-ease);
+}
+
+.tyto-script-line:hover .tyto-script-aside,
+.tyto-script-aside:focus-within,
+.tyto-script-aside:has([data-state='open']) {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Speaker name in front of the series (speaker-label.tsx). */
+.tyto-who {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tyto-sp-8);
+	max-width: 100%;
+	min-width: 0;
+	height: 20px;
+	font-size: 13.5px;
+	line-height: 20px;
+	font-weight: 600;
+	color: var(--foreground);
+}
+
+.tyto-who > .tyto-speaker-mark {
+	flex-shrink: 0;
+}
+
+/* Speaker mark (difference 7): 18 px square, filled / outlined / grey, tells speakers apart without colour. */
+.tyto-speaker-mark {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 var(--tyto-sp-2);
+	border-radius: var(--tyto-r-xs);
+	font-size: 10.5px;
+	line-height: 1;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	print-color-adjust: exact;
+	-webkit-print-color-adjust: exact;
+}
+
+.tyto-speaker-mark[data-tone='filled'] {
+	background: var(--foreground);
+	color: var(--background);
+}
+
+.tyto-speaker-mark[data-tone='outline'] {
+	border: 1.5px solid var(--foreground);
+	color: var(--foreground);
+}
+
+.tyto-speaker-mark[data-tone='grey'] {
+	background: var(--tyto-line2);
+	color: var(--foreground);
+}
+
+/*
+ * Text tabs «Текст / Сводка / Темы» (lib/tyto/transcript-tabs.tsx, difference 10): the full height of
+ * the toolbar, a 2 px rule under the active tab sitting on the toolbar's bottom line.
+ */
+.tyto-tabs {
+	display: flex;
+	align-self: stretch;
+	height: calc(var(--tyto-bar-h) - 1px);
+}
+
+.tyto-tab {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	height: 100%;
+	padding: 0 var(--tyto-sp-12);
+	border: 0;
+	background: none;
+	font-size: 13.5px;
+	color: var(--muted-foreground);
+	cursor: pointer;
+	transition: color 150ms var(--tyto-ease);
+}
+
+.tyto-tab:hover:not(:disabled) {
+	color: var(--foreground);
+}
+
+.tyto-tab[aria-selected='true'] {
+	color: var(--foreground);
+	font-weight: 500;
+}
+
+.tyto-tab[aria-selected='true']::after {
+	content: '';
+	position: absolute;
+	inset-inline: var(--tyto-sp-12);
+	bottom: -1px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--foreground);
+}
+
+/* Unavailable tabs read fainter than inactive ones (muted), still ≥3:1. */
+.tyto-tab:disabled {
+	color: var(--tyto-faint);
+	cursor: not-allowed;
+}
+
+.tyto-tab:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: -4px;
+	border-radius: var(--tyto-r-sm);
+}
+
+/*
+ * Empty main screen (lib/tyto/empty-screen.tsx, difference 9): no dashed card, the whole right-hand
+ * area takes the file. While a file is dragged over the window a quiet tint fills the area.
+ */
+.tyto-empty {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: var(--tyto-sp-48) var(--tyto-sp-24) 64px;
+	text-align: center;
+	overflow-y: auto;
+}
+
+.tyto-empty > :not(.tyto-empty-drop, .tyto-empty-local) {
+	position: relative;
+}
+
+.tyto-empty-drop {
+	position: absolute;
+	inset: var(--tyto-sp-16);
+	border: 1px solid var(--tyto-line2);
+	border-radius: var(--tyto-r-lg);
+	background: color-mix(in srgb, var(--foreground) 5%, transparent);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 200ms var(--tyto-ease);
+}
+
+.tyto-empty[data-dragging='true'] .tyto-empty-drop {
+	opacity: 1;
+}
+
+.tyto-empty-owl {
+	width: 44px;
+	height: 60px;
+	color: var(--foreground);
+}
+
+.tyto-empty-title {
+	margin: var(--tyto-sp-24) 0 var(--tyto-sp-8);
+	color: var(--foreground);
+}
+
+.tyto-empty-lead {
+	max-width: 420px;
+	margin: 0;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--muted-foreground);
+}
+
+.tyto-empty-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--tyto-sp-8);
+	margin-top: var(--tyto-sp-24);
+}
+
+.tyto-empty-panel {
+	width: 100%;
+	max-width: 576px;
+	margin-top: var(--tyto-sp-24);
+	padding: var(--tyto-sp-16) var(--tyto-sp-24);
+	border: 1px solid var(--border);
+	border-radius: var(--tyto-r-lg);
+	text-align: start;
+}
+
+.tyto-empty-options {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: var(--tyto-sp-4);
+	margin-top: var(--tyto-sp-24);
+	font-size: 13px;
+	color: var(--muted-foreground);
+}
+
+/* QuietRow's language pill and «Еще настройки» button read as links here, separated by a dot. */
+.tyto-empty-options > div {
+	gap: var(--tyto-sp-4);
+}
+
+.tyto-empty-options > div > div {
+	display: inline-flex;
+	align-items: center;
+	max-width: none;
+}
+
+.tyto-empty-options > div > div::after {
+	content: '·';
+	margin-inline-start: var(--tyto-sp-4);
+	color: var(--muted-foreground);
+}
+
+.tyto-empty-options :is(div, button)[class*='rounded-full'] {
+	width: auto;
+	height: auto;
+	padding: 0;
+	border: 0;
+	border-radius: var(--tyto-r-xs);
+	background: transparent;
+	color: var(--foreground);
+	font-size: 13px;
+	font-weight: 400;
+	text-decoration: underline;
+	text-decoration-color: var(--tyto-line2);
+	text-underline-offset: 3px;
+}
+
+.tyto-empty-options :is(div, button)[class*='rounded-full']:hover {
+	background: transparent;
+	color: var(--foreground);
+	text-decoration-color: currentColor;
+}
+
+.tyto-empty-options div[class*='rounded-full']:has(input) {
+	min-width: 180px;
+}
+
+.tyto-empty-options svg.lucide {
+	display: none;
+}
+
+.tyto-empty-local {
+	position: absolute;
+	bottom: var(--tyto-sp-24);
+	margin: 0;
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+
+/*
+ * Bottom bars (difference 8, v2): the sidebar footer («Настройки» + version) and the player are one
+ * height with one top line, content centred vertically, so the two read as a single strip.
+ */
+.tyto-bar {
+	box-sizing: border-box;
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	height: var(--tyto-bar-h);
+	border-top: 1px solid var(--border);
+}
+
+/*
+ * Sidebar history (recents-sidebar.tsx, difference 5). Text of rows, group labels and icons share one
+ * start edge 16 px from the panel (8 px list padding + 8 px row padding).
+ */
+.tyto-group-label {
+	margin: 0;
+	padding: var(--tyto-sp-16) var(--tyto-sp-8) var(--tyto-sp-4);
+	font-size: 12px;
+	line-height: 1.2;
+	font-weight: 500;
+	color: var(--muted-foreground);
+}
+
+.tyto-recent {
+	position: relative;
+	display: flex;
+	align-items: center;
+	margin-bottom: var(--tyto-sp-2);
+	border-radius: var(--tyto-r-sm);
+	transition: background-color 150ms var(--tyto-ease);
+}
+
+.tyto-recent:not(.tyto-recent-selected):hover:not(:has(> .tyto-recent-main:disabled)) {
+	background-color: var(--sidebar-accent);
+}
+
+/* While a job runs, other history rows cannot open: no hover, muted title (>= 4.5:1, theme.test.ts). */
+.tyto-recent-main:disabled .tyto-recent-title {
+	color: var(--muted-foreground);
+}
+
+/* Selected: a white row with a 2 px rule at its start, instead of Vibe's ink plate. */
+.tyto-recent-selected,
+.tyto-recent-selected:hover {
+	background-color: var(--background);
+	box-shadow: 0 0 0 1px var(--border);
+}
+
+.tyto-recent-selected::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: 0;
+	top: var(--tyto-sp-8);
+	bottom: var(--tyto-sp-8);
+	width: 2px;
+	border-radius: 2px;
+	background: var(--foreground);
+}
+
+.tyto-recent-main {
+	min-width: 0;
+	flex: 1;
+	padding: var(--tyto-sp-8);
+	text-align: start;
+	cursor: pointer;
+}
+
+.tyto-recent-main:disabled {
+	cursor: default;
+}
+
+.tyto-recent-main:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: -2px;
+	border-radius: var(--tyto-r-sm);
+}
+
+.tyto-recent-title {
+	font-size: 13.5px;
+	line-height: 18px;
+	color: var(--foreground);
+}
+
+.tyto-recent-selected .tyto-recent-title {
+	font-weight: 600;
+}
+
+.tyto-recent-meta {
+	margin-top: var(--tyto-sp-2);
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+}
+
+/* A transcription in progress: «Расшифровываем · 64%» and a mini progress bar beside it. */
+.tyto-recent-run {
+	display: flex;
+	align-items: center;
+	gap: var(--tyto-sp-8);
+	margin-top: var(--tyto-sp-4);
+}
+
+.tyto-recent-run .tyto-recent-meta {
+	margin-top: 0;
+	white-space: nowrap;
+}
+
+.tyto-mini-progress {
+	flex: 1;
+	min-width: 24px;
+	height: 3px;
+	overflow: hidden;
+	border-radius: 2px;
+	background: var(--tyto-track);
+}
+
+.tyto-mini-progress > div {
+	height: 100%;
+	background: var(--foreground);
+	transform-origin: left;
+	transition: transform 200ms var(--tyto-ease);
+}
+
+[dir='rtl'] .tyto-mini-progress > div {
+	transform-origin: right;
+}
+
+.tyto-sidebar-version {
+	margin-inline-start: auto;
+	padding-inline-end: var(--tyto-sp-8);
+	font-size: 12px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* Player (player-bar.tsx): 28 px start padding, the text column of the document; 12 px between items. */
+.tyto-player {
+	gap: var(--tyto-sp-12);
+	padding: 0 var(--tyto-sp-16) 0 28px;
+	background: var(--background);
+}
+
+.tyto-player-clock {
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.tyto-player-clock b {
+	font-weight: 500;
+	color: var(--foreground);
+}
+
+/* Replica timeline (lib/tyto/replica-timeline.tsx): 18 px hit area, 6 px pieces, 2 px playhead. */
+.tyto-timeline {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	height: 18px;
+	touch-action: none;
+	cursor: pointer;
+	border-radius: var(--tyto-r-xs);
+}
+
+.tyto-timeline[data-seekable='false'] {
+	cursor: default;
+}
+
+.tyto-timeline:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: 2px;
+}
+
+.tyto-timeline-layer {
+	position: absolute;
+	inset: 0;
+}
+
+.tyto-timeline-played {
+	pointer-events: none;
+}
+
+.tyto-timeline-replica {
+	position: absolute;
+	top: 6px;
+	height: 6px;
+	border-radius: 1.5px;
+	background: var(--tyto-track);
+}
+
+.tyto-timeline-empty {
+	left: 0;
+	right: 0;
+}
+
+/*
+ * Speaker tones (the speaker-mark order filled / outline / grey) on both sides of the playhead.
+ * Unplayed: stepping up from the track grey, so every piece keeps >= the track's 3:1. Played: darker
+ * and further apart. The untranscribed rest has no speaker: track unplayed, the lightest played tone.
+ */
+.tyto-timeline-replica[data-tone='filled'] {
+	background: color-mix(in srgb, var(--foreground) 40%, var(--tyto-track));
+}
+
+.tyto-timeline-replica[data-tone='outline'] {
+	background: color-mix(in srgb, var(--foreground) 20%, var(--tyto-track));
+}
+
+.tyto-timeline-played .tyto-timeline-replica[data-tone='filled'] {
+	background: var(--foreground);
+}
+
+.tyto-timeline-played .tyto-timeline-replica[data-tone='outline'] {
+	background: color-mix(in srgb, var(--foreground) 75%, var(--tyto-track));
+}
+
+.tyto-timeline-played .tyto-timeline-replica:is([data-tone='grey'], [data-tone='rest']) {
+	background: color-mix(in srgb, var(--foreground) 55%, var(--tyto-track));
+}
+
+.tyto-timeline-head {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	margin-inline-start: -1px;
+	border-radius: 1px;
+	background: var(--foreground);
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is(.tyto-script-time, .tyto-script-play, .tyto-script-text, .tyto-script-aside, .tyto-tab, .tyto-empty-drop, .tyto-recent, .tyto-mini-progress > div),
+	.tyto-script-text::before {
+		transition: none;
+	}
+}
+
+/*
+ * Settings as rows (difference 11). Sections still carry Vibe's per-row `px-4` here and there; inside
+ * a group the rows sit on the page margin instead, so their side padding goes. Whole-row action
+ * buttons keep theirs: it is their hover plate.
+ */
+.tyto-rows > :not(button) {
+	padding-inline: 0;
+}
+
+.tyto-settings-nav-item {
+	position: relative;
+	display: flex;
+	align-items: center;
+	height: 32px;
+	width: 100%;
+	padding: 0 8px;
+	border-radius: var(--tyto-r-sm);
+	font-size: 13.5px;
+	color: var(--foreground);
+	text-align: start;
+}
+
+.tyto-settings-nav-item:hover {
+	background-color: var(--accent);
+}
+
+.tyto-settings-nav-item[aria-current='page'] {
+	font-weight: 600;
+	background-color: var(--background);
+	box-shadow: 0 0 0 1px var(--border);
+}
+
+.tyto-settings-nav-item[aria-current='page']::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: 0;
+	top: 8px;
+	bottom: 8px;
+	width: 2px;
+	border-radius: 2px;
+	background-color: var(--foreground);
+}
+
+.tyto-settings-nav-item:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: 2px;
+}
+
+/*
+ * macOS overlay titlebar: the traffic lights float over the web content at x 16..~68, y ~22..34
+ * (traffic_light_position 16,28 in setup.rs). Modals keep their full-window backdrop, but the
+ * dialog itself must start below the lights, so it never touches or sits under them.
+ * Windows/Linux never get .mac-vibrancy and keep the original layout.
+ */
+html.mac-vibrancy {
+	--tyto-titlebar-inset: 44px;
+}
+
+html.mac-vibrancy .tyto-settings-frame {
+	padding-top: var(--tyto-titlebar-inset);
+}
+
+html.mac-vibrancy .tyto-settings-card {
+	max-height: calc(100dvh - var(--tyto-titlebar-inset) - 1.5rem);
+}
+
+/* Radix dialogs are centered in the space below the inset, not in the whole window. */
+html.mac-vibrancy .tyto-dialog {
+	top: calc(var(--tyto-titlebar-inset) + (100dvh - var(--tyto-titlebar-inset)) / 2);
+	max-height: calc(100dvh - var(--tyto-titlebar-inset) - 1.5rem);
+}

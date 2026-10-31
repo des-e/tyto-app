@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs><clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath></defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#0e0e10"/>
+  <g clip-path="url(#sq)">
+    <!-- head + shoulders -->
+    <path d="M170 960 C180 790 220 720 262 660 C214 570 214 340 326 262 C418 198 606 198 698 262 C810 340 810 570 762 660 C804 720 844 790 854 960 Z" fill="#c98a3e"/>
+    <!-- facial disc -->
+    <path d="M512 320 C474 286 418 276 370 282 C298 292 258 360 262 446 C268 566 384 680 512 750 C640 680 756 566 762 446 C766 360 726 292 654 282 C606 276 550 286 512 320 Z" fill="#f6f2ea"/>
+    <!-- eyes -->
+    <circle cx="430" cy="480" r="46" fill="#0e0e10"/>
+    <circle cx="594" cy="480" r="46" fill="#0e0e10"/>
+    <!-- beak -->
+    <path d="M512 572 C530 582 532 610 512 646 C492 610 494 582 512 572 Z" fill="#c98a3e"/>
+  </g>
+</svg>

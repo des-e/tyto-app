@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#0e0e10"/>
+  <!-- sound arcs: the owl hears -->
+  <g fill="none" stroke="#ff7a45" stroke-width="32" stroke-linecap="round">
+    <path d="M258 341 A300 300 0 0 0 258 659"/>
+    <path d="M198 304 A370 370 0 0 0 198 696"/>
+    <path d="M766 341 A300 300 0 0 1 766 659"/>
+    <path d="M826 304 A370 370 0 0 1 826 696"/>
+  </g>
+  <!-- head -->
+  <path d="M512 244 C652 244 742 338 742 488 C742 650 636 792 512 792 C388 792 282 650 282 488 C282 338 372 244 512 244 Z" fill="#5a554d"/>
+  <!-- facial disc -->
+  <path d="M512 326 C476 294 424 284 380 290 C322 298 300 352 302 430 C306 552 400 670 512 750 C624 670 718 552 722 430 C724 352 702 298 644 290 C600 284 548 294 512 326 Z" fill="#f4f1ea"/>
+  <!-- ridge -->
+  <path d="M512 338 C528 400 528 500 512 572 C496 500 496 400 512 338 Z" fill="#d6cfc2"/>
+  <circle cx="440" cy="478" r="44" fill="#0e0e10"/>
+  <circle cx="584" cy="478" r="44" fill="#0e0e10"/>
+  <path d="M512 560 C530 570 532 600 512 638 C492 600 494 570 512 560 Z" fill="#ff7a45"/>
+</svg>

@@ -1,0 +1,10 @@
+{
+	"bundle": {
+		"externalBin": ["binaries/tyto-engine", "binaries/ffmpeg"],
+		"windows": {
+			"nsis": {
+				"installerHooks": "vc_redist.nsh"
+			}
+		}
+	}
+}

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <style>
+    .owl-body {
+      animation: bob 0.32s ease-in-out infinite alternate;
+    }
+    .foot-back {
+      animation: step-a 0.32s ease-in-out infinite alternate;
+      transform-origin: 475px 795px;
+    }
+    .foot-front {
+      animation: step-b 0.32s ease-in-out infinite alternate;
+      transform-origin: 575px 795px;
+    }
+    @keyframes bob {
+      0%   { transform: translateY(0px); }
+      100% { transform: translateY(-14px); }
+    }
+    @keyframes step-a {
+      0%   { transform: translate(-18px, 0px) rotate(10deg); }
+      100% { transform: translate(22px, -22px) rotate(-12deg); }
+    }
+    @keyframes step-b {
+      0%   { transform: translate(22px, -22px) rotate(-12deg); }
+      100% { transform: translate(-18px, 0px) rotate(10deg); }
+    }
+  </style>
+
+  <!-- Фон иконки -->
+  <rect x="98" y="98" width="828" height="828" rx="224" fill="#F4F4F2" stroke="#DCDCD9" stroke-width="8"/>
+
+  <g transform="translate(1024, 0) scale(-1, 1)">
+    <!-- Задняя лапка -->
+    <g class="foot-back">
+      <path d="M 462 760 L 462 798 L 490 798 L 490 760 Z" fill="#111111"/>
+      <path d="M 428 844 C 428 814 446 796 476 796 C 506 796 522 814 522 844 Z" fill="#111111"/>
+    </g>
+
+    <!-- Передняя лапка -->
+    <g class="foot-front">
+      <path d="M 542 758 L 555 802 L 584 796 L 568 750 Z" fill="#111111"/>
+      <path d="M 535 844 C 535 814 552 796 582 796 C 612 796 629 814 629 844 Z" fill="#111111"/>
+    </g>
+
+    <!-- Корпус совы сбоку -->
+    <g class="owl-body">
+      <path d="M 382 156 L 480 226 C 605 220 712 308 730 442 C 762 454 780 478 784 514 C 766 508 750 504 735 503 C 748 666 648 796 485 804 L 365 804 C 458 766 516 688 525 588 C 510 694 442 782 325 804 L 225 804 L 268 584 L 268 446 C 268 352 315 284 382 252 Z" fill="#111111"/>
+      <circle cx="595" cy="434" r="90" fill="#F4F4F2"/>
+      <circle cx="595" cy="434" r="44" fill="#111111"/>
+    </g>
+  </g>
+</svg>

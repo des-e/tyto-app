@@ -1,0 +1,22 @@
+{
+	"productName": "Tyto",
+	"version": "0.1.4",
+	"identifier": "ru.eliseevdenis.tyto",
+	"bundle": {
+		"targets": ["nsis", "dmg", "app"],
+		"macOS": {
+			"signingIdentity": "-"
+		}
+	},
+	"plugins": {
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMxNkNCRUY1NERERjRFOTcKUldTWFR0OU45YjVzd1VjRmErRXE1UUhFa2VTK2tqOUVTN0pUSTNQVm1uaGx6aEZybVVnM1hBdVYK",
+			"endpoints": ["https://github.com/des-e/tyto/releases/latest/download/latest.json"]
+		},
+		"deep-link": {
+			"desktop": {
+				"schemes": ["tyto"]
+			}
+		}
+	}
+}
