@@ -287,6 +287,8 @@ fn set_wav_data_len(f: &mut File, l: &WavLayout, data: u64) -> Result<()> {
 
 /// Fixes a WAV whose writer was never finalized (hound leaves a zero or stale
 /// header after a crash). Returns the frame count; a file shorter than its header is 0.
+/// Recovery repairs the headers through `repair`; this wrapper is what the tests check.
+#[cfg(test)]
 pub fn repair_wav(path: &Path) -> Result<u64> {
     Ok(repair(path)?.map_or(0, |(_, frames)| frames))
 }
@@ -335,7 +337,7 @@ pub fn parse_ffmpeg_duration(stderr: &str) -> Option<f64> {
 }
 
 /// Last `time=HH:MM:SS.xx` of the progress lines (how far ffmpeg read).
-fn parse_ffmpeg_time(stderr: &str) -> Option<f64> {
+pub(super) fn parse_ffmpeg_time(stderr: &str) -> Option<f64> {
     let rest = &stderr[stderr.rfind("time=")? + "time=".len()..];
     let value = rest.split(|c: char| c.is_whitespace()).next()?;
     parse_clock(value)

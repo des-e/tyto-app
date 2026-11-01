@@ -772,6 +772,7 @@
 	"tytoRecordingSaving": "Saving the recording",
 	"tytoRecordingDeviceLost": "The audio device was disconnected. The recording was stopped and saved",
 	"tytoRecordingWriteFailed": "Could not write the audio to disk. The recording was stopped and saved",
+	"tytoRecordingVideoFailed": "The video stopped recording partway. The sound was recorded to the end",
 	"tytoRecordingSaveFailed": "Could not save the recording. Its parts are kept in the Записи folder",
 	"tytoPillPause": "Pause",
 	"tytoPillResume": "Resume",

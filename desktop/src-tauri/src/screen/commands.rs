@@ -14,9 +14,12 @@ fn text(e: eyre::Report) -> String {
     format!("{e:#}")
 }
 
+/// Blocking: video mode picks the encoder first (probe runs of a few seconds).
 #[tauri::command]
 pub async fn recording_start(app: AppHandle, options: StartOptions) -> Result<(), String> {
-    recorder::start(&app, options).map_err(text)
+    tauri::async_runtime::spawn_blocking(move || recorder::start(&app, options).map_err(text))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -84,7 +87,7 @@ pub async fn recording_state(app: AppHandle) -> Result<Option<RecordingStatePayl
     Ok(recorder::state(&app))
 }
 
-/// What this build can capture. Video comes with the capture of Task 11 (Windows) and 14 (macOS).
+/// What this build can capture. Video on Windows; macOS comes with Task 14.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureSupport {
@@ -93,6 +96,8 @@ pub struct CaptureSupport {
     pub pill_excluded: bool,
 }
 
+// Built by the Windows capture; the macOS one comes with Task 14.
+#[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MonitorInfo {
     pub id: String,
@@ -102,6 +107,7 @@ pub struct MonitorInfo {
     pub primary: bool,
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowTarget {
@@ -116,6 +122,26 @@ pub struct CaptureTargets {
     pub windows: Vec<WindowTarget>,
 }
 
+/// Video needs the OS floor, Windows.Graphics.Capture and a bundled ffmpeg that
+/// lists an H.264 encoder for this platform. Blocking (`ffmpeg -encoders`).
+#[cfg(windows)]
+fn capture_support() -> CaptureSupport {
+    use super::encoder::{bundled_ffmpeg, candidates, listed_encoders, TargetOs};
+    use super::targets::{video_supported, windows_build};
+    let build = windows_build();
+    let os_ok = build.is_none_or(|b| video_supported(TargetOs::Windows, (10, 0, b)));
+    let encoder_ok = || bundled_ffmpeg().is_some_and(|ff| !candidates(&listed_encoders(&ff), TargetOs::Windows).is_empty());
+    let video = os_ok && super::capture::capture_api_supported() && encoder_ok();
+    if !video {
+        tracing::info!("video recording is not available (build {build:?})");
+    }
+    CaptureSupport {
+        video,
+        pill_excluded: build.is_none_or(|b| b >= super::pill::EXCLUDE_FROM_CAPTURE_BUILD),
+    }
+}
+
+#[cfg(not(windows))]
 fn capture_support() -> CaptureSupport {
     CaptureSupport {
         video: false,
@@ -123,16 +149,34 @@ fn capture_support() -> CaptureSupport {
     }
 }
 
-/// Stub until the platform capture arrives (Task 11 and 14): no video yet.
-#[tauri::command]
-pub async fn screen_capture_support() -> Result<CaptureSupport, String> {
-    Ok(capture_support())
+#[cfg(windows)]
+fn capture_targets() -> CaptureTargets {
+    let monitors = super::capture::list_monitors().unwrap_or_else(|e| {
+        tracing::warn!("{e:#}");
+        Vec::new()
+    });
+    let windows = super::targets::filter_windows(meeting_detect::visible_windows(), std::process::id());
+    CaptureTargets { monitors, windows }
 }
 
-/// Stub until the platform capture arrives (Task 11 and 14): nothing to list yet.
+#[cfg(not(windows))]
+fn capture_targets() -> CaptureTargets {
+    CaptureTargets::default()
+}
+
+#[tauri::command]
+pub async fn screen_capture_support() -> Result<CaptureSupport, String> {
+    tauri::async_runtime::spawn_blocking(capture_support)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Monitors and windows to record (never Tyto's own windows).
 #[tauri::command]
 pub async fn list_capture_targets() -> Result<CaptureTargets, String> {
-    Ok(CaptureTargets::default())
+    tauri::async_runtime::spawn_blocking(capture_targets)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -140,13 +184,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stubs_say_no_video_and_no_targets() {
-        assert!(!capture_support().video);
+    fn support_and_targets_serialize_for_the_frontend() {
         assert_eq!(
-            serde_json::to_value(capture_support()).unwrap(),
-            serde_json::json!({ "video": false, "pillExcluded": false })
+            serde_json::to_value(CaptureSupport {
+                video: true,
+                pill_excluded: false
+            })
+            .unwrap(),
+            serde_json::json!({ "video": true, "pillExcluded": false })
         );
-        assert!(CaptureTargets::default().monitors.is_empty());
-        assert!(CaptureTargets::default().windows.is_empty());
+        let t = CaptureTargets {
+            monitors: vec![MonitorInfo {
+                id: "0".into(),
+                name: "1".into(),
+                width: 1920,
+                height: 1080,
+                primary: true,
+            }],
+            windows: vec![WindowTarget {
+                id: "42".into(),
+                title: "Телемост".into(),
+                app_name: "browser".into(),
+            }],
+        };
+        let v = serde_json::to_value(t).unwrap();
+        assert_eq!(v["windows"][0]["appName"], "browser");
+        assert_eq!(v["monitors"][0]["primary"], true);
+    }
+
+    #[test]
+    fn own_windows_are_never_listed() {
+        let own = std::process::id();
+        assert!(capture_targets().windows.iter().all(|w| {
+            meeting_detect::visible_windows()
+                .iter()
+                .find(|v| v.id.to_string() == w.id)
+                .is_none_or(|v| v.pid != own)
+        }));
     }
 }

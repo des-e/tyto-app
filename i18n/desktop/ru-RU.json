@@ -772,6 +772,7 @@
 	"tytoRecordingSaving": "Сохраняю запись",
 	"tytoRecordingDeviceLost": "Устройство звука отключилось. Запись остановлена и сохранена",
 	"tytoRecordingWriteFailed": "Не удалось записать звук на диск. Запись остановлена и сохранена",
+	"tytoRecordingVideoFailed": "Видео перестало записываться. Звук записан до конца",
 	"tytoRecordingSaveFailed": "Не удалось сохранить запись. Ее части остались в папке Записи",
 	"tytoPillPause": "Пауза",
 	"tytoPillResume": "Продолжить",

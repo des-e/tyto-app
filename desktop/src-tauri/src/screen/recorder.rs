@@ -34,9 +34,11 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::audio_sink::SegmentedWavSink;
+use super::capture::{self, CaptureHandle};
 use super::disk;
-use super::encoder::VideoEncoder;
-use super::quality::{preset, Quality};
+use super::encoder::{bundled_ffmpeg, encoder_queue, listed_encoders, select_encoder, TargetOs, VideoEncoder};
+use super::frame::LatestFrame;
+use super::quality::{output_size, preset, Preset, Quality};
 use super::recovery::{
     discard_unfinished, ensure_session_dir, prepare_recovery, probe_video_seconds, record_final_bytes, remove_working_dir,
     RecoveryAction, SessionLock,
@@ -46,6 +48,7 @@ use super::segments::{
     FinalizeError, FinalizePlan, Manifest, SegmentRecord, MANIFEST_VERSION, SEGMENT_MAX, SESSION_PREFIX,
 };
 use super::session::{transition, Command, Mode, RecordingStatePayload, SessionError, Status, Timeline};
+use super::video_writer::{self, VideoSegmentWriter};
 use crate::cmd::audio::{build_capture_stream, get_output_device_and_config, AudioDevice, LevelMeter};
 
 #[cfg(windows)]
@@ -61,6 +64,8 @@ pub const FAILED_EVENT: &str = "recording_failed";
 /// `RecordingFinished.warning` codes; the frontend shows its own text for them.
 pub const WARN_DEVICE_LOST: &str = "device_lost";
 pub const WARN_WRITE_FAILED: &str = "write_failed";
+/// Every video encoder failed: the picture stopped, the sound was recorded to the end.
+pub const WARN_VIDEO_FAILED: &str = "video_failed";
 
 const TICK: Duration = Duration::from_secs(1);
 /// Free space is checked every 10 ticks (it lists every volume).
@@ -85,7 +90,7 @@ const FIRST_BLOCK_GRACE: Duration = Duration::from_secs(10);
 const FAILURE_RETRY: Duration = Duration::from_secs(5);
 const MANIFEST_WAIT: Duration = Duration::from_secs(120);
 
-/// What to record in video mode (used from the Windows capture task on).
+/// What to record in video mode.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum CaptureTarget {
@@ -127,6 +132,8 @@ pub struct RecordingFinished {
 #[serde(rename_all = "snake_case")]
 pub enum FailCode {
     TooShort,
+    // Part of the event contract; the macOS capture (Task 14) reports a refused permission with it.
+    #[allow(dead_code)]
     Capture,
     Encoder,
     Other,
@@ -155,6 +162,8 @@ struct Health {
     write_failed: AtomicBool,
     /// Frames dropped because a queue was full.
     dropped_frames: AtomicU64,
+    /// No video encoder is left: the session records sound only.
+    video_lost: AtomicBool,
 }
 
 struct Block {
@@ -232,12 +241,93 @@ struct OpenSegment {
     started: Instant,
 }
 
+/// The video side of a session: one ffmpeg per segment, fed from `latest`.
+struct VideoTrack {
+    ffmpeg: PathBuf,
+    preset: Preset,
+    size: (u32, u32),
+    latest: LatestFrame,
+    /// Encoders still to try, one attempt each; the first is the one in use.
+    encoders: Vec<VideoEncoder>,
+    writer: Option<VideoSegmentWriter>,
+    health: Arc<Health>,
+}
+
+impl VideoTrack {
+    /// Starts the segment's ffmpeg; an encoder that does not start is dropped
+    /// for the next one. None left: the session goes on with sound only.
+    fn open(&mut self, dir: &Path, index: u32, now: Instant) -> (Option<String>, Option<VideoEncoder>) {
+        let file = segment_file(index, "mp4");
+        while let Some(&enc) = self.encoders.first() {
+            match VideoSegmentWriter::start(
+                &self.ffmpeg,
+                enc,
+                &self.preset,
+                self.size,
+                &dir.join(&file),
+                self.latest.clone(),
+                now,
+            ) {
+                Ok(w) => {
+                    self.writer = Some(w);
+                    return (Some(file), Some(enc));
+                }
+                Err(e) => {
+                    tracing::error!("starting the {} encoder failed: {e:#}", enc.ffmpeg_name());
+                    self.encoders.remove(0);
+                }
+            }
+        }
+        self.give_up();
+        (None, None)
+    }
+
+    fn give_up(&self) {
+        if !self.health.video_lost.swap(true, Ordering::SeqCst) {
+            tracing::warn!("no video encoder works, recording the sound only");
+        }
+    }
+
+    fn has_failed(&self) -> bool {
+        self.writer.as_ref().is_some_and(|w| w.has_failed())
+    }
+
+    /// Closes the segment's ffmpeg at `at` and returns its frames. A failed
+    /// encoder is dropped (the next segment tries the next one) and the frames
+    /// that reached the file are read back from it, so the sound is cut to the
+    /// same length and the following segments stay in sync.
+    fn close(&mut self, at: Instant) -> u64 {
+        let Some(w) = self.writer.take() else {
+            return 0;
+        };
+        w.finish_at(at);
+        let (enc, file) = (w.encoder, w.file.clone());
+        match w.close() {
+            Ok(frames) => frames,
+            Err(e) => {
+                tracing::error!("the {} encoder failed: {e:#}", enc.ffmpeg_name());
+                if self.encoders.first() == Some(&enc) {
+                    self.encoders.remove(0);
+                }
+                if self.encoders.is_empty() {
+                    self.give_up();
+                }
+                let secs = super::recovery::probe_video_seconds(&self.ffmpeg, &file).unwrap_or(0.0);
+                let frames = (secs * f64::from(self.preset.fps)).floor() as u64;
+                tracing::warn!("{frames} frames of {} were saved", file.display());
+                frames
+            }
+        }
+    }
+}
+
 /// Segments and manifest of one session. Owned by the writer thread (the only
 /// one that writes the manifest while recording).
 struct Segments {
     dir: PathBuf,
     manifest: Manifest,
     tracks: Vec<Track>,
+    video: Option<VideoTrack>,
     open: Option<OpenSegment>,
     next_index: u32,
 }
@@ -248,6 +338,7 @@ impl Segments {
             dir,
             manifest,
             tracks,
+            video: None,
             open: None,
             next_index: 1,
         }
@@ -263,10 +354,14 @@ impl Segments {
         self.next_index += 1;
         // Set first: if one sink fails to open, `close_segment` still closes the others.
         self.open = Some(OpenSegment { index, started: now });
+        let (video_file, encoder) = match self.video.as_mut() {
+            Some(v) => v.open(&self.dir, index, now),
+            None => (None, None),
+        };
         self.manifest.segments.push(SegmentRecord {
             index,
-            video_file: None,
-            encoder: None,
+            video_file,
+            encoder,
             video_frames: 0,
             wall_ms: 0,
             audio: Vec::new(),
@@ -286,9 +381,18 @@ impl Segments {
             return Ok(());
         };
         let wall_ms = millis(now.saturating_duration_since(seg.started));
+        // The video decides the segment length: the sound is padded or cut to its frames.
+        let (frames, target_ms) = match self.video.as_mut() {
+            Some(v) => {
+                let frames = v.close(now);
+                let fps = u64::from(v.preset.fps.max(1));
+                (frames, if frames > 0 { frames * 1000 / fps } else { wall_ms })
+            }
+            None => (0, wall_ms),
+        };
         let mut audio = Vec::new();
         for t in &mut self.tracks {
-            match t.sink.close(wall_ms) {
+            match t.sink.close(target_ms) {
                 Ok(Some(rec)) => audio.push(rec),
                 Ok(None) => {}
                 Err(e) => tracing::error!("closing {} audio of segment {} failed: {e:#}", t.source.name(), seg.index),
@@ -296,6 +400,7 @@ impl Segments {
         }
         if let Some(rec) = self.manifest.segments.iter_mut().find(|s| s.index == seg.index) {
             rec.wall_ms = wall_ms;
+            rec.video_frames = frames;
             rec.audio = audio;
             rec.closed = true;
         }
@@ -310,6 +415,9 @@ impl Segments {
         }
         if self.tracks.iter().any(|t| t.sink.has_failed()) {
             return Some("an audio file stopped taking samples");
+        }
+        if self.video.as_ref().is_some_and(|v| v.has_failed()) {
+            return Some("the video encoder stopped");
         }
         None
     }
@@ -487,6 +595,8 @@ struct ActiveRecording {
     ctl: Sender<Ctl>,
     writer: Option<JoinHandle<()>>,
     streams: Vec<StreamHandle>,
+    /// Video mode: runs for the whole session, pauses included (`latest` stays fresh).
+    capture: Option<CaptureHandle>,
     lock: Option<SessionLock>,
     health: Arc<Health>,
     warnings: Vec<&'static str>,
@@ -594,9 +704,16 @@ impl ActiveRecording {
         self.timeline.pause(at);
         let (tx, rx) = mpsc::channel();
         self.send(Ctl::Finish(now, tx));
+        // `latest` keeps the last frame for the writer's final frames.
+        if let Some(c) = self.capture.take() {
+            c.stop();
+        }
         let dropped = self.health.dropped_frames.load(Ordering::Relaxed);
         if dropped > 0 {
             tracing::warn!("{dropped} audio frames were dropped (writer queue full)");
+        }
+        if self.health.video_lost.load(Ordering::SeqCst) {
+            self.warnings.push(WARN_VIDEO_FAILED);
         }
         PendingSave {
             manifest: rx,
@@ -706,9 +823,45 @@ fn is_device_lost(kind: cpal::ErrorKind) -> bool {
     )
 }
 
+/// Video settings worked out before the session starts (encoder probes are slow).
+struct VideoSetup {
+    target: CaptureTarget,
+    ffmpeg: PathBuf,
+    preset: Preset,
+    size: (u32, u32),
+    encoders: Vec<VideoEncoder>,
+}
+
+/// Session size from the source (up to 1080p), the encoder from probes. Blocking.
+fn prepare_video(o: &StartOptions) -> Result<VideoSetup> {
+    let target = o.target.clone().context("no screen or window chosen")?;
+    let ffmpeg = bundled_ffmpeg().context("ffmpeg not found")?;
+    let p = preset(o.quality);
+    let (w, h) = capture::source_size(&target)?;
+    let size = output_size(w, h, &p);
+    let os = TargetOs::current();
+    let selected = select_encoder(&ffmpeg, os);
+    let encoders = encoder_queue(selected, &listed_encoders(&ffmpeg), os);
+    tracing::info!(
+        "video {}x{} from {w}x{h} at {} fps, encoders {:?}",
+        size.0,
+        size.1,
+        p.fps,
+        encoders.iter().map(|e| e.ffmpeg_name()).collect::<Vec<_>>()
+    );
+    Ok(VideoSetup {
+        target,
+        ffmpeg,
+        preset: p,
+        size,
+        encoders,
+    })
+}
+
 fn start_session(
     app: &AppHandle,
     o: &StartOptions,
+    video: Option<VideoSetup>,
     recordings_dir: PathBuf,
     dir: PathBuf,
     started: String,
@@ -763,19 +916,35 @@ fn start_session(
         streams.push(StreamHandle(stream));
     }
 
+    let mode = if video.is_some() { Mode::Video } else { Mode::Audio };
     let manifest = Manifest {
         version: MANIFEST_VERSION,
-        mode: Mode::Audio,
+        mode,
         name: stem.clone(),
         started_at: chrono::Local::now().to_rfc3339(),
         quality: o.quality,
-        size: None,
-        fps: None,
+        size: video.as_ref().map(|v| v.size),
+        fps: video.as_ref().map(|v| v.preset.fps),
         segments: Vec::new(),
         finalizing_to: None,
         final_bytes: None,
     };
     let mut segments = Segments::new(dir.clone(), manifest, tracks);
+    let mut capture_handle = None;
+    if let Some(v) = video {
+        let latest: LatestFrame = Arc::new(Mutex::new(None));
+        // Before the first segment: the first frame is on its way while ffmpeg starts.
+        capture_handle = Some(capture::start_capture(&v.target, v.size, latest.clone(), v.preset.fps)?);
+        segments.video = Some(VideoTrack {
+            ffmpeg: v.ffmpeg,
+            preset: v.preset,
+            size: v.size,
+            latest,
+            encoders: v.encoders,
+            writer: None,
+            health: health.clone(),
+        });
+    }
     let clock = Instant::now();
     // Opened before the devices play: their latency is padded by the sinks.
     segments.open_segment(clock)?;
@@ -795,7 +964,7 @@ fn start_session(
     timeline.start(0);
     Ok(ActiveRecording {
         status: Status::Recording,
-        mode: Mode::Audio,
+        mode,
         dir,
         recordings_dir,
         stem,
@@ -804,20 +973,25 @@ fn start_session(
         ctl: ctl_tx,
         writer: Some(writer),
         streams,
+        capture: capture_handle,
         lock: Some(session_lock),
         health,
         warnings: Vec::new(),
     })
 }
 
+/// Blocking in video mode (encoder probes): call from `spawn_blocking`.
 pub fn start(app: &AppHandle, o: StartOptions) -> Result<()> {
-    if o.mode == Mode::Video {
-        bail!("video capture is not available");
-    }
     if o.devices.is_empty() {
         bail!("At least one audio device is required");
     }
     let runtime = app.state::<RecorderRuntime>();
+    transition(lock(&runtime.inner).as_ref().map(|r| r.status), Command::Start)?;
+    // Outside the runtime lock: the probes take seconds.
+    let video = match o.mode {
+        Mode::Video => Some(prepare_video(&o)?),
+        Mode::Audio => None,
+    };
     let mut guard = lock(&runtime.inner);
     transition(guard.as_ref().map(|r| r.status), Command::Start)?;
 
@@ -828,9 +1002,17 @@ pub fn start(app: &AppHandle, o: StartOptions) -> Result<()> {
     }
     let started = crate::ffmpeg::get_local_time();
     let dir = create_session_dir(&recordings_dir, &started)?;
-    let rec = match start_session(app, &o, recordings_dir, dir.clone(), started) {
+    let is_video = video.is_some();
+    if is_video {
+        // Out of the picture before the first frame (the pill does the same on start).
+        super::pill::exclude_main_from_capture(app, true);
+    }
+    let rec = match start_session(app, &o, video, recordings_dir, dir.clone(), started) {
         Ok(rec) => rec,
         Err(e) => {
+            if is_video {
+                super::pill::exclude_main_from_capture(app, false);
+            }
             // Nothing was recorded; the lock, the streams and the files are already closed.
             if let Err(rm) = std::fs::remove_dir_all(&dir) {
                 tracing::warn!("removing {} failed: {rm}", dir.display());
@@ -901,6 +1083,12 @@ pub fn state(app: &AppHandle) -> Option<RecordingStatePayload> {
 /// App quit: close the open segment (the folder stays for recovery) and stop a
 /// running mux. Bounded, so quitting never hangs.
 pub fn shutdown(app: &AppHandle) {
+    close_for_quit(app);
+    // A segment ffmpeg still running would outlive the app.
+    video_writer::kill_all();
+}
+
+fn close_for_quit(app: &AppHandle) {
     let Some(runtime) = app.try_state::<RecorderRuntime>() else {
         return;
     };
@@ -1115,6 +1303,20 @@ fn move_into_place(job: &mut SaveJob, partial: &Path, mut target: PathBuf, ext: 
     }
 }
 
+/// Encoder for a re-encode (segments from different encoders): the one the
+/// session ended with, which worked. The bundle has no libx264.
+fn reencode_encoder(m: &Manifest) -> VideoEncoder {
+    m.segments
+        .iter()
+        .rev()
+        .filter(|s| s.video_frames > 0)
+        .find_map(|s| s.encoder)
+        .unwrap_or(match TargetOs::current() {
+            TargetOs::Windows => VideoEncoder::MediaFoundationSoftware,
+            TargetOs::MacOs => VideoEncoder::VideoToolbox,
+        })
+}
+
 fn mux(job: &mut SaveJob, plan: &FinalizePlan, ffmpeg: Option<PathBuf>, slot: &Mutex<Option<Child>>) -> Result<PathBuf> {
     let ffmpeg = ffmpeg.context("ffmpeg not found")?;
     let taken = reserved_names(&job.recordings_dir, &job.dir);
@@ -1129,7 +1331,13 @@ fn mux(job: &mut SaveJob, plan: &FinalizePlan, ffmpeg: Option<PathBuf>, slot: &M
     write_manifest_atomic(&job.dir, &job.manifest)?;
     write_concat_lists(plan, &job.dir)?;
     let partial = job.dir.join(format!("final.partial.{}", plan.ext));
-    let args = finalize_args(plan, &job.dir, &partial, VideoEncoder::X264, &preset(job.manifest.quality));
+    let args = finalize_args(
+        plan,
+        &job.dir,
+        &partial,
+        reencode_encoder(&job.manifest),
+        &preset(job.manifest.quality),
+    );
     run_ffmpeg(&ffmpeg, &args, slot)?;
     if !partial.is_file() {
         bail!("ffmpeg wrote no {}", partial.display());
@@ -1752,5 +1960,144 @@ mod tests {
         })
         .unwrap();
         assert_eq!(failed["code"], "too_short");
+    }
+
+    // ---- video segments with the real bundled ffmpeg (skipped without it) ----
+
+    use super::super::encoder::test_support::{test_encoder, usable_ffmpeg};
+    use super::super::frame::Frame;
+
+    const VIDEO_SIZE: (u32, u32) = (320, 180);
+
+    fn video_session(dir: &Path, ffmpeg: &Path, encoders: Vec<VideoEncoder>) -> (Segments, Arc<Health>) {
+        let mut m = manifest();
+        m.mode = Mode::Video;
+        m.size = Some(VIDEO_SIZE);
+        m.fps = Some(15);
+        // A real rate: the final AAC track does not take 1 kHz.
+        let mut s = Segments::new(
+            dir.to_path_buf(),
+            m,
+            vec![Track {
+                source: AudioSource::Mic,
+                sink: SegmentedWavSink::new(AudioSource::Mic, 48_000, 1),
+            }],
+        );
+        let health = Arc::new(Health::default());
+        s.video = Some(VideoTrack {
+            ffmpeg: ffmpeg.to_path_buf(),
+            preset: preset(Quality::Good),
+            size: VIDEO_SIZE,
+            latest: Arc::new(Mutex::new(Some(Frame::black(VIDEO_SIZE.0, VIDEO_SIZE.1)))),
+            encoders,
+            writer: None,
+            health: health.clone(),
+        });
+        (s, health)
+    }
+
+    /// Records one segment of about `ms` with a little sound in it.
+    fn record(s: &mut Segments, ms: u64) {
+        let t = Instant::now();
+        s.open_segment(t).unwrap();
+        feed(s, 4_800, t);
+        std::thread::sleep(Duration::from_millis(ms));
+        s.close_segment(t + Duration::from_millis(ms)).unwrap();
+    }
+
+    /// Seconds of stream `map` in `file`, as a `-c copy` pass reads it.
+    fn stream_seconds(ffmpeg: &Path, file: &Path, map: &str) -> f64 {
+        let out = Process::new(ffmpeg)
+            .args(["-hide_banner", "-nostdin", "-i"])
+            .arg(file)
+            .args(["-map", map, "-c", "copy", "-f", "null", "-"])
+            .output()
+            .unwrap();
+        super::super::recovery::parse_ffmpeg_time(&String::from_utf8_lossy(&out.stderr)).unwrap()
+    }
+
+    /// Task 5 re-review: segment lengths in whole milliseconds must not drift the
+    /// sound off the picture over the segments. Measured on a real encode.
+    #[test]
+    fn segments_keep_sound_and_picture_together_on_a_real_encode() {
+        let Some(ffmpeg) = usable_ffmpeg() else {
+            return;
+        };
+        let root = tempfile::tempdir().unwrap();
+        let (mut s, health) = video_session(root.path(), &ffmpeg, vec![test_encoder()]);
+        // 0.7 s = 10.5 frames and 0.5 s = 7.5 frames: both lengths are fractional in ms too
+        for ms in [700, 500, 700] {
+            record(&mut s, ms);
+        }
+        let frames: Vec<u64> = s.manifest.segments.iter().map(|g| g.video_frames).collect();
+        assert!(frames.iter().all(|f| *f >= 7), "{frames:?}");
+        for g in &s.manifest.segments {
+            assert_eq!(g.encoder, Some(test_encoder()));
+            assert_eq!(g.audio[0].target_ms, g.video_frames * 1000 / 15);
+        }
+        assert!(!health.video_lost.load(Ordering::SeqCst));
+
+        let mut job = job(root.path(), &s, None);
+        let plan = finalize_plan(&job.manifest).unwrap();
+        assert_eq!(plan.video.len(), 3);
+        let out = mux(&mut job, &plan, Some(ffmpeg.clone()), &no_child()).unwrap();
+        let expected = frames.iter().sum::<u64>() as f64 / 15.0;
+        let video = stream_seconds(&ffmpeg, &out, "0:v:0");
+        let audio = stream_seconds(&ffmpeg, &out, "0:a:0");
+        // `time=` of a copy pass ends about a frame early; AAC frames are 21 ms
+        assert!(
+            (video - expected).abs() <= 2.0 / 15.0,
+            "video {video} s, expected {expected} s"
+        );
+        assert!((audio - video).abs() <= 0.1, "audio {audio} s, video {video} s");
+    }
+
+    #[test]
+    fn a_dead_encoder_gives_way_to_the_next_one_and_none_left_keeps_the_sound() {
+        let Some(ffmpeg) = usable_ffmpeg() else {
+            return;
+        };
+        if listed_encoders(&ffmpeg).iter().any(|e| e == "libx264") {
+            eprintln!("this ffmpeg has libx264, the broken encoder is not broken, skipped");
+            return;
+        }
+        // libx264 is not in the bundle: its ffmpeg exits at once
+        let root = tempfile::tempdir().unwrap();
+        let (mut s, health) = video_session(root.path(), &ffmpeg, vec![VideoEncoder::X264, test_encoder()]);
+        let t0 = Instant::now();
+        s.open_segment(t0).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while s.rotation_reason(Instant::now()).is_none() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(s.rotation_reason(Instant::now()), Some("the video encoder stopped"));
+        s.rotate(Instant::now()).unwrap();
+        std::thread::sleep(Duration::from_millis(600));
+        s.close_segment(Instant::now()).unwrap();
+        let segs = &s.manifest.segments;
+        assert_eq!((segs[0].encoder, segs[0].video_frames), (Some(VideoEncoder::X264), 0));
+        assert_eq!(segs[1].encoder, Some(test_encoder()));
+        assert!(segs[1].video_frames > 0);
+        assert!(!health.video_lost.load(Ordering::SeqCst));
+
+        // nothing left to try: the picture stops, the sound goes on and is saved
+        let root = tempfile::tempdir().unwrap();
+        let (mut s, health) = video_session(root.path(), &ffmpeg, vec![VideoEncoder::X264]);
+        let t0 = Instant::now();
+        s.open_segment(t0).unwrap();
+        feed(&mut s, 300, t0);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while s.rotation_reason(Instant::now()).is_none() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let t1 = Instant::now();
+        s.rotate(t1).unwrap();
+        feed(&mut s, 300, t1);
+        s.close_segment(t1 + Duration::from_millis(300)).unwrap();
+        assert!(health.video_lost.load(Ordering::SeqCst));
+        assert_eq!(s.manifest.segments[1].video_file, None);
+        let plan = finalize_plan(&s.manifest).unwrap();
+        assert_eq!(plan.ext, "m4a");
+        assert_eq!(plan.audio[0].1.len(), 2);
     }
 }

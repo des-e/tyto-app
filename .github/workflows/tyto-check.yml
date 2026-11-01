@@ -135,6 +135,25 @@ jobs:
             - name: cargo test
               run: cargo test -p meeting-detect -p vibe
 
+            # Our capture and our own code use windows 0.62 only. Older versions
+            # (0.52/0.58/0.61) come from upstream dependencies and are listed for the log.
+            - name: windows crate versions
+              if: runner.os == 'Windows'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  t=x86_64-pc-windows-msvc
+                  for p in vibe meeting-detect windows-capture; do
+                      deps=$(cargo tree -p "$p" --target "$t" -e normal --depth 1)
+                      echo "$deps" | grep -E " windows v" || true
+                      if echo "$deps" | grep -E " windows v" | grep -vqE " windows v0\.62\."; then
+                          echo "::error::$p depends on a windows crate other than 0.62"
+                          exit 1
+                      fi
+                  done
+                  echo "windows versions in the whole tree:"
+                  cargo tree --target "$t" -e normal --prefix none | grep -oE "^windows v[0-9.]+" | sort -u
+
     bundle:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.bundle }}
         timeout-minutes: 90

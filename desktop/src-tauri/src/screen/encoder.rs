@@ -21,6 +21,9 @@ pub enum VideoEncoder {
     Qsv,
     Amf,
     MediaFoundation,
+    /// `h264_mf` on the software MFT: the last resort on a PC without a hardware
+    /// encoder (and the one a CI runner without a GPU can run).
+    MediaFoundationSoftware,
     VideoToolbox,
     X264,
 }
@@ -31,7 +34,7 @@ impl VideoEncoder {
             VideoEncoder::Nvenc => "h264_nvenc",
             VideoEncoder::Qsv => "h264_qsv",
             VideoEncoder::Amf => "h264_amf",
-            VideoEncoder::MediaFoundation => "h264_mf",
+            VideoEncoder::MediaFoundation | VideoEncoder::MediaFoundationSoftware => "h264_mf",
             VideoEncoder::VideoToolbox => "h264_videotoolbox",
             VideoEncoder::X264 => "libx264",
         }
@@ -88,6 +91,21 @@ pub fn candidates(listed: &[String], os: TargetOs) -> Vec<VideoEncoder> {
         .collect()
 }
 
+/// Encoders a session tries in turn, one attempt each: the selected one, the
+/// candidates after it, then the software Media Foundation encoder on Windows.
+pub fn encoder_queue(selected: VideoEncoder, listed: &[String], os: TargetOs) -> Vec<VideoEncoder> {
+    let mut queue = vec![selected];
+    let rest = candidates(listed, os);
+    let after = rest.iter().position(|e| *e == selected).map_or(0, |i| i + 1);
+    queue.extend(rest[after..].iter().copied().filter(|e| *e != selected));
+    let mf_listed = listed.iter().any(|n| n == "h264_mf");
+    if os == TargetOs::Windows && (mf_listed || selected == VideoEncoder::MediaFoundation) {
+        queue.push(VideoEncoder::MediaFoundationSoftware);
+    }
+    queue.dedup();
+    queue
+}
+
 /// Raw BGRA frames on stdin, fragmented MP4 (video only) out.
 pub fn video_segment_args(enc: VideoEncoder, p: &Preset, size: (u32, u32), out: &Path) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
@@ -116,6 +134,7 @@ pub fn codec_args(enc: VideoEncoder, p: &Preset) -> Vec<String> {
         VideoEncoder::Qsv => push(&["-preset", "veryfast"]),
         VideoEncoder::Amf => push(&["-quality", "speed", "-rc", "vbr_peak"]),
         VideoEncoder::MediaFoundation => push(&["-hw_encoding", "1", "-rate_control", "u_vbr", "-scenario", "display_remoting"]),
+        VideoEncoder::MediaFoundationSoftware => push(&["-rate_control", "u_vbr", "-scenario", "display_remoting"]),
         VideoEncoder::VideoToolbox => push(&["-realtime", "1", "-allow_sw", "1"]),
         VideoEncoder::X264 => push(&["-preset", "veryfast"]),
     }
@@ -226,6 +245,74 @@ fn run(ffmpeg: &Path, args: &[String], timeout: Duration) -> Option<(bool, Strin
 const LIST_TIMEOUT: Duration = Duration::from_secs(3);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Video encoders of the bundle (`ffmpeg -encoders`). A non-empty list is cached
+/// per process. Blocking (up to 3 s).
+pub fn listed_encoders(ffmpeg: &Path) -> Vec<String> {
+    static CACHE: OnceLock<Vec<String>> = OnceLock::new();
+    if let Some(l) = CACHE.get() {
+        return l.clone();
+    }
+    let listed = run(ffmpeg, &["-hide_banner".to_string(), "-encoders".to_string()], LIST_TIMEOUT)
+        .map(|(_, out)| parse_encoders(&out))
+        .unwrap_or_default();
+    if listed.is_empty() {
+        return listed;
+    }
+    CACHE.get_or_init(|| listed).clone()
+}
+
+/// One synthetic frame encodes with `enc` and the recording flags. Blocking (up to 5 s).
+pub fn probe_ok(ffmpeg: &Path, enc: VideoEncoder) -> bool {
+    matches!(run(ffmpeg, &probe_args(enc), PROBE_TIMEOUT), Some((true, _)))
+}
+
+/// Helpers for tests that run the real bundled ffmpeg.
+#[cfg(test)]
+pub(super) mod test_support {
+    use super::*;
+
+    /// `desktop/src-tauri/binaries/ffmpeg-<triple>` (fetched by `chore setup`), else the usual search.
+    pub fn bundled_ffmpeg_for_tests() -> Option<PathBuf> {
+        let triple = if cfg!(windows) {
+            "x86_64-pc-windows-msvc.exe"
+        } else if cfg!(target_arch = "aarch64") {
+            "aarch64-apple-darwin"
+        } else {
+            "x86_64-apple-darwin"
+        };
+        let sidecar = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(format!("ffmpeg-{triple}"));
+        if sidecar.is_file() {
+            Some(sidecar)
+        } else {
+            bundled_ffmpeg()
+        }
+    }
+
+    /// An encoder a CI runner without a GPU can run.
+    pub fn test_encoder() -> VideoEncoder {
+        match TargetOs::current() {
+            TargetOs::Windows => VideoEncoder::MediaFoundationSoftware,
+            TargetOs::MacOs => VideoEncoder::VideoToolbox,
+        }
+    }
+
+    /// The bundled ffmpeg, if it can encode with `test_encoder` here.
+    pub fn usable_ffmpeg() -> Option<PathBuf> {
+        let Some(ffmpeg) = bundled_ffmpeg_for_tests() else {
+            eprintln!("no ffmpeg, skipped");
+            return None;
+        };
+        if probe_ok(&ffmpeg, test_encoder()) {
+            Some(ffmpeg)
+        } else {
+            eprintln!("{:?} can not encode here, skipped", test_encoder());
+            None
+        }
+    }
+}
+
 /// Picks the first encoder that is listed by the bundle and passes a probe.
 /// The bundle may lack libx264, so the last resort is the platform's own encoder.
 /// Blocking (up to ~3 s + 5 s per candidate): call from `spawn_blocking`.
@@ -236,14 +323,9 @@ pub fn select_encoder(ffmpeg: &Path, os: TargetOs) -> VideoEncoder {
     if let Some(e) = CACHE.get() {
         return *e;
     }
-    let listed = run(ffmpeg, &["-hide_banner".to_string(), "-encoders".to_string()], LIST_TIMEOUT)
-        .map(|(_, out)| parse_encoders(&out))
-        .unwrap_or_default();
+    let listed = listed_encoders(ffmpeg);
     let list = candidates(&listed, os);
-    let verified = list
-        .iter()
-        .copied()
-        .find(|e| matches!(run(ffmpeg, &probe_args(*e), PROBE_TIMEOUT), Some((true, _))));
+    let verified = list.iter().copied().find(|e| probe_ok(ffmpeg, *e));
     if let Some(e) = verified {
         tracing::info!("selected encoder {}", e.ffmpeg_name());
         return *CACHE.get_or_init(|| e);
@@ -330,6 +412,7 @@ mod tests {
             VideoEncoder::Qsv,
             VideoEncoder::Amf,
             VideoEncoder::MediaFoundation,
+            VideoEncoder::MediaFoundationSoftware,
             VideoEncoder::VideoToolbox,
             VideoEncoder::X264,
         ] {
@@ -342,6 +425,30 @@ mod tests {
         }
         let mf = probe_args(VideoEncoder::MediaFoundation).join(" ");
         assert!(mf.contains("-hw_encoding 1") && mf.contains("format=nv12") && mf.contains("-b:v 2000k"));
+    }
+
+    #[test]
+    fn a_session_falls_back_through_the_rest_and_ends_on_software_mf() {
+        let listed: Vec<String> = ["h264_amf", "h264_mf", "h264_nvenc", "h264_qsv"].map(String::from).to_vec();
+        use VideoEncoder::*;
+        assert_eq!(
+            encoder_queue(Qsv, &listed, TargetOs::Windows),
+            vec![Qsv, Amf, MediaFoundation, MediaFoundationSoftware]
+        );
+        assert_eq!(
+            encoder_queue(MediaFoundation, &[], TargetOs::Windows),
+            vec![MediaFoundation, MediaFoundationSoftware]
+        );
+        assert_eq!(
+            encoder_queue(VideoToolbox, &["h264_videotoolbox".into()], TargetOs::MacOs),
+            vec![VideoToolbox]
+        );
+        let sw = codec_args(MediaFoundationSoftware, &preset(Quality::Good)).join(" ");
+        assert!(sw.contains("-c:v h264_mf") && !sw.contains("-hw_encoding"));
+        assert_eq!(
+            serde_json::to_string(&MediaFoundationSoftware).unwrap(),
+            "\"media_foundation_software\""
+        );
     }
 
     #[test]

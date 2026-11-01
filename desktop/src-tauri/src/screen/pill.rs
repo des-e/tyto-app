@@ -153,17 +153,14 @@ pub fn exclude_from_capture(window: &WebviewWindow, exclude: bool) {
 /// `WDA_EXCLUDEFROMCAPTURE` is there from build 19041; earlier builds treat it as
 /// `WDA_MONITOR` (a black box in every share), so it is not set there at all.
 #[cfg(windows)]
-fn windows_can_exclude() -> bool {
-    use winreg::enums::HKEY_LOCAL_MACHINE;
-    use winreg::RegKey;
-    let build = RegKey::predef(HKEY_LOCAL_MACHINE)
-        .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
-        .and_then(|key| key.get_value::<String, _>("CurrentBuildNumber"))
-        .ok()
-        .and_then(|build| build.trim().parse::<u32>().ok());
+pub(super) fn windows_can_exclude() -> bool {
     // Unknown build: try; a failing call only logs.
-    build.is_none_or(|build| build >= 19041)
+    super::targets::windows_build().is_none_or(|build| build >= EXCLUDE_FROM_CAPTURE_BUILD)
 }
+
+/// First Windows build with `WDA_EXCLUDEFROMCAPTURE` (10 2004).
+#[cfg(windows)]
+pub(super) const EXCLUDE_FROM_CAPTURE_BUILD: u32 = 19041;
 
 /// Writes the last position of a drag at most once per `SAVE_EVERY`.
 #[derive(Default)]
@@ -335,6 +332,13 @@ fn show(app: &AppHandle) -> Result<(), String> {
         tracing::warn!("positioning the recording pill: {e}");
     }
     show_without_focus(app, &window)
+}
+
+/// Tyto's main window in or out of screen captures (video mode sets it before the capture starts).
+pub fn exclude_main_from_capture(app: &AppHandle, exclude: bool) {
+    if let Some(main) = app.get_webview_window(MAIN_LABEL) {
+        exclude_from_capture(&main, exclude);
+    }
 }
 
 /// Any recording started (panel, shortcut, meeting prompt): pill on, Tyto out of the way.

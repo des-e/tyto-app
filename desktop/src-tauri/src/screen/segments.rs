@@ -228,26 +228,47 @@ pub(super) fn segment_ms(m: &Manifest, s: &SegmentRecord) -> u64 {
     }
 }
 
+fn has_video(s: &SegmentRecord) -> bool {
+    s.video_frames > 0 && s.video_file.is_some()
+}
+
+/// Length of a segment in seconds for the concat lists: a video segment is exactly
+/// `frames / fps` (no millisecond rounding that would add up over the segments).
+fn segment_secs(m: &Manifest, s: &SegmentRecord) -> Option<f64> {
+    if let (Mode::Video, Some(fps)) = (m.mode, m.fps.filter(|f| *f > 0)) {
+        if has_video(s) {
+            return Some(s.video_frames as f64 / f64::from(fps));
+        }
+    }
+    let ms = segment_ms(m, s);
+    (ms > 0).then_some(ms as f64 / 1000.0)
+}
+
+/// Video mode keeps the segments with video, plus the sound recorded after the
+/// last of them (the encoders gave up: the picture stops, the sound goes on).
+/// No video at all (no frame ever arrived) saves the sound alone, as `.m4a`.
 pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
     let used: Vec<&SegmentRecord> = match m.mode {
-        Mode::Video => m
-            .segments
-            .iter()
-            .filter(|s| s.video_frames > 0 && s.video_file.is_some())
-            .collect(),
+        Mode::Video => match m.segments.iter().rposition(has_video) {
+            Some(last) => m
+                .segments
+                .iter()
+                .enumerate()
+                .filter(|(i, s)| has_video(s) || (*i > last && has_samples(s)))
+                .map(|(_, s)| s)
+                .collect(),
+            None => m.segments.iter().filter(|s| has_samples(s)).collect(),
+        },
         Mode::Audio => m.segments.iter().filter(|s| has_samples(s)).collect(),
     };
     if used.is_empty() {
         return Err(FinalizeError::Empty);
     }
 
-    let is_video = m.mode == Mode::Video;
-    let video: Vec<String> = if is_video {
-        used.iter().filter_map(|s| s.video_file.clone()).collect()
-    } else {
-        Vec::new()
-    };
-    let reencode_video = is_video && used.windows(2).any(|w| w[0].encoder != w[1].encoder);
+    let is_video = m.mode == Mode::Video && used.iter().any(|s| has_video(s));
+    let with_video: Vec<&&SegmentRecord> = used.iter().filter(|s| is_video && has_video(s)).collect();
+    let video: Vec<String> = with_video.iter().filter_map(|s| s.video_file.clone()).collect();
+    let reencode_video = with_video.windows(2).any(|w| w[0].encoder != w[1].encoder);
 
     let mut sources: Vec<AudioSource> = Vec::new();
     for a in used.iter().flat_map(|s| s.audio.iter()) {
@@ -266,7 +287,7 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
         let mut entries: AudioEntries = Vec::new();
         for s in &used {
             let ms = segment_ms(m, s);
-            let secs = (ms > 0).then_some(ms as f64 / 1000.0);
+            let secs = segment_secs(m, s);
             match s.audio.iter().find(|a| a.source == src) {
                 Some(a) => entries.push((a.file.clone(), if a.target_ms > 0 { secs } else { a.outpoint_secs })),
                 None => {
@@ -289,10 +310,7 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
         video,
         audio,
         reencode_video,
-        ext: match m.mode {
-            Mode::Video => "mp4",
-            Mode::Audio => "m4a",
-        },
+        ext: if is_video { "mp4" } else { "m4a" },
         silence,
     })
 }
@@ -435,6 +453,8 @@ pub fn finalize_args(plan: &FinalizePlan, dir: &Path, out: &Path, enc: VideoEnco
 }
 
 /// Free name for the final file in `Записи/`: `name.mp4`, `name (1).mp4`, ...
+/// The recorder uses `pick_output_path`, which also skips names other sessions reserved.
+#[cfg(test)]
 pub fn final_output_path(recordings_dir: &Path, stem: &str, ext: &str) -> PathBuf {
     crate::cmd::files::available_path(recordings_dir, stem, ext)
 }
@@ -552,6 +572,41 @@ mod tests {
         assert_eq!(plan.audio[0].1, vec![("seg-0002.mic.wav".to_string(), Some(10.0))]);
         audio_only.segments = vec![seg(1, 0, &[0])];
         assert_eq!(finalize_plan(&audio_only).unwrap_err(), FinalizeError::Empty);
+    }
+
+    #[test]
+    fn sound_after_the_video_gave_up_is_kept_and_no_video_saves_the_sound() {
+        let mut tail = seg(3, 0, &[96_000]);
+        tail.video_file = None;
+        tail.encoder = None;
+        let m = manifest_with(vec![seg(1, 0, &[48_000]), seg(2, 150, &[480_000]), tail]);
+        let plan = finalize_plan(&m).unwrap();
+        assert_eq!((plan.ext, plan.video.clone()), ("mp4", vec!["seg-0002.mp4".to_string()]));
+        // segment 1 (before the first frame) is dropped, 3 (after the last) is kept
+        assert_eq!(
+            plan.audio[0].1,
+            vec![
+                ("seg-0002.mic.wav".to_string(), Some(10.0)),
+                ("seg-0003.mic.wav".to_string(), Some(2.0))
+            ]
+        );
+
+        let never = manifest_with(vec![seg(1, 0, &[48_000]), seg(2, 0, &[96_000])]);
+        let plan = finalize_plan(&never).unwrap();
+        assert_eq!(plan.ext, "m4a");
+        assert!(plan.video.is_empty());
+        assert_eq!(plan.audio[0].1.len(), 2);
+    }
+
+    #[test]
+    fn video_segments_last_exactly_frames_over_fps() {
+        // 7 frames at 15 fps = 0.4666… s; the audio target is 466 ms. Over 1000
+        // segments millisecond rounding alone would drift by 0.67 s.
+        let mut s = seg(1, 7, &[22_368]);
+        s.audio[0].target_ms = 466;
+        let plan = finalize_plan(&manifest_with(vec![s])).unwrap();
+        let secs = plan.audio[0].1[0].1.unwrap();
+        assert!((secs - 7.0 / 15.0).abs() < 1e-9, "{secs}");
     }
 
     #[test]

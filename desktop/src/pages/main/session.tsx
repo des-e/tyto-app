@@ -11,7 +11,7 @@ import { pathToNamedPath } from '~/lib/fs'
 import { cleanupPartialDownloads, listInstalledModels, type InstalledModel } from '~/lib/model'
 import { autoProjectName } from '~/lib/project-name'
 import { findProjectBySource, notifyTranscriptsChanged, saveTranscript, TRANSCRIPT_VERSION, type TranscriptRecord } from '~/lib/transcripts-store'
-import { onRecordingFailed, onRecordingFinished, onRecordingState, WARNING_DEVICE_LOST, WARNING_WRITE_FAILED } from '~/lib/tyto/screen-recording'
+import { onRecordingFailed, onRecordingFinished, onRecordingState, WARNING_DEVICE_LOST, WARNING_VIDEO_FAILED, WARNING_WRITE_FAILED } from '~/lib/tyto/screen-recording'
 import { useRecordingRecovery } from '~/lib/tyto/recording-recovery'
 import type { NamedPath, ProjectSource } from '~/lib/types'
 import { useConfirmExit } from '~/lib/use-confirm-exit'
@@ -178,6 +178,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (payload.stopReason === 'low_disk') toast.warning(m.tytoLowDiskStopped(), { position: 'bottom-center' })
 			if (payload.warning === WARNING_DEVICE_LOST) toast.warning(m.tytoRecordingDeviceLost(), { position: 'bottom-center' })
 			else if (payload.warning === WARNING_WRITE_FAILED) toast.warning(m.tytoRecordingWriteFailed(), { position: 'bottom-center' })
+			else if (payload.warning === WARNING_VIDEO_FAILED) toast.warning(m.tytoRecordingVideoFailed(), { position: 'bottom-center' })
 			else if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
 
 			const name = autoProjectName(payload.name, 'record')

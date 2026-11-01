@@ -204,10 +204,6 @@ impl SegmentedWavSink {
         }))
     }
 
-    pub fn is_open(&self) -> bool {
-        self.open.is_some()
-    }
-
     /// The open segment stopped taking samples (write error or WAV size limit):
     /// the recorder rotates to a new segment so the rest is not lost.
     pub fn has_failed(&self) -> bool {

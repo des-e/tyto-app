@@ -33,6 +33,7 @@ export type RecorderStatus = 'idle' | RecordingState['status']
 /** `RecordingFinished.warning` codes sent by the recorder. */
 export const WARNING_DEVICE_LOST = 'device_lost'
 export const WARNING_WRITE_FAILED = 'write_failed'
+export const WARNING_VIDEO_FAILED = 'video_failed'
 
 export interface RecordingFinished {
 	path: string
