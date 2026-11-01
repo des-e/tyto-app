@@ -207,6 +207,8 @@ pub struct FinalizePlan {
     pub video: Vec<String>,
     /// Per source: segment files and their lengths, in order.
     pub audio: Vec<(AudioSource, AudioEntries)>,
+    /// Channels of each `audio` source (fixed per session).
+    pub channels: Vec<u16>,
     pub reencode_video: bool,
     pub ext: &'static str,
     /// Written by `write_concat_lists` before the mux.
@@ -279,6 +281,7 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
     // Every source covers every used segment, so the concat lists share one
     // timeline: a segment without a file for a source gets a silent stand-in.
     let mut audio = Vec::new();
+    let mut channels = Vec::new();
     let mut silence = Vec::new();
     for src in sources {
         let Some(like) = used.iter().flat_map(|s| s.audio.iter()).find(|a| a.source == src) else {
@@ -304,11 +307,13 @@ pub fn finalize_plan(m: &Manifest) -> Result<FinalizePlan, FinalizeError> {
             }
         }
         audio.push((src, entries));
+        channels.push(like.channels);
     }
 
     Ok(FinalizePlan {
         video,
         audio,
+        channels,
         reencode_video,
         ext: if is_video { "mp4" } else { "m4a" },
         silence,
@@ -414,13 +419,23 @@ pub fn finalize_args(plan: &FinalizePlan, dir: &Path, out: &Path, enc: VideoEnco
     }
 
     let n = plan.audio.len();
+    // A mono f32 WAV from hound is "1 channels (FL)", which the AAC encoder refuses:
+    // relabel it as mono. Other layouts go to mono/stereo (a mix: stereo).
+    let align = |k: usize, layouts: &str| {
+        let mono = if plan.channels.get(k) == Some(&1) {
+            ",channelmap=channel_layout=mono"
+        } else {
+            ""
+        };
+        format!("{ALIGN_FILTER}{mono},aformat=channel_layouts={layouts}")
+    };
     match n {
         0 => {}
-        1 => graph.push(format!("[{video_inputs}:a]{ALIGN_FILTER}[a]")),
+        1 => graph.push(format!("[{video_inputs}:a]{}[a]", align(0, "mono|stereo"))),
         n => {
             let mut mix = String::new();
             for k in 0..n {
-                graph.push(format!("[{}:a]{ALIGN_FILTER}[a{k}]", video_inputs + k));
+                graph.push(format!("[{}:a]{}[a{k}]", video_inputs + k, align(k, "stereo")));
                 mix.push_str(&format!("[a{k}]"));
             }
             // Same mix as `ffmpeg::merge_wav_files`: sum without averaging, cap the peaks.
@@ -599,6 +614,35 @@ mod tests {
     }
 
     #[test]
+    fn one_source_keeps_mono_or_stereo_for_aac() {
+        let mono = finalize_plan(&manifest_with(vec![seg(1, 150, &[480_000])])).unwrap();
+        assert_eq!(mono.channels, vec![1]);
+        let args = finalize_args(
+            &mono,
+            Path::new("/s"),
+            Path::new("/o.mp4"),
+            VideoEncoder::X264,
+            &preset(Quality::Good),
+        );
+        assert!(args.join(" ").contains(
+            "[1:a]aresample=async=1:first_pts=0,channelmap=channel_layout=mono,aformat=channel_layouts=mono|stereo[a]"
+        ));
+        let mut s = seg(1, 150, &[480_000]);
+        s.audio[0].channels = 2;
+        let stereo = finalize_plan(&manifest_with(vec![s])).unwrap();
+        let args = finalize_args(
+            &stereo,
+            Path::new("/s"),
+            Path::new("/o.mp4"),
+            VideoEncoder::X264,
+            &preset(Quality::Good),
+        );
+        assert!(args
+            .join(" ")
+            .contains("[1:a]aresample=async=1:first_pts=0,aformat=channel_layouts=mono|stereo[a]"));
+    }
+
+    #[test]
     fn video_segments_last_exactly_frames_over_fps() {
         // 7 frames at 15 fps = 0.4666… s; the audio target is 466 ms. Over 1000
         // segments millisecond rounding alone would drift by 0.67 s.
@@ -673,7 +717,12 @@ mod tests {
         )
         .join(" ");
         assert!(args.contains("amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.97[a]"));
-        assert!(args.contains("[1:a]aresample=async=1:first_pts=0[a0];[2:a]aresample=async=1:first_pts=0[a1];[a0][a1]amix"));
+        // mono sources are relabeled (AAC refuses hound's "1 channels (FL)") and mixed in stereo
+        let input = "aresample=async=1:first_pts=0,channelmap=channel_layout=mono,aformat=channel_layouts=stereo";
+        assert!(
+            args.contains(&format!("[1:a]{input}[a0];[2:a]{input}[a1];[a0][a1]amix")),
+            "{args}"
+        );
         assert!(
             args.contains("-map 0:v") && args.contains("-c:v copy") && args.contains("-c:a aac") && args.contains("+faststart")
         );
