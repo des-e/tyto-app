@@ -213,6 +213,13 @@ impl SegmentedWavSink {
     pub fn has_failed(&self) -> bool {
         self.open.as_ref().is_some_and(|seg| seg.failed || seg.full)
     }
+
+    #[cfg(test)]
+    pub(crate) fn fail_for_test(&mut self) {
+        if let Some(seg) = self.open.as_mut() {
+            seg.failed = true;
+        }
+    }
 }
 
 #[cfg(test)]

@@ -73,6 +73,13 @@ const FILL_MARGIN: Duration = Duration::from_millis(300);
 /// A microphone delivers blocks even in silence: none for this long means it is gone.
 /// (Loopback legitimately sends nothing while nothing plays, so it is not checked.)
 const STALL_AFTER: Duration = Duration::from_secs(3);
+/// Until its first block (at start and again after a resume) a microphone gets
+/// longer: a Bluetooth headset switching to hands-free or a USB camera mic can
+/// take seconds to deliver.
+const FIRST_BLOCK_GRACE: Duration = Duration::from_secs(10);
+/// A sink that fails again this soon after a rotation is not retried: the
+/// session stops and saves instead of making a new segment every tick.
+const FAILURE_RETRY: Duration = Duration::from_secs(5);
 const MANIFEST_WAIT: Duration = Duration::from_secs(120);
 
 /// What to record in video mode (used from the Windows capture task on).
@@ -183,11 +190,18 @@ struct Input {
     blocks: Receiver<Block>,
     spares: SyncSender<Vec<f32>>,
     last_data: Option<Instant>,
+    /// A block arrived since the stall window was armed (start, resume).
+    flowing: bool,
 }
 
 fn source_queue(rate: u32, channels: u16, health: Arc<Health>) -> (BlockSender, Input) {
     let (block_tx, block_rx) = mpsc::sync_channel(BLOCK_QUEUE);
     let (spare_tx, spare_rx) = mpsc::sync_channel(SPARE_BUFFERS);
+    // Buffers of 100 ms ready before the first callback: it does not allocate.
+    let capacity = (rate as usize / 10).max(1) * usize::from(channels.max(1));
+    for _ in 0..SPARE_BUFFERS {
+        let _ = spare_tx.try_send(Vec::with_capacity(capacity));
+    }
     (
         BlockSender {
             blocks: block_tx,
@@ -200,6 +214,7 @@ fn source_queue(rate: u32, channels: u16, health: Arc<Health>) -> (BlockSender, 
             blocks: block_rx,
             spares: spare_tx,
             last_data: None,
+            flowing: false,
         },
     )
 }
@@ -316,17 +331,44 @@ struct Writer {
     health: Arc<Health>,
     ctl: Receiver<Ctl>,
     stall_reported: bool,
+    /// Start of the stall window: the session start, then every resume.
+    armed_at: Option<Instant>,
+    /// Last rotation caused by a failed sink.
+    failure_rotation: Option<Instant>,
 }
 
 impl Writer {
-    fn drain(&mut self) {
+    fn new(segments: Segments, inputs: Vec<Input>, health: Arc<Health>, ctl: Receiver<Ctl>, armed_at: Instant) -> Self {
+        Self {
+            segments,
+            inputs,
+            health,
+            ctl,
+            stall_reported: false,
+            armed_at: Some(armed_at),
+            failure_rotation: None,
+        }
+    }
+
+    /// Writes the queued blocks; with `skip_before`, blocks that start earlier are dropped.
+    fn drain(&mut self, skip_before: Option<Instant>) {
         for (input, track) in self.inputs.iter_mut().zip(self.segments.tracks.iter_mut()) {
             while let Ok(block) = input.blocks.try_recv() {
                 input.last_data = Some(block.start);
-                track.sink.write(&block.samples, block.start);
+                input.flowing = true;
+                if skip_before.is_none_or(|at| block.start >= at) {
+                    track.sink.write(&block.samples, block.start);
+                }
                 // A full spare queue just lets the buffer go.
                 let _ = input.spares.try_send(block.samples);
             }
+        }
+    }
+
+    fn arm(&mut self, at: Instant) {
+        self.armed_at = Some(at);
+        for input in &mut self.inputs {
+            input.flowing = false;
         }
     }
 
@@ -336,7 +378,7 @@ impl Writer {
     }
 
     fn tick(&mut self, now: Instant) {
-        self.drain();
+        self.drain(None);
         let Some(seg_start) = self.segments.open.as_ref().map(|s| s.started) else {
             return;
         };
@@ -351,13 +393,17 @@ impl Writer {
             }
         }
         if !self.stall_reported {
+            let armed = self.armed_at.unwrap_or(seg_start);
             for (input, track) in self.inputs.iter().zip(self.segments.tracks.iter()) {
                 if track.source != AudioSource::Mic {
                     continue;
                 }
-                let heard = input.last_data.map_or(seg_start, |t| t.max(seg_start));
-                if now.saturating_duration_since(heard) > STALL_AFTER {
-                    tracing::error!("the microphone sent nothing for {STALL_AFTER:?}");
+                let stalled = match (input.flowing, input.last_data) {
+                    (true, Some(t)) => now.saturating_duration_since(t.max(armed)) > STALL_AFTER,
+                    _ => now.saturating_duration_since(armed) > FIRST_BLOCK_GRACE,
+                };
+                if stalled {
+                    tracing::error!("the microphone stopped sending audio");
                     self.stall_reported = true;
                     self.health.device_lost.store(true, Ordering::SeqCst);
                 }
@@ -367,6 +413,17 @@ impl Writer {
             return;
         }
         if let Some(why) = self.segments.rotation_reason(now) {
+            if self.segments.tracks.iter().any(|t| t.sink.has_failed()) {
+                if self
+                    .failure_rotation
+                    .is_some_and(|t| now.saturating_duration_since(t) < FAILURE_RETRY)
+                {
+                    tracing::error!("an audio file failed again right after a new segment, stopping");
+                    self.health.write_failed.store(true, Ordering::SeqCst);
+                    return;
+                }
+                self.failure_rotation = Some(now);
+            }
             tracing::info!("new segment: {why}");
             if let Err(e) = self.segments.rotate(now) {
                 self.fail("rotating the segment failed", &e);
@@ -378,20 +435,21 @@ impl Writer {
         loop {
             match self.ctl.recv_timeout(WRITER_TICK) {
                 Ok(Ctl::Pause(at)) => {
-                    self.drain();
+                    self.drain(None);
                     if let Err(e) = self.segments.close_segment(at) {
                         tracing::error!("saving the manifest on pause failed: {e:#}");
                     }
                 }
                 Ok(Ctl::Resume(at)) => {
-                    // Blocks of the pause were dropped by the closed sinks.
-                    self.drain();
+                    // Open first, then keep the queued blocks from `at` on; the pause's blocks go.
                     if let Err(e) = self.segments.open_segment(at) {
                         self.fail("opening a segment on resume failed", &e);
                     }
+                    self.arm(at);
+                    self.drain(Some(at));
                 }
                 Ok(Ctl::Finish(at, reply)) => {
-                    self.drain();
+                    self.drain(None);
                     if let Err(e) = self.segments.close_segment(at) {
                         tracing::error!("saving the manifest on stop failed: {e:#}");
                     }
@@ -400,7 +458,7 @@ impl Writer {
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
-                    self.drain();
+                    self.drain(None);
                     let _ = self.segments.close_segment(Instant::now());
                     return;
                 }
@@ -682,21 +740,18 @@ fn start_session(
     let clock = Instant::now();
     // Opened before the devices play: their latency is padded by the sinks.
     segments.open_segment(clock)?;
+    // The writer starts only after the devices play: if one fails, the files are
+    // closed when `segments` drops here, and the folder can be removed at once.
+    // Blocks queue up meanwhile.
+    for stream in &streams {
+        stream.0.play().context("start capture stream")?;
+    }
     let (ctl_tx, ctl_rx) = mpsc::channel();
-    let writer = Writer {
-        segments,
-        inputs,
-        health: health.clone(),
-        ctl: ctl_rx,
-        stall_reported: false,
-    };
+    let writer = Writer::new(segments, inputs, health.clone(), ctl_rx, clock);
     let writer = std::thread::Builder::new()
         .name("tyto-rec-writer".into())
         .spawn(move || writer.run())
         .context("start the recording writer")?;
-    for stream in &streams {
-        stream.0.play().context("start capture stream")?;
-    }
     let mut timeline = Timeline::default();
     timeline.start(0);
     Ok(ActiveRecording {
@@ -737,9 +792,7 @@ pub fn start(app: &AppHandle, o: StartOptions) -> Result<()> {
     let rec = match start_session(app, &o, recordings_dir, dir.clone(), started) {
         Ok(rec) => rec,
         Err(e) => {
-            // Nothing was recorded. The writer (if it started) exits when its
-            // control channel drops; give it a moment before removing the folder.
-            std::thread::sleep(Duration::from_millis(100));
+            // Nothing was recorded; the lock, the streams and the files are already closed.
             if let Err(rm) = std::fs::remove_dir_all(&dir) {
                 tracing::warn!("removing {} failed: {rm}", dir.display());
             }
@@ -851,7 +904,10 @@ fn spawn_watchdog(app: AppHandle, dir: PathBuf) {
                 emit_state(&app, state);
                 let problem = if rec.health.device_lost.load(Ordering::SeqCst) {
                     Some(WARN_DEVICE_LOST)
-                } else if rec.health.write_failed.load(Ordering::SeqCst) {
+                } else if rec.health.write_failed.load(Ordering::SeqCst)
+                    // The writer ends only on stop: ended earlier means it panicked.
+                    || rec.writer.as_ref().is_some_and(|w| w.is_finished())
+                {
                     Some(WARN_WRITE_FAILED)
                 } else {
                     None
@@ -1220,14 +1276,103 @@ mod tests {
             senders.push(sender);
         }
         let (ctl_tx, ctl_rx) = mpsc::channel();
-        let writer = Writer {
-            segments: Segments::new(dir.to_path_buf(), manifest(), tracks),
-            inputs,
-            health: health.clone(),
-            ctl: ctl_rx,
-            stall_reported: false,
-        };
+        let segments = Segments::new(dir.to_path_buf(), manifest(), tracks);
+        let writer = Writer::new(segments, inputs, health.clone(), ctl_rx, Instant::now());
         (writer, senders, ctl_tx, health)
+    }
+
+    /// A mic session armed at `t0`, its first segment open at `t0`.
+    fn mic_writer(dir: &Path) -> (Writer, BlockSender, Arc<Health>, Instant) {
+        let (mut w, mut senders, _ctl, health) = writer_with(dir, &[AudioSource::Mic]);
+        let t0 = Instant::now();
+        w.arm(t0);
+        w.segments.open_segment(t0).unwrap();
+        (w, senders.remove(0), health, t0)
+    }
+
+    fn lost(h: &Health) -> bool {
+        h.device_lost.load(Ordering::SeqCst)
+    }
+
+    #[test]
+    fn a_slow_mic_has_ten_seconds_for_its_first_block() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, mut mic, health, t0) = mic_writer(root.path());
+        for s in 1..=4 {
+            w.tick(t0 + Duration::from_secs(s));
+        }
+        assert!(!lost(&health));
+        // first block at 4 s (Bluetooth hands-free switch), then it flows
+        for i in 0..100u64 {
+            let at = t0 + Duration::from_millis(4_000 + 20 * (i + 1));
+            mic.push(&[0.5; 20], at);
+            w.tick(at);
+        }
+        w.tick(t0 + Duration::from_millis(6_500));
+        assert!(!lost(&health));
+    }
+
+    #[test]
+    fn a_mic_that_never_sends_is_lost_after_ten_seconds() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, _mic, health, t0) = mic_writer(root.path());
+        w.tick(t0 + Duration::from_secs(9));
+        assert!(!lost(&health));
+        w.tick(t0 + Duration::from_secs(11));
+        assert!(lost(&health));
+    }
+
+    #[test]
+    fn a_mic_that_flowed_and_went_quiet_for_three_and_a_half_seconds_is_lost() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, mut mic, health, t0) = mic_writer(root.path());
+        let last = t0 + Duration::from_secs(1);
+        mic.push(&[0.5; 20], last);
+        w.tick(last);
+        // the block started at 0.98 s
+        w.tick(last + Duration::from_millis(2_500));
+        assert!(!lost(&health));
+        w.tick(last + Duration::from_millis(3_500));
+        assert!(lost(&health));
+    }
+
+    #[test]
+    fn resume_gives_the_mic_a_fresh_grace_window() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, mut mic, health, t0) = mic_writer(root.path());
+        mic.push(&[0.5; 20], t0 + Duration::from_secs(1));
+        w.tick(t0 + Duration::from_secs(1));
+        w.segments.close_segment(t0 + Duration::from_secs(1)).unwrap();
+        // paused for a minute, then resumed: the mic gets 10 s again
+        let resumed = t0 + Duration::from_secs(61);
+        w.segments.open_segment(resumed).unwrap();
+        w.arm(resumed);
+        w.tick(resumed + Duration::from_secs(5));
+        assert!(!lost(&health));
+        w.tick(resumed + Duration::from_secs(11));
+        assert!(lost(&health));
+    }
+
+    #[test]
+    fn a_sink_that_fails_again_right_after_rotation_stops_the_session() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut w, mut mic, health, t0) = mic_writer(root.path());
+        let mut feed_until = |w: &mut Writer, ms: u64| {
+            let at = t0 + Duration::from_millis(ms);
+            mic.push(&[0.5; 20], at);
+            w.tick(at);
+        };
+        feed_until(&mut w, 20);
+        w.segments.tracks[0].sink.fail_for_test();
+        feed_until(&mut w, 40);
+        assert_eq!(w.segments.manifest.segments.len(), 2);
+        assert!(!health.write_failed.load(Ordering::SeqCst));
+        // fails again a second later: no third segment, the session is stopped
+        w.segments.tracks[0].sink.fail_for_test();
+        feed_until(&mut w, 1_040);
+        feed_until(&mut w, 1_060);
+        assert_eq!(w.segments.manifest.segments.len(), 2);
+        assert!(health.write_failed.load(Ordering::SeqCst));
     }
 
     #[test]
