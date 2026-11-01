@@ -805,6 +805,7 @@ pub fn start(app: &AppHandle, o: StartOptions) -> Result<()> {
 
     emit_state(app, state);
     crate::meeting_prompt::recording_started(app);
+    super::pill::recording_started(app);
     spawn_watchdog(app.clone(), dir);
     Ok(())
 }
@@ -959,6 +960,7 @@ fn spawn_save(app: AppHandle, pending: PendingSave) {
             tracing::error!("emit recording result: {e}");
         }
         crate::meeting_prompt::recording_stopped(&app);
+        super::pill::recording_ended(&app);
     });
 }
 

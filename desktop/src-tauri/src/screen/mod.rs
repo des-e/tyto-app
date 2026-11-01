@@ -8,6 +8,7 @@ pub mod commands;
 pub mod disk;
 pub mod encoder;
 pub mod pacer;
+pub mod pill;
 pub mod quality;
 pub mod recorder;
 pub mod recovery;

@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(!StateFlags::VISIBLE)
-                .with_denylist(&["meeting-prompt"])
+                .with_denylist(&["meeting-prompt", screen::pill::WINDOW_LABEL])
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -148,6 +148,7 @@ async fn main() -> Result<()> {
             screen::commands::recording_resume,
             screen::commands::recording_stop,
             screen::commands::recording_state,
+            screen::pill::recording_pill_ready,
             cmd::app::get_models_folder,
             cmd::app::get_logs_folder,
             cmd::app::show_log_path,

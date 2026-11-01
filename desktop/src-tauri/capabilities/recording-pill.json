@@ -1,0 +1,16 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "recording-pill",
+	"description": "Minimal permissions for the floating recording pill",
+	"local": true,
+	"windows": ["recording-pill"],
+	"permissions": [
+		"core:event:default",
+		"core:path:default",
+		"core:window:allow-start-dragging",
+		"os:allow-locale",
+		"store:allow-load",
+		"store:allow-get",
+		"store:allow-entries"
+	]
+}

@@ -98,6 +98,7 @@ export function createRecordingHandlers(emit: Emit): CommandHandlerMap {
 			return undefined
 		},
 		recording_state: () => state(),
+		recording_pill_ready: () => state(),
 	}
 }
 

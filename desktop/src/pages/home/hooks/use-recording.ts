@@ -9,6 +9,7 @@ import { ensureSystemAudioPermission } from '~/lib/permissions'
 import { recordingsFolder } from '~/lib/tyto/media-path'
 import {
 	type CaptureTarget,
+	getRecordingState,
 	onRecordingFailed,
 	onRecordingFinished,
 	onRecordingState,
@@ -81,6 +82,12 @@ export function useRecording(onBeforeStart: () => void) {
 			updateStatus('idle')
 		}
 		const unlisteners = [onRecordingState((state) => updateStatus(state.status)), onRecordingFinished(end), onRecordingFailed(end)]
+		// A recording already running when this window (re)loads.
+		void getRecordingState()
+			.then((state) => {
+				if (state && statusRef.current === 'idle') updateStatus(state.status)
+			})
+			.catch((error) => console.error('recording_state error: ', error))
 		return () => {
 			for (const unlisten of unlisteners) unlisten.then((dispose) => dispose())
 		}
@@ -149,7 +156,9 @@ export function useRecording(onBeforeStart: () => void) {
 		setDevices,
 		inputDevice,
 		outputDevice,
-		isRecording,
+		// From the recorder's own state too: the shortcut and the meeting prompt start recordings
+		// elsewhere, and the main window must show them like its own.
+		isRecording: isRecording || status !== 'idle',
 		setIsRecording,
 		status,
 		isPaused: status === 'paused',

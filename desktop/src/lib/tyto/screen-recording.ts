@@ -82,6 +82,11 @@ export async function getRecordingState(): Promise<RecordingState | null> {
 	return (await invoke<RecordingState | null>('recording_state')) ?? null
 }
 
+/** The pill page is up: the current state (null hides the pill), also sent as `recording_state`. */
+export async function recordingPillReady(): Promise<RecordingState | null> {
+	return (await invoke<RecordingState | null>('recording_pill_ready')) ?? null
+}
+
 export function onRecordingState(cb: (state: RecordingState) => void): Promise<UnlistenFn> {
 	return listen<RecordingState>(RECORDING_STATE_EVENT, ({ payload }) => cb(payload))
 }

@@ -26,6 +26,10 @@ const RU: Record<string, string> = {
 	tytoRecordingDeviceLost: 'Устройство звука отключилось. Запись остановлена и сохранена',
 	tytoRecordingWriteFailed: 'Не удалось записать звук на диск. Запись остановлена и сохранена',
 	tytoRecordingSaveFailed: 'Не удалось сохранить запись. Ее части остались в папке Записи',
+	tytoPillPause: 'Пауза',
+	tytoPillResume: 'Продолжить',
+	tytoPillStop: 'Стоп',
+	tytoPillSaving: 'Сохраняем запись',
 }
 
 const KEYS = [
@@ -45,6 +49,10 @@ const KEYS = [
 	'tytoRecordingDeviceLost',
 	'tytoRecordingWriteFailed',
 	'tytoRecordingSaveFailed',
+	'tytoPillPause',
+	'tytoPillResume',
+	'tytoPillStop',
+	'tytoPillSaving',
 ]
 
 describe('тексты записи экрана', () => {

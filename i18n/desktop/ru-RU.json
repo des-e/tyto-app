@@ -772,5 +772,9 @@
 	"tytoRecordingSaving": "Сохраняю запись",
 	"tytoRecordingDeviceLost": "Устройство звука отключилось. Запись остановлена и сохранена",
 	"tytoRecordingWriteFailed": "Не удалось записать звук на диск. Запись остановлена и сохранена",
-	"tytoRecordingSaveFailed": "Не удалось сохранить запись. Ее части остались в папке Записи"
+	"tytoRecordingSaveFailed": "Не удалось сохранить запись. Ее части остались в папке Записи",
+	"tytoPillPause": "Пауза",
+	"tytoPillResume": "Продолжить",
+	"tytoPillStop": "Стоп",
+	"tytoPillSaving": "Сохраняем запись"
 }
