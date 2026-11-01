@@ -37,8 +37,8 @@ pub type LatestFrame = Arc<Mutex<Option<Frame>>>;
 const BLACK: [u8; 4] = [0, 0, 0, 255];
 
 fn fill_black(data: &mut [u8]) {
-    for px in data.chunks_exact_mut(4) {
-        px.copy_from_slice(&BLACK);
+    for px in data.as_chunks_mut::<4>().0 {
+        *px = BLACK;
     }
 }
 
@@ -106,10 +106,7 @@ mod tests {
 
     fn row(f: &Frame, y: u32) -> Vec<[u8; 4]> {
         let w = f.width as usize * 4;
-        f.data[y as usize * w..(y as usize + 1) * w]
-            .chunks_exact(4)
-            .map(|p| [p[0], p[1], p[2], p[3]])
-            .collect()
+        f.data[y as usize * w..(y as usize + 1) * w].as_chunks::<4>().0.to_vec()
     }
 
     #[test]
