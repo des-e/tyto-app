@@ -594,7 +594,7 @@ pub fn prepare_recovery(dir: &Path, active: &[PathBuf], video_seconds: impl Fn(&
     }
 }
 
-fn ensure_session_dir(dir: &Path) -> Result<()> {
+pub(super) fn ensure_session_dir(dir: &Path) -> Result<()> {
     let is_session = dir
         .file_name()
         .is_some_and(|n| n.to_string_lossy().starts_with(SESSION_PREFIX));

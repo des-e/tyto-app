@@ -87,6 +87,31 @@ export async function recordingPillReady(): Promise<RecordingState | null> {
 	return (await invoke<RecordingState | null>('recording_pill_ready')) ?? null
 }
 
+/** A recording left in `Записи/` by a crash (`.tyto-rec-*` working folder). */
+export interface UnfinishedRecording {
+	dir: string
+	name: string
+	startedAt: string
+	approxSeconds: number
+	mode: RecordingMode
+}
+
+/** `recording_recover` fails with this prefix when nothing was left to save (the folder is removed). */
+export const NOTHING_TO_RECOVER = 'too_short'
+
+export async function listUnfinishedRecordings(recordingsDir: string): Promise<UnfinishedRecording[]> {
+	return (await invoke<UnfinishedRecording[] | undefined>('recordings_unfinished', { recordingsDir })) ?? []
+}
+
+/** Saves the recording like a normal stop; the result arrives as `recording_finished { recovered: true }`. */
+export async function recoverRecording(dir: string): Promise<void> {
+	await invoke('recording_recover', { dir })
+}
+
+export async function discardRecording(dir: string): Promise<void> {
+	await invoke('recording_discard', { dir })
+}
+
 export function onRecordingState(cb: (state: RecordingState) => void): Promise<UnlistenFn> {
 	return listen<RecordingState>(RECORDING_STATE_EVENT, ({ payload }) => cb(payload))
 }

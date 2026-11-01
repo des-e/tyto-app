@@ -100,6 +100,7 @@ vi.mock('~/lib/transcripts-store', () => ({
 		mediaPath: input.sourcePath,
 	})),
 	notifyTranscriptsChanged: vi.fn(),
+	findProjectBySource: vi.fn(async () => null),
 }))
 vi.mock('~/lib/tyto/media-path', () => ({ recordingsFolder: vi.fn(async () => RECORDINGS) }))
 vi.mock('~/lib/use-confirm-exit', () => ({ useConfirmExit: () => {} }))

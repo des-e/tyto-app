@@ -393,6 +393,20 @@ export async function readTranscript(path: string): Promise<TranscriptRecord | n
 	}
 }
 
+function samePath(a: string, b: string) {
+	const norm = (path: string) => path.replace(/\\/g, '/').toLowerCase()
+	return norm(a) === norm(b)
+}
+
+/** The project whose media is `sourcePath` (a file referenced in place, not copied), or null. */
+export async function findProjectBySource(projectsPath: string | null | undefined, sourcePath: string): Promise<string | null> {
+	for (const entry of await listTranscripts(projectsPath)) {
+		const record = await readTranscript(entry.path)
+		if (record?.sourcePath && samePath(record.sourcePath, sourcePath)) return entry.path
+	}
+	return null
+}
+
 /**
  * Absolute path of the media copy stored beside a record, when the project folder still has one.
  * Legacy flat saves (and records whose copy was deleted) resolve to null — the caller falls back to

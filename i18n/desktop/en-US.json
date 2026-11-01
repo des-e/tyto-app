@@ -776,5 +776,13 @@
 	"tytoPillPause": "Pause",
 	"tytoPillResume": "Resume",
 	"tytoPillStop": "Stop",
-	"tytoPillSaving": "Saving the recording"
+	"tytoPillSaving": "Saving the recording",
+	"tytoRecoveryTitle": "Unfinished recording found",
+	"tytoRecoveryBody": "The recording from {date} was interrupted. Restore what was recorded?",
+	"tytoRecoveryRestore": "Restore",
+	"tytoRecoveryDiscard": "Delete",
+	"tytoRecoveryLater": "Later",
+	"tytoRecoveryEmpty": "Nothing was left in the interrupted recording, it was removed",
+	"tytoRecoveryFailed": "Could not restore the recording. Its parts are kept in the Записи folder",
+	"tytoRecoveryDiscardFailed": "Could not delete the interrupted recording"
 }

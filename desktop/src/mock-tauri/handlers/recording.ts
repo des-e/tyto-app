@@ -22,7 +22,16 @@ function stamp(date: Date) {
 	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`
 }
 
-export function createRecordingHandlers(emit: Emit): CommandHandlerMap {
+export interface MockUnfinished {
+	dir: string
+	name: string
+	startedAt: string
+	approxSeconds: number
+	mode: 'audio' | 'video'
+}
+
+/** `unfinished`: crash leftovers the mock reports (recover and discard remove them). */
+export function createRecordingHandlers(emit: Emit, unfinished: MockUnfinished[] = []): CommandHandlerMap {
 	let session: {
 		options: MockStartOptions
 		status: 'recording' | 'paused' | 'finishing'
@@ -95,6 +104,30 @@ export function createRecordingHandlers(emit: Emit): CommandHandlerMap {
 					recovered: false,
 				})
 			}, FINISH_DELAY_MS)
+			return undefined
+		},
+		recordings_unfinished: () => [...unfinished],
+		recording_recover: (args) => {
+			const dir = String(args?.dir)
+			const index = unfinished.findIndex((item) => item.dir === dir)
+			if (index < 0) throw `${dir} is not an unfinished recording`
+			const [item] = unfinished.splice(index, 1)
+			const path = `${dir.replace(/[/\\][^/\\]*$/, '')}/${item.name}.m4a`
+			virtualFs.set(path, null)
+			emit('recording_finished', {
+				path,
+				name: `${item.name}.m4a`,
+				durationSeconds: item.approxSeconds,
+				hasVideo: false,
+				warning: null,
+				stopReason: 'user',
+				recovered: true,
+			})
+			return undefined
+		},
+		recording_discard: (args) => {
+			const index = unfinished.findIndex((item) => item.dir === String(args?.dir))
+			if (index >= 0) unfinished.splice(index, 1)
 			return undefined
 		},
 		recording_state: () => state(),

@@ -37,7 +37,10 @@ use super::audio_sink::SegmentedWavSink;
 use super::disk;
 use super::encoder::VideoEncoder;
 use super::quality::{preset, Quality};
-use super::recovery::{discard_unfinished, record_final_bytes, remove_working_dir, SessionLock};
+use super::recovery::{
+    discard_unfinished, ensure_session_dir, prepare_recovery, probe_video_seconds, record_final_bytes, remove_working_dir,
+    RecoveryAction, SessionLock,
+};
 use super::segments::{
     finalize_args, finalize_plan, read_manifest, segment_file, write_concat_lists, write_manifest_atomic, AudioSource,
     FinalizeError, FinalizePlan, Manifest, SegmentRecord, MANIFEST_VERSION, SEGMENT_MAX, SESSION_PREFIX,
@@ -613,12 +616,48 @@ impl ActiveRecording {
 pub struct RecorderRuntime {
     inner: Mutex<Option<ActiveRecording>>,
     ffmpeg: Mutex<Option<Child>>,
+    /// Folders being recovered right now (a second request for one is refused).
+    recovering: Mutex<Vec<PathBuf>>,
+    /// The mux of a recovery; its own slot, so it never meets the live session's ffmpeg.
+    recovery_ffmpeg: Mutex<Option<Child>>,
+}
+
+/// Marks a folder as being recovered until dropped.
+struct RecoveryGuard<'a> {
+    runtime: &'a RecorderRuntime,
+    dir: PathBuf,
+}
+
+impl Drop for RecoveryGuard<'_> {
+    fn drop(&mut self) {
+        lock(&self.runtime.recovering).retain(|d| d != &self.dir);
+    }
 }
 
 impl RecorderRuntime {
-    /// Working folder of the session recording or saving now: recovery must not touch it.
-    pub fn active_dirs(&self) -> Vec<PathBuf> {
+    /// Working folder of the session recording or saving now.
+    fn session_dirs(&self) -> Vec<PathBuf> {
         lock(&self.inner).iter().map(|r| r.dir.clone()).collect()
+    }
+
+    /// Folders recovery must not offer or touch: the session recording or saving
+    /// now, and the ones being recovered.
+    pub fn active_dirs(&self) -> Vec<PathBuf> {
+        let mut dirs = self.session_dirs();
+        dirs.extend(lock(&self.recovering).iter().cloned());
+        dirs
+    }
+
+    fn begin_recovery(&self, dir: &Path) -> Result<RecoveryGuard<'_>> {
+        let mut busy = lock(&self.recovering);
+        if busy.iter().any(|d| d == dir) {
+            bail!("{} is already being recovered", dir.display());
+        }
+        busy.push(dir.to_path_buf());
+        Ok(RecoveryGuard {
+            runtime: self,
+            dir: dir.to_path_buf(),
+        })
     }
 
     pub fn state(&self) -> Option<RecordingStatePayload> {
@@ -865,8 +904,10 @@ pub fn shutdown(app: &AppHandle) {
     let Some(runtime) = app.try_state::<RecorderRuntime>() else {
         return;
     };
-    if let Some(child) = lock(&runtime.ffmpeg).as_mut() {
-        let _ = child.kill();
+    for slot in [&runtime.ffmpeg, &runtime.recovery_ffmpeg] {
+        if let Some(child) = lock(slot).as_mut() {
+            let _ = child.kill();
+        }
     }
     let Ok(mut guard) = runtime.inner.try_lock() else {
         return;
@@ -1140,6 +1181,97 @@ fn save(mut job: SaveJob, ffmpeg: Option<PathBuf>, slot: &Mutex<Option<Child>>) 
             })
         }
     }
+}
+
+/// Error text of `recover` when nothing was left to recover (the folder is removed);
+/// the frontend tells it apart by this prefix.
+pub const NOTHING_TO_RECOVER: &str = "too_short: nothing was recorded";
+
+fn finished_recovery(path: &Path, plan: Option<&FinalizePlan>) -> RecordingFinished {
+    RecordingFinished {
+        path: path.to_string_lossy().into_owned(),
+        name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        duration_seconds: plan.map(plan_seconds).unwrap_or(0.0),
+        has_video: plan.is_some_and(|p| !p.video.is_empty()),
+        warning: None,
+        stop_reason: StopReason::User,
+        recovered: true,
+    }
+}
+
+/// Recovers one unfinished folder: closes its segments from the disk and saves the
+/// same way a normal stop does (same file name rules, `Записи/`). A final file that is
+/// already in place only gets its working folder removed. Blocking.
+fn recover_dir(
+    dir: &Path,
+    active: &[PathBuf],
+    ffmpeg: Option<PathBuf>,
+    slot: &Mutex<Option<Child>>,
+) -> Result<RecordingFinished> {
+    ensure_session_dir(dir)?;
+    let recordings_dir = dir.parent().context("recordings folder")?.to_path_buf();
+    let probe = |file: &Path| ffmpeg.as_deref().and_then(|ff| probe_video_seconds(ff, file));
+    match prepare_recovery(dir, active, probe)? {
+        RecoveryAction::AlreadyFinished(path) => {
+            let plan = read_manifest(dir).ok().and_then(|m| finalize_plan(&m).ok());
+            if let Err(e) = remove_working_dir(dir, &path, active) {
+                tracing::warn!("{e:#}");
+            }
+            Ok(finished_recovery(&path, plan.as_ref()))
+        }
+        RecoveryAction::Finalize(manifest) => {
+            let plan = match finalize_plan(&manifest) {
+                Ok(plan) => plan,
+                Err(FinalizeError::Empty) => {
+                    discard_unfinished(dir, active)?;
+                    bail!("{}", NOTHING_TO_RECOVER);
+                }
+            };
+            let lock = SessionLock::acquire(dir)?;
+            let stem = if manifest.name.trim().is_empty() {
+                "Запись".to_string()
+            } else {
+                manifest.name.clone()
+            };
+            let mut job = SaveJob {
+                dir: dir.to_path_buf(),
+                recordings_dir,
+                stem,
+                manifest,
+                lock: Some(lock),
+                stop_reason: StopReason::User,
+                warnings: Vec::new(),
+            };
+            let final_path = mux(&mut job, &plan, ffmpeg, slot)?;
+            drop(job.lock.take());
+            if let Err(e) = remove_working_dir(dir, &final_path, &[]) {
+                tracing::warn!("{e:#}");
+            }
+            Ok(finished_recovery(&final_path, Some(&plan)))
+        }
+    }
+}
+
+/// Command side of "Восстановить": runs `recover_dir` and announces the file as `recording_finished`.
+pub fn recover(app: &AppHandle, dir: &Path) -> Result<()> {
+    let runtime = app.state::<RecorderRuntime>();
+    let _guard = runtime.begin_recovery(dir)?;
+    let active = runtime.session_dirs();
+    let finished = recover_dir(dir, &active, crate::ffmpeg::find_ffmpeg_path(), &runtime.recovery_ffmpeg)?;
+    app.emit(FINISHED_EVENT, &finished).context("emit recording_finished")
+}
+
+/// Command side of "Удалить".
+pub fn discard(app: &AppHandle, dir: &Path) -> Result<()> {
+    let runtime = app.state::<RecorderRuntime>();
+    let _guard = runtime.begin_recovery(dir)?;
+    discard_unfinished(dir, &runtime.session_dirs())
+}
+
+/// Unfinished recordings in `recordings_dir`, without the live session and the ones being recovered.
+pub fn unfinished(app: &AppHandle, recordings_dir: &Path) -> Vec<super::recovery::UnfinishedRecording> {
+    let runtime = app.state::<RecorderRuntime>();
+    super::recovery::scan_unfinished(recordings_dir, &runtime.active_dirs())
 }
 
 #[cfg(test)]
@@ -1456,6 +1588,74 @@ mod tests {
         assert_eq!(m.finalizing_to.as_deref(), Some("2026-10-31 14-05-33.m4a"));
         assert_eq!(m.final_bytes, None);
         assert!(!root.path().join("2026-10-31 14-05-33.m4a").exists());
+    }
+
+    /// A session folder with one closed second of mic audio, as left by a crash.
+    fn crashed_session(root: &Path, seconds: u64) -> PathBuf {
+        let dir = create_session_dir(root, "2026-10-31 14-05-33").unwrap();
+        let mut s = mic_session(&dir);
+        let t0 = Instant::now();
+        s.open_segment(t0).unwrap();
+        feed(&mut s, (seconds * 1_000) as usize, t0);
+        s.close_segment(t0 + Duration::from_secs(seconds)).unwrap();
+        dir
+    }
+
+    #[test]
+    fn recovery_of_a_finished_file_only_removes_the_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = crashed_session(root.path(), 2);
+        let mut m = read_manifest(&dir).unwrap();
+        m.finalizing_to = Some("2026-10-31 14-05-33.m4a".into());
+        m.final_bytes = Some(4);
+        write_manifest_atomic(&dir, &m).unwrap();
+        let final_file = root.path().join("2026-10-31 14-05-33.m4a");
+        std::fs::write(&final_file, b"done").unwrap();
+
+        let finished = recover_dir(&dir, &[], None, &no_child()).unwrap();
+        assert!(finished.recovered);
+        assert_eq!(finished.path, final_file.to_string_lossy());
+        assert_eq!(finished.name, "2026-10-31 14-05-33.m4a");
+        assert!(!dir.exists());
+        // no second file appeared
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn recovery_with_nothing_recorded_removes_the_folder_and_says_so() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = create_session_dir(root.path(), "2026-10-31 14-05-33").unwrap();
+        let mut s = mic_session(&dir);
+        let t0 = Instant::now();
+        s.open_segment(t0).unwrap();
+        s.close_segment(t0 + Duration::from_millis(300)).unwrap();
+        let err = recover_dir(&dir, &[], None, &no_child()).unwrap_err();
+        assert!(format!("{err:#}").starts_with("too_short"));
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn a_failed_recovery_keeps_the_folder_and_a_live_session_is_refused() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = crashed_session(root.path(), 2);
+        let missing = root.path().join("no-ffmpeg-here");
+        assert!(recover_dir(&dir, &[], Some(missing.clone()), &no_child()).is_err());
+        assert!(dir.join("seg-0001.mic.wav").is_file());
+        // the folder of the live session is not touched
+        assert!(recover_dir(&dir, &[dir.clone()], Some(missing), &no_child()).is_err());
+        assert!(dir.join("manifest.json").is_file());
+    }
+
+    #[test]
+    fn a_folder_is_recovered_by_one_caller_at_a_time() {
+        let runtime = RecorderRuntime::default();
+        let dir = PathBuf::from("rec/.tyto-rec-1");
+        let first = runtime.begin_recovery(&dir).unwrap();
+        assert!(runtime.begin_recovery(&dir).is_err());
+        assert_eq!(runtime.active_dirs(), vec![dir.clone()]);
+        drop(first);
+        assert!(runtime.active_dirs().is_empty());
+        assert!(runtime.begin_recovery(&dir).is_ok());
     }
 
     #[test]

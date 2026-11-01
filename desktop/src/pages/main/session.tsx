@@ -10,8 +10,9 @@ import * as config from '~/lib/config'
 import { pathToNamedPath } from '~/lib/fs'
 import { cleanupPartialDownloads, listInstalledModels, type InstalledModel } from '~/lib/model'
 import { autoProjectName } from '~/lib/project-name'
-import { notifyTranscriptsChanged, saveTranscript, TRANSCRIPT_VERSION, type TranscriptRecord } from '~/lib/transcripts-store'
+import { findProjectBySource, notifyTranscriptsChanged, saveTranscript, TRANSCRIPT_VERSION, type TranscriptRecord } from '~/lib/transcripts-store'
 import { onRecordingFailed, onRecordingFinished, onRecordingState, WARNING_DEVICE_LOST, WARNING_WRITE_FAILED } from '~/lib/tyto/screen-recording'
+import { useRecordingRecovery } from '~/lib/tyto/recording-recovery'
 import type { NamedPath, ProjectSource } from '~/lib/types'
 import { useConfirmExit } from '~/lib/use-confirm-exit'
 import { hotkeyRecordingActive } from '~/providers/hotkey'
@@ -135,6 +136,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	)
 	const link = useAudioDownload(transcribeDownloads)
 
+	// Once at startup: offers to recover or delete recordings a crash left in `Записи/`.
+	useRecordingRecovery()
+
 	useEffect(() => {
 		recordingShortcut.setNormalRecordingActive(recording.isRecording)
 		return () => recordingShortcut.setNormalRecordingActive(false)
@@ -158,14 +162,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	// «Не расшифровано» until transcribed; audio may start that on its own, video never does.
 	useEffect(() => {
 		const unlistenFinished = onRecordingFinished(async (payload) => {
-			recording.setIsRecording(false)
-			setPanel('none')
+			const { preference: current, hydrate, transcribeJob } = recordingCompletionRef.current
+			if (payload.recovered) {
+				// A recovered recording is not the one on screen: leave the panel alone, and never
+				// make a second project for a file that already has one (a double click).
+				try {
+					if (await findProjectBySource(current.projectsPath, payload.path)) return
+				} catch (error) {
+					console.warn('failed to look for an existing project:', error)
+				}
+			} else {
+				recording.setIsRecording(false)
+				setPanel('none')
+			}
 			if (payload.stopReason === 'low_disk') toast.warning(m.tytoLowDiskStopped(), { position: 'bottom-center' })
 			if (payload.warning === WARNING_DEVICE_LOST) toast.warning(m.tytoRecordingDeviceLost(), { position: 'bottom-center' })
 			else if (payload.warning === WARNING_WRITE_FAILED) toast.warning(m.tytoRecordingWriteFailed(), { position: 'bottom-center' })
 			else if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
 
-			const { preference: current, hydrate, transcribeJob } = recordingCompletionRef.current
 			const name = autoProjectName(payload.name, 'record')
 			const createdAt = new Date()
 			const saved = await saveTranscript({
@@ -198,7 +212,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			}
 			const jobId = hydrate(record, saved.recordPath, saved.mediaPath, 'record')
 			notifyTranscriptsChanged()
-			if (!payload.hasVideo && current.autoTranscribeAfterRecording && jobId) transcribeJob(jobId)
+			// A recovered recording stays «Не расшифровано»: nobody asked for work at startup.
+			if (!payload.recovered && !payload.hasVideo && current.autoTranscribeAfterRecording && jobId) transcribeJob(jobId)
 		})
 		const unlistenFailed = onRecordingFailed((payload) => {
 			recording.setIsRecording(false)

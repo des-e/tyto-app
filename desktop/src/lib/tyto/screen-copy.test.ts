@@ -30,6 +30,14 @@ const RU: Record<string, string> = {
 	tytoPillResume: 'Продолжить',
 	tytoPillStop: 'Стоп',
 	tytoPillSaving: 'Сохраняем запись',
+	tytoRecoveryTitle: 'Найдена незавершенная запись',
+	tytoRecoveryBody: 'Запись от {date} прервалась. Восстановить то, что успело записаться?',
+	tytoRecoveryRestore: 'Восстановить',
+	tytoRecoveryDiscard: 'Удалить',
+	tytoRecoveryLater: 'Позже',
+	tytoRecoveryEmpty: 'В прерванной записи ничего не осталось, ее убрали',
+	tytoRecoveryFailed: 'Не удалось восстановить запись. Ее части остались в папке Записи',
+	tytoRecoveryDiscardFailed: 'Не удалось удалить прерванную запись',
 }
 
 const KEYS = [
@@ -53,6 +61,14 @@ const KEYS = [
 	'tytoPillResume',
 	'tytoPillStop',
 	'tytoPillSaving',
+	'tytoRecoveryTitle',
+	'tytoRecoveryBody',
+	'tytoRecoveryRestore',
+	'tytoRecoveryDiscard',
+	'tytoRecoveryLater',
+	'tytoRecoveryEmpty',
+	'tytoRecoveryFailed',
+	'tytoRecoveryDiscardFailed',
 ]
 
 describe('тексты записи экрана', () => {
