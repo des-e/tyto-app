@@ -16,6 +16,7 @@ import { readConfig } from '~/lib/config-store'
 import { message } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import type { ModelMetadata } from '~/lib/model'
+import type { Quality } from '~/lib/tyto/screen-recording'
 
 /** Which build of the engine's CPU backend to run; `auto` lets CPUID decide. */
 export type CpuVariant = 'auto' | 'avx2' | 'baseline'
@@ -137,6 +138,9 @@ export interface Preference {
 	setMeetingDetectionEnabled: ModifyState<boolean>
 	autoTranscribeAfterRecording: boolean
 	setAutoTranscribeAfterRecording: ModifyState<boolean>
+	/** Video recording quality (Tyto): `good` is the default, `high` doubles the frame rate. */
+	screenQuality: Quality
+	setScreenQuality: ModifyState<Quality>
 }
 
 // Create the context
@@ -277,6 +281,7 @@ export function PreferenceProvider({ children }: { children: ReactNode }) {
 	const [saveTranscripts, setSaveTranscripts] = usePersisted<boolean>(CONFIG_KEYS.saveTranscripts, true)
 	const [meetingDetectionEnabled, setMeetingDetectionEnabled] = usePersisted<boolean>(CONFIG_KEYS.meetingDetectionEnabled, false)
 	const [autoTranscribeAfterRecording, setAutoTranscribeAfterRecording] = usePersisted<boolean>(CONFIG_KEYS.autoTranscribeAfterRecording, false)
+	const [screenQuality, setScreenQuality] = usePersisted<Quality>(CONFIG_KEYS.screenQuality, 'good')
 
 	const [analyticsEnabled, setAnalyticsEnabledLocal] = useState(true)
 
@@ -387,6 +392,7 @@ export function PreferenceProvider({ children }: { children: ReactNode }) {
 		setAi(DEFAULT_AI)
 		setMeetingDetectionEnabled(false)
 		setAutoTranscribeAfterRecording(false)
+		setScreenQuality('good')
 		message(m.successAction())
 	}
 
@@ -472,6 +478,8 @@ export function PreferenceProvider({ children }: { children: ReactNode }) {
 		setMeetingDetectionEnabled,
 		autoTranscribeAfterRecording,
 		setAutoTranscribeAfterRecording,
+		screenQuality,
+		setScreenQuality,
 	}
 
 	return <PreferenceContext.Provider value={preference}>{children}</PreferenceContext.Provider>

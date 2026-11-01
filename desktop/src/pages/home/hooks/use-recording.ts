@@ -107,8 +107,7 @@ export function useRecording(onBeforeStart: () => void) {
 				target: target ?? null,
 				devices: selectedDevices,
 				recordingsDir: await recordingsFolder(preference.projectsPath),
-				// The quality setting arrives with the video recording settings.
-				quality: 'good',
+				quality: preference.screenQuality ?? 'good',
 				name: recordingName.trim() || null,
 			})
 		} catch (error) {

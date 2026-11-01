@@ -68,10 +68,12 @@ describe('screen-recording', () => {
 		expect(await getRecordingState()).toEqual({ status: 'recording', mode: 'audio', activeMs: 0 })
 	})
 
-	it('видео пока недоступно: recording_start отказывает', async () => {
-		await expect(
-			startRecording({ mode: 'video', target: { kind: 'monitor', id: '1' }, devices: [mic], recordingsDir, quality: 'high' }),
-		).rejects.toBe('video capture is not available')
+	it('видео в моках: цель и качество уходят в recording_start, состояние в режиме video', async () => {
+		await startRecording({ mode: 'video', target: { kind: 'monitor', id: '1' }, devices: [mic], recordingsDir, quality: 'high' })
+		expect(invoke).toHaveBeenCalledWith('recording_start', {
+			options: { mode: 'video', target: { kind: 'monitor', id: '1' }, devices: [mic], recordingsDir, quality: 'high', name: null },
+		})
+		expect(await getRecordingState()).toMatchObject({ status: 'recording', mode: 'video' })
 	})
 
 	it('пауза не идет в длину записи, recording_finished несет файл в Записи', async () => {

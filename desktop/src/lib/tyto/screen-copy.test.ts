@@ -38,6 +38,19 @@ const RU: Record<string, string> = {
 	tytoRecoveryEmpty: 'В прерванной записи ничего не осталось, ее убрали',
 	tytoRecoveryFailed: 'Не удалось восстановить запись. Ее части остались в папке Записи',
 	tytoRecoveryDiscardFailed: 'Не удалось удалить прерванную запись',
+	tytoRecordAudio: 'Запись аудио',
+	tytoRecordVideo: 'Запись видео',
+	tytoCaptureTitle: 'Что записывать',
+	tytoCaptureScreen: 'Весь экран',
+	tytoCaptureWindow: 'Одно окно',
+	tytoCaptureMonitor: 'Экран {index}, {width}×{height}',
+	tytoCaptureNoWindows: 'Открытых окон не найдено',
+	tytoCaptureStart: 'Начать запись',
+	tytoQualityLabel: 'Качество видео',
+	tytoQualityGood: 'Хорошее',
+	tytoQualityHigh: 'Высокое',
+	tytoQualityGoodInfo: 'До 1080p, 15 кадров в секунду, около 1 ГБ в час',
+	tytoQualityHighInfo: 'До 1080p, 30 кадров в секунду, около 2 ГБ в час',
 }
 
 const KEYS = [
@@ -69,6 +82,19 @@ const KEYS = [
 	'tytoRecoveryEmpty',
 	'tytoRecoveryFailed',
 	'tytoRecoveryDiscardFailed',
+	'tytoRecordAudio',
+	'tytoRecordVideo',
+	'tytoCaptureTitle',
+	'tytoCaptureScreen',
+	'tytoCaptureWindow',
+	'tytoCaptureMonitor',
+	'tytoCaptureNoWindows',
+	'tytoCaptureStart',
+	'tytoQualityLabel',
+	'tytoQualityGood',
+	'tytoQualityHigh',
+	'tytoQualityGoodInfo',
+	'tytoQualityHighInfo',
 ]
 
 describe('тексты записи экрана', () => {

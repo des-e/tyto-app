@@ -151,6 +151,8 @@ async fn main() -> Result<()> {
             screen::commands::recordings_unfinished,
             screen::commands::recording_recover,
             screen::commands::recording_discard,
+            screen::commands::screen_capture_support,
+            screen::commands::list_capture_targets,
             screen::pill::recording_pill_ready,
             cmd::app::get_models_folder,
             cmd::app::get_logs_folder,

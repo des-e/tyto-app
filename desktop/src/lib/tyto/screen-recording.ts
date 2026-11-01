@@ -123,3 +123,40 @@ export function onRecordingFinished(cb: (finished: RecordingFinished) => void): 
 export function onRecordingFailed(cb: (failed: RecordingFailed) => void): Promise<UnlistenFn> {
 	return listen<RecordingFailed>(RECORDING_FAILED_EVENT, ({ payload }) => cb(payload))
 }
+
+/** What this build can capture (`screen_capture_support`). */
+export interface CaptureSupport {
+	video: boolean
+	/** The recording pill is left out of the picture by the capture itself. */
+	pillExcluded: boolean
+}
+
+export interface MonitorInfo {
+	id: string
+	name: string
+	width: number
+	height: number
+	primary: boolean
+}
+
+export interface WindowTarget {
+	id: string
+	title: string
+	appName: string
+}
+
+export interface CaptureTargets {
+	monitors: MonitorInfo[]
+	windows: WindowTarget[]
+}
+
+export async function getCaptureSupport(): Promise<CaptureSupport> {
+	const support = await invoke<Partial<CaptureSupport> | undefined>('screen_capture_support')
+	return { video: support?.video === true, pillExcluded: support?.pillExcluded === true }
+}
+
+/** Monitors and open windows to record; Tyto's own windows are left out by the backend. */
+export async function listCaptureTargets(): Promise<CaptureTargets> {
+	const targets = await invoke<Partial<CaptureTargets> | undefined>('list_capture_targets')
+	return { monitors: targets?.monitors ?? [], windows: targets?.windows ?? [] }
+}

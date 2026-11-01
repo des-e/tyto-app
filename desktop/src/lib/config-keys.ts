@@ -48,6 +48,7 @@ export const CONFIG_KEYS = {
 	recordingShortcut: 'recording.shortcut',
 	meetingDetectionEnabled: 'recording.meetingDetectionEnabled',
 	autoTranscribeAfterRecording: 'recording.autoTranscribeAfterRecording',
+	screenQuality: 'recording.screenQuality',
 
 	// Reading the transcript
 	textAreaDirection: 'transcript.textDirection',

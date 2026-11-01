@@ -784,5 +784,18 @@
 	"tytoRecoveryLater": "Later",
 	"tytoRecoveryEmpty": "Nothing was left in the interrupted recording, it was removed",
 	"tytoRecoveryFailed": "Could not restore the recording. Its parts are kept in the Записи folder",
-	"tytoRecoveryDiscardFailed": "Could not delete the interrupted recording"
+	"tytoRecoveryDiscardFailed": "Could not delete the interrupted recording",
+	"tytoRecordAudio": "Record audio",
+	"tytoRecordVideo": "Record video",
+	"tytoCaptureTitle": "What to record",
+	"tytoCaptureScreen": "Whole screen",
+	"tytoCaptureWindow": "One window",
+	"tytoCaptureMonitor": "Screen {index}, {width}×{height}",
+	"tytoCaptureNoWindows": "No open windows found",
+	"tytoCaptureStart": "Start recording",
+	"tytoQualityLabel": "Video quality",
+	"tytoQualityGood": "Good",
+	"tytoQualityHigh": "High",
+	"tytoQualityGoodInfo": "Up to 1080p, 15 frames per second, about 1 GB per hour",
+	"tytoQualityHighInfo": "Up to 1080p, 30 frames per second, about 2 GB per hour"
 }

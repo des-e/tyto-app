@@ -8,6 +8,7 @@ import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
 import { getDefaultRecordingShortcut } from '~/lib/config'
 import type { PermissionStatus } from '~/lib/permissions'
+import { SegmentedControl } from '~/lib/tyto/segmented-control'
 import { m } from '~/paraglide/messages.js'
 import { useRecordingShortcut } from '~/providers/recording-shortcut'
 import { usePreferenceProvider } from '~/providers/preference'
@@ -148,7 +149,8 @@ function MeetPermissionRow({ enabled }: { enabled: boolean }) {
 
 export function RecordingSection() {
 	const shortcut = useRecordingShortcut()
-	const { meetingDetectionEnabled, setMeetingDetectionEnabled, autoTranscribeAfterRecording, setAutoTranscribeAfterRecording } = usePreferenceProvider()
+	const { meetingDetectionEnabled, setMeetingDetectionEnabled, autoTranscribeAfterRecording, setAutoTranscribeAfterRecording, screenQuality, setScreenQuality } =
+		usePreferenceProvider()
 	const isMacOS = platform() === 'macos'
 
 	return (
@@ -181,6 +183,20 @@ export function RecordingSection() {
 						/>
 					</SettingsRow>
 				)}
+			</SettingsGroup>
+
+			<SettingsGroup>
+				<SettingsRow label={m.tytoQualityLabel()} description={screenQuality === 'high' ? m.tytoQualityHighInfo() : m.tytoQualityGoodInfo()}>
+					<SegmentedControl
+						ariaLabel={m.tytoQualityLabel()}
+						value={screenQuality}
+						onChange={setScreenQuality}
+						options={[
+							{ value: 'good', label: m.tytoQualityGood() },
+							{ value: 'high', label: m.tytoQualityHigh() },
+						]}
+					/>
+				</SettingsRow>
 			</SettingsGroup>
 
 			{isMacOS && (

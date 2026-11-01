@@ -1,6 +1,6 @@
 import { listen } from '@tauri-apps/api/event'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Link2, Mic, Pause, Play, Plus, Square, X } from 'lucide-react'
+import { Link2, Mic, Pause, Play, Plus, Square, Video, X } from 'lucide-react'
 import { siFacebook, siInstagram, siTiktok, siX, siYoutube } from 'simple-icons'
 import { useEffect, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
@@ -9,7 +9,9 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
 import { cn } from '~/lib/style'
+import { CaptureTargetDialog } from '~/lib/tyto/capture-target-dialog'
 import { EmptyScreen } from '~/lib/tyto/empty-screen'
+import { getCaptureSupport } from '~/lib/tyto/screen-recording'
 import { parseMediaLinks } from '~/lib/ytdlp'
 import { useSession, type IdlePanel } from '../session'
 import QuietRow from './quiet-row'
@@ -80,12 +82,21 @@ function LevelMeter() {
 	)
 }
 
-function RecordPanel() {
+export function RecordPanel() {
 	const { recording, recordElapsed, preference } = useSession()
+	const [videoSupported, setVideoSupported] = useState(false)
+	const [pickingTarget, setPickingTarget] = useState(false)
 
 	useEffect(() => {
 		// The recording hook loads audio devices for this tab only.
 		preference.setHomeTab('record')
+	}, [])
+
+	useEffect(() => {
+		// Builds without video capture show no video button.
+		getCaptureSupport()
+			.then((support) => setVideoSupported(support.video))
+			.catch((error) => console.error('getCaptureSupport error: ', error))
 	}, [])
 
 	if (recording.isRecording) {
@@ -126,13 +137,34 @@ function RecordPanel() {
 				<AudioDeviceInput type="input" devices={recording.devices} device={recording.inputDevice} setDevice={recording.setInputDevice} />
 				<AudioDeviceInput type="output" devices={recording.devices} device={recording.outputDevice} setDevice={recording.setOutputDevice} />
 			</div>
-			<Button
-				onClick={() => recording.startRecord()}
-				disabled={!preference.modelPath || (!recording.inputDevice && !recording.outputDevice)}
-				className="h-10 w-full">
-				<Mic className="h-4 w-4" />
-				{m.startRecord()}
-			</Button>
+			{/* Two ways to start: audio right away, video after choosing what to capture. */}
+			<div className="flex w-full gap-2">
+				<Button
+					onClick={() => void recording.startRecord('audio')}
+					disabled={!preference.modelPath || (!recording.inputDevice && !recording.outputDevice)}
+					className="h-10 flex-1">
+					<Mic className="h-4 w-4" />
+					{m.tytoRecordAudio()}
+				</Button>
+				{videoSupported && (
+					<Button
+						variant="secondary"
+						onClick={() => setPickingTarget(true)}
+						disabled={!preference.modelPath || (!recording.inputDevice && !recording.outputDevice)}
+						className="h-10 flex-1">
+						<Video className="h-4 w-4" />
+						{m.tytoRecordVideo()}
+					</Button>
+				)}
+			</div>
+			<CaptureTargetDialog
+				open={pickingTarget}
+				onCancel={() => setPickingTarget(false)}
+				onStart={(target) => {
+					setPickingTarget(false)
+					void recording.startRecord('video', target)
+				}}
+			/>
 		</div>
 	)
 }

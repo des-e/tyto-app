@@ -3,7 +3,7 @@ import { virtualFs } from '../state'
 import type { CommandHandlerMap } from '../types'
 
 // Stand-in for the segmented recorder (`screen/recorder.rs`): `recording_state` once a second,
-// `recording_finished` with an `.m4a` in the given `Записи` folder after `recording_stop`.
+// `recording_finished` with an `.m4a` (`.mp4` for video) in the given `Записи` folder after `recording_stop`.
 
 type Emit = (event: string, payload?: unknown) => void
 
@@ -49,7 +49,6 @@ export function createRecordingHandlers(emit: Emit, unfinished: MockUnfinished[]
 		recording_start: (args) => {
 			const options = args?.options as MockStartOptions
 			if (session) throw 'recording is already in progress'
-			if (options.mode === 'video') throw 'video capture is not available'
 			session = { options, status: 'recording', activeMs: 0, runningSince: Date.now(), startedAt: new Date(), timers: [] }
 			let level = 0
 			session.timers.push(
@@ -91,14 +90,15 @@ export function createRecordingHandlers(emit: Emit, unfinished: MockUnfinished[]
 					emit('recording_failed', { code: 'too_short', message: 'recording is too short, nothing to save' })
 					return
 				}
-				const name = `${stopped.options.name?.trim() || stamp(stopped.startedAt)}.m4a`
+				const video = stopped.options.mode === 'video'
+				const name = `${stopped.options.name?.trim() || stamp(stopped.startedAt)}.${video ? 'mp4' : 'm4a'}`
 				const path = `${stopped.options.recordingsDir.replace(/\/+$/, '')}/${name}`
 				virtualFs.set(path, null)
 				emit('recording_finished', {
 					path,
 					name,
 					durationSeconds: Math.round(stopped.activeMs / 1000),
-					hasVideo: false,
+					hasVideo: video,
 					warning: null,
 					stopReason: 'user',
 					recovered: false,
@@ -130,6 +130,19 @@ export function createRecordingHandlers(emit: Emit, unfinished: MockUnfinished[]
 			if (index >= 0) unfinished.splice(index, 1)
 			return undefined
 		},
+		// The browser mock shows the whole video flow; real builds answer `video: false` until the capture exists.
+		screen_capture_support: () => ({ video: true, pillExcluded: true }),
+		list_capture_targets: () => ({
+			monitors: [
+				{ id: 'mock-monitor-1', name: 'Mock display 1', width: 1920, height: 1080, primary: true },
+				{ id: 'mock-monitor-2', name: 'Mock display 2', width: 2560, height: 1440, primary: false },
+			],
+			windows: [
+				{ id: 'mock-window-1', title: 'Созвон с командой', appName: 'Zoom' },
+				{ id: 'mock-window-2', title: 'Квартальный отчет.xlsx', appName: 'Excel' },
+				{ id: 'mock-window-3', title: 'Входящие', appName: 'Chrome' },
+			],
+		}),
 		recording_state: () => state(),
 		recording_pill_ready: () => state(),
 	}
