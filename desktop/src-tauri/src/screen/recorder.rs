@@ -1642,7 +1642,7 @@ mod tests {
         assert!(recover_dir(&dir, &[], Some(missing.clone()), &no_child()).is_err());
         assert!(dir.join("seg-0001.mic.wav").is_file());
         // the folder of the live session is not touched
-        assert!(recover_dir(&dir, &[dir.clone()], Some(missing), &no_child()).is_err());
+        assert!(recover_dir(&dir, std::slice::from_ref(&dir), Some(missing), &no_child()).is_err());
         assert!(dir.join("manifest.json").is_file());
     }
 
