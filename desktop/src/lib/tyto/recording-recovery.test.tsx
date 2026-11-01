@@ -106,6 +106,7 @@ import * as dialog from '@tauri-apps/plugin-dialog'
 import { toast } from 'sonner'
 import { findProjectBySource, saveTranscript } from '~/lib/transcripts-store'
 import { createRecordingHandlers, type MockUnfinished } from '~/mock-tauri/handlers/recording'
+import { resetRecoveryAsked } from '~/lib/tyto/recording-recovery'
 import { SessionProvider } from '~/pages/main/session'
 import { setLocale } from '~/paraglide/runtime.js'
 import { HotkeyProvider } from '~/providers/hotkey'
@@ -117,7 +118,7 @@ const unfinished: MockUnfinished = { dir: DIR, name: '2026-10-31 14-05-33', star
 const message = vi.mocked(dialog.message)
 const commands = () => backend.calls.map((call) => call.cmd)
 
-async function renderApp() {
+async function renderApp(expectScan = true) {
 	render(
 		<HotkeyProvider>
 			<RecordingShortcutProvider>
@@ -126,7 +127,7 @@ async function renderApp() {
 		</HotkeyProvider>,
 	)
 	await waitFor(() => expect(bus.listeners.get('recording_finished')?.size).toBeGreaterThan(0))
-	await waitFor(() => expect(commands()).toContain('recordings_unfinished'))
+	if (expectScan) await waitFor(() => expect(commands()).toContain('recordings_unfinished'))
 }
 
 beforeAll(() => setLocale('ru-RU', { reload: false }))
@@ -135,6 +136,7 @@ beforeEach(() => {
 	vi.clearAllMocks()
 	bus.listeners.clear()
 	backend.calls = []
+	resetRecoveryAsked()
 	backend.handlers = {
 		...createRecordingHandlers(bus.emit, [{ ...unfinished }]),
 		get_audio_devices: () => [],
@@ -181,6 +183,7 @@ describe('восстановление прерванной записи при 
 		bus.listeners.clear()
 		message.mockClear()
 		backend.calls = []
+		resetRecoveryAsked() // a new app run
 		await renderApp()
 		expect(message).not.toHaveBeenCalled()
 	})
@@ -198,6 +201,34 @@ describe('восстановление прерванной записи при 
 		await waitFor(() => expect(message).toHaveBeenCalledTimes(1))
 		expect(commands()).not.toContain('recording_recover')
 		expect(commands()).not.toContain('recording_discard')
+	})
+
+	it('уход с главной страницы и возврат (remount) не задают вопрос второй раз в тот же запуск', async () => {
+		message.mockResolvedValueOnce('Cancel')
+		await renderApp()
+		await waitFor(() => expect(message).toHaveBeenCalledTimes(1))
+		cleanup()
+		bus.listeners.clear()
+		backend.calls = []
+		await renderApp(false)
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		expect(message).toHaveBeenCalledTimes(1)
+
+		// a remount while the question is still open does not open a second one
+		resetRecoveryAsked()
+		message.mockClear()
+		let answer: (value: string) => void = () => {}
+		message.mockReturnValueOnce(new Promise<string>((resolve) => (answer = resolve)))
+		cleanup()
+		bus.listeners.clear()
+		await renderApp()
+		await waitFor(() => expect(message).toHaveBeenCalledTimes(1))
+		cleanup()
+		bus.listeners.clear()
+		await renderApp(false)
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		expect(message).toHaveBeenCalledTimes(1)
+		answer('Cancel')
 	})
 
 	it('пустая запись: сообщение, что сохранять нечего, а не ошибка', async () => {

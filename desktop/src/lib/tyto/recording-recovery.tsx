@@ -34,9 +34,9 @@ async function ask(item: UnfinishedRecording): Promise<boolean> {
 			await recoverRecording(item.dir)
 		} catch (error) {
 			console.error('failed to recover a recording:', error)
-			const message = String(error)
-			if (message.startsWith(NOTHING_TO_RECOVER)) toast.warning(m.tytoRecoveryEmpty(), { position: 'bottom-center' })
-			else toast.error(m.tytoRecoveryFailed(), { description: message, position: 'bottom-center' })
+			// The Rust text is English and only for the log; the person gets the Russian title.
+			if (String(error).startsWith(NOTHING_TO_RECOVER)) toast.warning(m.tytoRecoveryEmpty(), { position: 'bottom-center' })
+			else toast.error(m.tytoRecoveryFailed(), { position: 'bottom-center' })
 		}
 		return false
 	}
@@ -45,7 +45,7 @@ async function ask(item: UnfinishedRecording): Promise<boolean> {
 			await discardRecording(item.dir)
 		} catch (error) {
 			console.error('failed to delete a recording:', error)
-			toast.error(m.tytoRecoveryDiscardFailed(), { description: String(error), position: 'bottom-center' })
+			toast.error(m.tytoRecoveryDiscardFailed(), { position: 'bottom-center' })
 		}
 		return false
 	}
@@ -57,18 +57,25 @@ async function ask(item: UnfinishedRecording): Promise<boolean> {
  * «Восстановить» saves it, «Удалить» drops it, «Позже» asks again at the next start.
  * Mount once.
  */
+let askedThisRun = false
+
+/** For tests: forget that the question was already shown in this run. */
+export function resetRecoveryAsked(): void {
+	askedThisRun = false
+}
+
 export function useRecordingRecovery(): void {
 	const { projectsPath } = usePreferenceProvider()
 	const projectsPathRef = useRef(projectsPath)
-	const started = useRef(false)
 
 	useEffect(() => {
 		projectsPathRef.current = projectsPath
 	}, [projectsPath])
 
 	useEffect(() => {
-		if (started.current) return
-		started.current = true
+		// Once per app run: leaving the main route and coming back remounts the provider.
+		if (askedThisRun) return
+		askedThisRun = true
 		void (async () => {
 			try {
 				const found = await listUnfinishedRecordings(await recordingsFolder(projectsPathRef.current))
