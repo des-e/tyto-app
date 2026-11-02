@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use eyre::{bail, Context, ContextCompat, Result};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -927,8 +927,7 @@ fn create_session_dir(recordings_dir: &Path, started: &str) -> Result<PathBuf> {
 
 fn open_device(host: &cpal::Host, d: &AudioDevice) -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
     if d.is_input {
-        let id: usize = d.id.parse().context("Failed to parse device ID")?;
-        let device = host.devices()?.nth(id).context("Failed to get device by ID")?;
+        let device = crate::cmd::audio::find_device(host, d)?;
         let config = device.default_input_config().context("Failed to get default input config")?;
         Ok((device, config))
     } else {

@@ -55,10 +55,41 @@ pub fn get_audio_devices() -> Result<Vec<AudioDevice>> {
             id: device_index.to_string(),
             name,
         };
+        tracing::debug!(
+            "  {} {} {:?}",
+            audio_device.id,
+            if audio_device.is_input { "in " } else { "out" },
+            audio_device.name
+        );
         audio_devices.push(audio_device);
     }
 
     Ok(audio_devices)
+}
+
+/// The device the UI picked. `id` is its index in the enumeration, but Windows does
+/// not promise the same order every time (Tyto: a microphone id pointed at an output
+/// device), so the index counts only if name and direction still match; otherwise the
+/// device is looked up by name and direction.
+pub(crate) fn find_device(host: &cpal::Host, wanted: &AudioDevice) -> Result<Device> {
+    let matches =
+        |d: &Device| d.supports_input() == wanted.is_input && d.description().is_ok_and(|n| n.to_string() == wanted.name);
+    if let Ok(index) = wanted.id.parse::<usize>() {
+        if let Some(d) = host.devices()?.nth(index).filter(|d| matches(d)) {
+            return Ok(d);
+        }
+    }
+    match host.devices()?.find(|d| matches(d)) {
+        Some(d) => {
+            tracing::warn!("audio device {:?} moved from index {}, found by name", wanted.name, wanted.id);
+            Ok(d)
+        }
+        None => bail!(
+            "audio device {:?} ({}) is not connected",
+            wanted.name,
+            if wanted.is_input { "input" } else { "output" }
+        ),
+    }
 }
 
 struct StreamHandle(Stream);
@@ -167,8 +198,7 @@ pub async fn start_record(app_handle: AppHandle, devices: Vec<AudioDevice>, reco
 
         let is_input = device.is_input;
         let (device, config) = if is_input {
-            let device_id: usize = device.id.parse().context("Failed to parse device ID")?;
-            let dev = host.devices()?.nth(device_id).context("Failed to get device by ID")?;
+            let dev = find_device(&host, &device)?;
             let config = dev.default_input_config().context("Failed to get default input config")?;
             (dev, config)
         } else {
@@ -318,8 +348,7 @@ pub(crate) fn get_output_device_and_config(
 
     #[cfg(not(target_os = "macos"))]
     {
-        let device_id: usize = audio_device.id.parse().context("Failed to parse device ID")?;
-        let device = host.devices()?.nth(device_id).context("Failed to get device by ID")?;
+        let device = find_device(host, audio_device)?;
         let config = device
             .default_output_config()
             .context("Failed to get default output config")?;
