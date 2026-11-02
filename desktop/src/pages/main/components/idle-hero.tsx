@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip
 import { cn } from '~/lib/style'
 import { CaptureTargetDialog } from '~/lib/tyto/capture-target-dialog'
 import { EmptyScreen } from '~/lib/tyto/empty-screen'
+import { ensureScreenRecordingPermission } from '~/lib/tyto/screen-permission'
 import { getCaptureSupport } from '~/lib/tyto/screen-recording'
 import { parseMediaLinks } from '~/lib/ytdlp'
 import { useSession, type IdlePanel } from '../session'
@@ -149,7 +150,8 @@ export function RecordPanel() {
 				{videoSupported && (
 					<Button
 						variant="secondary"
-						onClick={() => setPickingTarget(true)}
+						// On a Mac the list of screens and windows needs Screen Recording first.
+						onClick={() => void ensureScreenRecordingPermission().then((ok) => ok && setPickingTarget(true))}
 						disabled={!preference.modelPath || (!recording.inputDevice && !recording.outputDevice)}
 						className="h-10 flex-1">
 						<Video className="h-4 w-4" />

@@ -1,6 +1,7 @@
 //! The captured picture shared between the capture and the segment writer.
-// `resize_into` is called by the Windows capture; the macOS one does its own scaling.
-#![cfg_attr(not(windows), allow(dead_code))]
+// Both captures call `resize_into`; on the Mac it only drops the row padding
+// (ScreenCaptureKit scales the picture itself).
+#![cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};

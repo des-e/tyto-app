@@ -99,8 +99,8 @@ pub struct CaptureSupport {
     pub reason: Option<&'static str>,
 }
 
-// Built by the Windows capture; the macOS one comes with Task 14.
-#[cfg_attr(not(windows), allow(dead_code))]
+// Built by the Windows and macOS captures.
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MonitorInfo {
     pub id: String,
@@ -110,7 +110,7 @@ pub struct MonitorInfo {
     pub primary: bool,
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowTarget {
@@ -156,7 +156,37 @@ fn capture_support() -> CaptureSupport {
     })
 }
 
-#[cfg(not(windows))]
+/// Video needs macOS 13 (ScreenCaptureKit is weak-linked and not touched below
+/// it) and an encoder that passes a probe. The pill is always left out: the
+/// display filter excludes every window of Tyto.
+#[cfg(target_os = "macos")]
+fn capture_support() -> CaptureSupport {
+    use super::encoder::{bundled_ffmpeg, select_encoder, TargetOs};
+    static CACHE: std::sync::OnceLock<CaptureSupport> = std::sync::OnceLock::new();
+    *CACHE.get_or_init(|| {
+        let reason = if !super::capture::video_available() {
+            Some("os_too_old")
+        } else {
+            match bundled_ffmpeg() {
+                None => Some("no_ffmpeg"),
+                Some(ff) => select_encoder(&ff, TargetOs::MacOs).is_none().then_some("no_encoder"),
+            }
+        };
+        if let Some(r) = reason {
+            tracing::warn!(
+                "video recording is not available: {r} (macOS {:?})",
+                super::capture::macos_version()
+            );
+        }
+        CaptureSupport {
+            video: reason.is_none(),
+            pill_excluded: true,
+            reason,
+        }
+    })
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn capture_support() -> CaptureSupport {
     CaptureSupport {
         video: false,
@@ -165,7 +195,8 @@ fn capture_support() -> CaptureSupport {
     }
 }
 
-#[cfg(windows)]
+/// Window ids are HWNDs on Windows and CGWindowIDs on the Mac, the ids the captures take.
+#[cfg(any(windows, target_os = "macos"))]
 fn capture_targets() -> CaptureTargets {
     let monitors = super::capture::list_monitors().unwrap_or_else(|e| {
         tracing::warn!("{e:#}");
@@ -175,7 +206,7 @@ fn capture_targets() -> CaptureTargets {
     CaptureTargets { monitors, windows }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn capture_targets() -> CaptureTargets {
     CaptureTargets::default()
 }

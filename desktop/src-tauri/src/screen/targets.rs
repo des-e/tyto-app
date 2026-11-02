@@ -1,6 +1,6 @@
 //! What can be recorded: the window list for the picker and the OS floors for video.
-// Used on Windows now; the macOS capture (Task 14) uses it too.
-#![cfg_attr(not(windows), allow(dead_code))]
+// Used by the Windows and macOS captures.
+#![cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 
 use super::commands::WindowTarget;
 use super::encoder::TargetOs;

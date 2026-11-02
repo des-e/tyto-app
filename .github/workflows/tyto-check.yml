@@ -135,6 +135,31 @@ jobs:
             - name: cargo test
               run: cargo test -p meeting-detect -p vibe
 
+            # Tyto must start on macOS without ScreenCaptureKit: the framework has to be
+            # LC_LOAD_WEAK_DYLIB in every binary that links it (the test binaries link
+            # the same code as the app).
+            - name: weak ScreenCaptureKit
+              if: runner.os == 'macOS'
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  bins=$(cargo test -p vibe --no-run --message-format=json 2>/dev/null | jq -r 'select(.executable != null) | .executable')
+                  checked=0
+                  for b in $bins; do
+                      otool -L "$b" | grep -q ScreenCaptureKit || continue
+                      checked=$((checked + 1))
+                      if ! otool -l "$b" | grep -A2 LC_LOAD_WEAK_DYLIB | grep -q ScreenCaptureKit; then
+                          echo "::error::ScreenCaptureKit is not weak-linked in $b"
+                          otool -l "$b" | grep -B1 -A2 ScreenCaptureKit
+                          exit 1
+                      fi
+                      echo "weak: $b"
+                  done
+                  if [ "$checked" -eq 0 ]; then
+                      echo "::error::no binary links ScreenCaptureKit"
+                      exit 1
+                  fi
+
             # Our capture and our own code use windows 0.62 only. Older versions
             # (0.52/0.58/0.61) come from upstream dependencies and are listed for the log.
             - name: windows crate versions

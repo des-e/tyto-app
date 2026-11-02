@@ -11,6 +11,8 @@ pub mod recovery;
 pub mod segments;
 pub mod session;
 pub mod targets;
+#[cfg(target_os = "macos")]
+pub mod video_mac;
 #[cfg(windows)]
 pub mod video_win;
 pub mod video_writer;
@@ -19,15 +21,17 @@ pub mod video_writer;
 #[cfg(windows)]
 pub use video_win as capture;
 
-/// No video capture on this platform yet (macOS comes with Task 14).
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub use video_mac as capture;
+
+/// No video capture on Linux.
+#[cfg(not(any(windows, target_os = "macos")))]
 pub mod capture {
     use eyre::{bail, Result};
 
     use super::frame::LatestFrame;
     use super::recorder::CaptureTarget;
 
-    // Constructed by the macOS capture (Task 14).
     #[allow(dead_code)]
     pub struct CaptureHandle;
 

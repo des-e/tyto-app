@@ -800,5 +800,8 @@
 	"tytoQualityGoodInfo": "До 1080p, 15 кадров в секунду, около 1 ГБ в час",
 	"tytoQualityHighInfo": "До 1080p, 30 кадров в секунду, около 2 ГБ в час",
 	"tytoFullscreen": "На весь экран",
-	"tytoExitFullscreen": "Обычный размер"
+	"tytoExitFullscreen": "Обычный размер",
+	"tytoScreenPermissionTitle": "Нужно разрешение на запись экрана",
+	"tytoScreenPermissionBody": "Откройте Системные настройки, раздел Конфиденциальность и безопасность, пункт про запись экрана, и включите Tyto. Затем перезапустите Tyto.",
+	"tytoScreenPermissionOpen": "Открыть настройки"
 }

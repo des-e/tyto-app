@@ -26,6 +26,8 @@ vi.mock('@tauri-apps/api/core', () => ({
 	}),
 }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}), emit: vi.fn() }))
+// Windows: no Screen Recording check before the picker (the Mac one is in screen-permission.test).
+vi.mock('@tauri-apps/plugin-os', () => ({ platform: () => 'windows' }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } }))
 vi.mock('~/lib/config-store', async () => {
 	const { useState } = await import('react')
