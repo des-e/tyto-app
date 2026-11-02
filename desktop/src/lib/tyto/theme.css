@@ -1330,13 +1330,21 @@ svg.lucide {
 }
 
 .tyto-video-column .tyto-video-box {
-	max-height: 40vh;
+	max-height: 32vh;
+}
+
+/* A hidden video leaves one slim row above the text. */
+.tyto-video-hidden {
+	display: flex;
+	align-items: center;
+	padding: var(--tyto-sp-8) var(--tyto-sp-16) 0;
+	color: var(--muted-foreground);
 }
 
 @media (min-width: 1100px) {
 	.tyto-video-layout {
 		display: grid;
-		grid-template-columns: minmax(0, 3fr) minmax(380px, 2fr);
+		grid-template-columns: minmax(0, 2fr) minmax(420px, 3fr);
 	}
 
 	.tyto-video-column {
@@ -1375,19 +1383,24 @@ svg.lucide {
 	background: #000;
 }
 
-.tyto-video-action {
+.tyto-video-actions {
 	position: absolute;
 	inset-block-start: var(--tyto-sp-8);
 	inset-inline-end: var(--tyto-sp-8);
-	color: #fff;
-	background: rgb(0 0 0 / 0.45);
+	display: flex;
+	gap: var(--tyto-sp-4, 4px);
 	opacity: 0;
 	transition: opacity 150ms ease-out;
 }
 
-.group:hover > .tyto-video-action,
-.tyto-video-action:focus-visible {
+.group:hover > .tyto-video-actions,
+.tyto-video-actions:focus-within {
 	opacity: 1;
+}
+
+.tyto-video-action {
+	color: #fff;
+	background: rgb(0 0 0 / 0.45);
 }
 
 .tyto-video-action:hover {

@@ -29,6 +29,8 @@ const session = vi.hoisted(() => ({
 vi.mock('~/pages/main/session', () => ({ useSession: () => session.value }))
 
 import { TooltipProvider } from '~/components/ui/tooltip'
+import { deleteConfig, readConfig, writeConfig } from '~/lib/config-store'
+import { VIDEO_PANE_OPEN_KEY } from '~/lib/tyto/video-pane'
 import type { Segment } from '~/lib/transcript'
 import PlayerBar, { PLAYER_SEEK_EVENT, PLAYER_TIME_EVENT, type PlayerTimeDetail } from '~/pages/main/components/player-bar'
 import SessionView from '~/pages/main/components/session-view'
@@ -72,6 +74,8 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+	// The layout tests look at an open video; the hidden default has its own block below.
+	writeConfig(VIDEO_PANE_OPEN_KEY, true)
 	created = []
 	win.setFullscreen.mockClear()
 	const make = document.createElement.bind(document)
@@ -208,5 +212,41 @@ describe('экран записи с видео', () => {
 		unmount()
 		expect(video.isConnected).toBe(false)
 		expect(video.pause).toHaveBeenCalled()
+	})
+})
+
+describe('видео можно скрыть', () => {
+	beforeEach(() => deleteConfig(VIDEO_PANE_OPEN_KEY))
+
+	it('по умолчанию видео скрыто: над текстом строка «Показать видео», звук и шкала работают', () => {
+		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
+		const video = media()
+		loaded(video, 1920)
+		expect(video.isConnected).toBe(false)
+		expect(document.querySelector('.tyto-video-layout')).toBeNull()
+		expect(screen.getByRole('button', { name: 'Показать видео' })).toBeTruthy()
+		expect(document.querySelectorAll('.tyto-timeline')).toHaveLength(1)
+		act(() => {
+			window.dispatchEvent(new CustomEvent(PLAYER_SEEK_EVENT, { detail: { seconds: 24 } }))
+		})
+		expect(video.currentTime).toBe(24)
+	})
+
+	it('«Показать видео» открывает видео, «Скрыть видео» убирает; выбор запоминается', () => {
+		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
+		const video = media()
+		loaded(video, 1920)
+		fireEvent.click(screen.getByRole('button', { name: 'Показать видео' }))
+		expect(document.querySelector('[data-slot="video"]')?.contains(video)).toBe(true)
+		expect(readConfig(VIDEO_PANE_OPEN_KEY, false)).toBe(true)
+		fireEvent.click(screen.getByRole('button', { name: 'Скрыть видео' }))
+		expect(video.isConnected).toBe(false)
+		expect(screen.getByRole('button', { name: 'Показать видео' })).toBeTruthy()
+		expect(readConfig(VIDEO_PANE_OPEN_KEY, true)).toBe(false)
+	})
+
+	it('аудиопроект: строки «Показать видео» нет', () => {
+		open('C:/Users/Д/Documents/Tyto/plan/plan.m4a')
+		expect(screen.queryByRole('button', { name: 'Показать видео' })).toBeNull()
 	})
 })

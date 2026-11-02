@@ -801,6 +801,8 @@
 	"tytoQualityHighInfo": "Up to 1080p, 30 frames per second, about 2 GB per hour",
 	"tytoFullscreen": "Full screen",
 	"tytoExitFullscreen": "Exit full screen",
+	"tytoShowVideo": "Show video",
+	"tytoHideVideo": "Hide video",
 	"tytoScreenPermissionTitle": "Screen recording permission needed",
 	"tytoScreenPermissionBody": "Open System Settings, Privacy & Security, Screen Recording, and turn on Tyto. Then restart Tyto.",
 	"tytoScreenPermissionOpen": "Open settings"

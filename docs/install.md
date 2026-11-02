@@ -22,7 +22,7 @@
 
 ## Mac
 
-Проверено на macOS 26.
+Нужна macOS 12 Monterey или новее. Проверено на macOS 26.
 
 1. Скачайте файл `.dmg` со страницы https://github.com/des-e/tyto/releases/latest. Он один для всех маков: и с чипом Apple Silicon, и с Intel. Откройте его и перетащите значок Tyto в папку «Программы» (Applications).
 
