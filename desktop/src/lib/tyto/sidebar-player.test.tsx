@@ -250,6 +250,16 @@ describe('плеер со шкалой реплик (отличие 8)', () => {
 		expect(screen.getByText('00:00')).toBeTruthy()
 		expect(document.querySelectorAll('[data-replica-start]')).toHaveLength(4)
 	})
+
+	it('аудио играет через элемент вне DOM, как раньше: ни <audio>, ни <video> на странице', () => {
+		const job = { id: 'j', name: 'Планерка', path: '/m/b.mp3', status: 'done', progress: 100, segments }
+		render(
+			<TooltipProvider>
+				<PlayerBar job={job as never} />
+			</TooltipProvider>,
+		)
+		expect(document.querySelector('audio, video')).toBeNull()
+	})
 })
 
 describe('плеер: показать запись в папке', () => {

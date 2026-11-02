@@ -1,9 +1,9 @@
-import { convertFileSrc, invoke } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core'
 import * as dialog from '@tauri-apps/plugin-dialog'
 import * as fs from '@tauri-apps/plugin-fs'
 import { motion } from 'framer-motion'
 import { Download, FolderOpen, Pause, Play } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { m } from '~/paraglide/messages.js'
 import { Button } from '~/components/ui/button'
@@ -11,6 +11,7 @@ import { PlaybackRateButton } from '~/components/playback-rate-button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
 import { usePlaybackRate } from '~/lib/playback-rate'
 import { MissingMedia } from '~/lib/tyto/media-missing'
+import { createPlayerMedia, releasePlayerMedia } from '~/lib/tyto/player-media'
 import { PlayerClock, ReplicaTimeline } from '~/lib/tyto/replica-timeline'
 import type { NamedPath } from '~/lib/types'
 import type { Job } from '../hooks/use-transcribe-queue'
@@ -52,7 +53,8 @@ function extension(path: string) {
 }
 
 export default function PlayerBar({ job }: { job: Job }) {
-	const audioRef = useRef<HTMLAudioElement | null>(null)
+	// An <audio> for sound, a <video> the video pane shows for video (lib/tyto/player-media).
+	const audioRef = useRef<HTMLMediaElement | null>(null)
 	const [playing, setPlaying] = useState(false)
 	const [currentTime, setCurrentTime] = useState(0)
 	const [duration, setDuration] = useState(Number.NaN)
@@ -83,10 +85,9 @@ export default function PlayerBar({ job }: { job: Job }) {
 		window.dispatchEvent(new CustomEvent<PlayerTimeDetail>(PLAYER_TIME_EVENT, { detail: { seconds, playing: isPlaying } }))
 	}, [])
 
-	// One audio element per source: switching files stops playback and swaps the stream.
+	// One media element per source: switching files stops playback and swaps the stream.
 	useEffect(() => {
-		const audio = new Audio(convertFileSrc(sourcePath))
-		audio.preload = 'metadata'
+		const audio = createPlayerMedia(sourcePath)
 		audioRef.current = audio
 		setPlaying(false)
 		setCurrentTime(0)
@@ -126,12 +127,11 @@ export default function PlayerBar({ job }: { job: Job }) {
 			audio.removeEventListener('play', onPlay)
 			audio.removeEventListener('pause', onPause)
 			audio.removeEventListener('ended', onEnded)
-			audio.pause()
-			audio.src = ''
+			releasePlayerMedia(audio)
 			if (audioRef.current === audio) audioRef.current = null
 		}
 	}, [broadcast, sourcePath])
-	const { playbackRate, cyclePlaybackRate } = usePlaybackRate(audioRef, sourcePath)
+	const { playbackRate, cyclePlaybackRate } = usePlaybackRate(audioRef as RefObject<HTMLAudioElement | null>, sourcePath)
 
 	// `timeupdate` only fires ~4x/second which makes the fill step visibly; while playing, the
 	// position is sampled every animation frame instead so the bar glides.
