@@ -350,21 +350,20 @@ impl VideoTrack {
 
     /// Ends the segment's video at `at` without waiting: ffmpeg finishes on a
     /// helper thread (an encoder may hang for seconds; the writer thread must
-    /// keep draining the audio). Returns the frames the pacer owes by `at`
-    /// (`floor(length * fps)`), zero while no frame was captured yet; the real
-    /// count arrives through `poll`. A failed encoder is dropped right away, so
-    /// the next segment starts on the next one.
-    fn begin_close(&mut self, index: u32, started: Instant, at: Instant) -> u64 {
+    /// keep draining the audio). Returns the frames the file will hold
+    /// (`finish_at`: exact, so the sound is cut to the same length), zero while
+    /// no frame was captured yet; the count read back from ffmpeg arrives
+    /// through `poll`. A failed encoder is dropped right away, so the next
+    /// segment starts on the next one.
+    fn begin_close(&mut self, index: u32, at: Instant) -> u64 {
         let Some(w) = self.writer.take() else {
             return 0;
         };
         if w.has_failed() {
             self.drop_encoder(w.encoder);
         }
-        w.finish_at(at);
+        let owed = w.finish_at(at);
         let fps = self.preset.fps.max(1);
-        let len = at.saturating_duration_since(started);
-        let owed = (len.as_nanos() * u128::from(fps) / 1_000_000_000) as u64;
         let captured = self.latest.lock().map(|l| l.is_some()).unwrap_or(true);
         let (tx, rx) = mpsc::channel();
         let (job, ffmpeg) = (self.close_job, self.ffmpeg.clone());
@@ -474,11 +473,11 @@ impl Segments {
         };
         let wall_ms = millis(now.saturating_duration_since(seg.started));
         // The video decides the segment length: the sound is padded or cut to the
-        // frames the pacer owes. The real count replaces it when ffmpeg is done
-        // (`collect_video`); the concat lists follow the real count.
+        // frames the file will hold. The count read back from ffmpeg is stored
+        // when it is done (`collect_video`); it differs only if ffmpeg failed.
         let (frames, target_ms) = match self.video.as_mut() {
             Some(v) => {
-                let frames = v.begin_close(seg.index, seg.started, now);
+                let frames = v.begin_close(seg.index, now);
                 let fps = u64::from(v.preset.fps.max(1));
                 (frames, if frames > 0 { frames * 1000 / fps } else { wall_ms })
             }
@@ -2164,9 +2163,9 @@ mod tests {
         assert!(frames.iter().all(|f| *f >= 7), "{frames:?}");
         for g in &s.manifest.segments {
             assert_eq!(g.encoder, Some(test_encoder()));
-            // the sound was cut to the frames owed at the close; ffmpeg may hold one more
-            let owed_ms = g.audio[0].target_ms as i64;
-            assert!((owed_ms - (g.video_frames * 1000 / 15) as i64).abs() <= 67, "{g:?}");
+            // the sound is cut to exactly the frames in the file (Review: a frame
+            // short per segment added up, `aresample` does not fill gaps under 0.1 s)
+            assert_eq!(g.audio[0].target_ms, g.video_frames * 1000 / 15, "{g:?}");
         }
         assert!(!health.video_lost.load(Ordering::SeqCst));
 
@@ -2258,14 +2257,17 @@ mod tests {
         s.rotate(t0 + Duration::from_millis(700)).unwrap();
         assert!(started.elapsed() < Duration::from_millis(1500), "{:?}", started.elapsed());
         // the owed frames stand in until ffmpeg is done
-        assert_eq!(s.manifest.segments[0].video_frames, 10);
-        assert!(s.manifest.segments[0].closed && s.manifest.segments[0].audio[0].target_ms == 666);
+        // 10 due by 0.7 s, 11 if the pacer was already past it on a busy runner
+        let first = s.manifest.segments[0].video_frames;
+        assert!((10..=11).contains(&first), "{first}");
+        assert!(s.manifest.segments[0].closed && s.manifest.segments[0].audio[0].target_ms == first * 1000 / 15);
         s.collect_video(None);
         assert_eq!(s.video.as_ref().unwrap().closing.len(), 1);
         std::thread::sleep(Duration::from_millis(300));
         s.close_segment(Instant::now()).unwrap();
         settle(&mut s);
-        assert!((10..=11).contains(&s.manifest.segments[0].video_frames));
+        // ffmpeg holds exactly what the sound was cut to
+        assert_eq!(s.manifest.segments[0].video_frames, first);
         assert!(s.manifest.segments[1].video_frames > 0);
         assert_eq!(read_manifest(&s.dir).unwrap(), s.manifest);
     }

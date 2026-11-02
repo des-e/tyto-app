@@ -70,6 +70,10 @@ pub struct VideoSegmentWriter {
     child: SharedChild,
     stop_at: Arc<Mutex<Option<Instant>>>,
     failed: Arc<AtomicBool>,
+    /// Frames the pacer has counted so far (updated under `stop_at`).
+    counted: Arc<AtomicU64>,
+    fps: u32,
+    segment_start: Instant,
     thread: Option<JoinHandle<Result<Written>>>,
     stderr: Option<JoinHandle<String>>,
 }
@@ -112,6 +116,7 @@ impl VideoSegmentWriter {
 
         let stop_at = Arc::new(Mutex::new(None));
         let failed = Arc::new(AtomicBool::new(false));
+        let counted = Arc::new(AtomicU64::new(0));
         let pacing = Pacing {
             stdin,
             latest,
@@ -120,6 +125,7 @@ impl VideoSegmentWriter {
             segment_start,
             stop_at: stop_at.clone(),
             failed: failed.clone(),
+            counted: counted.clone(),
         };
         let thread = std::thread::Builder::new()
             .name("tyto-video-writer".into())
@@ -139,6 +145,9 @@ impl VideoSegmentWriter {
             child,
             stop_at,
             failed,
+            counted,
+            fps: p.fps,
+            segment_start,
             thread: Some(thread),
             stderr,
         })
@@ -152,8 +161,16 @@ impl VideoSegmentWriter {
 
     /// The segment ends at `at` (pause, rotation, stop): frames due by then are
     /// still written by `close`. Without it, `close` ends the segment when called.
-    pub fn finish_at(&self, at: Instant) {
-        lock(&self.stop_at).get_or_insert(at);
+    /// Returns the frames the file will hold: those due by `at`, or more if the
+    /// pacer already went past `at` before the stop reached it (it runs on real
+    /// time). The pacer counts under the same lock, so the number is exact and
+    /// the sound can be cut to it.
+    pub fn finish_at(&self, at: Instant) -> u64 {
+        let mut stop = lock(&self.stop_at);
+        let at = *stop.get_or_insert(at);
+        let elapsed = at.saturating_duration_since(self.segment_start);
+        let due = (elapsed.as_nanos() * u128::from(self.fps) / 1_000_000_000) as u64;
+        due.max(self.counted.load(Ordering::SeqCst))
     }
 
     /// Closes stdin, waits for ffmpeg and returns the frames written, and whether
@@ -237,6 +254,7 @@ struct Pacing {
     segment_start: Instant,
     stop_at: Arc<Mutex<Option<Instant>>>,
     failed: Arc<AtomicBool>,
+    counted: Arc<AtomicU64>,
 }
 
 impl Pacing {
@@ -256,9 +274,16 @@ impl Pacing {
         let mut lag_warned = false;
         let frame_ns = 1_000_000_000 / u64::from(self.fps);
         loop {
-            let stop = *lock(&self.stop_at);
-            let now = stop.unwrap_or_else(Instant::now);
-            let n = pacer.due(now.saturating_duration_since(self.segment_start));
+            // Counted under the stop lock: `finish_at` sees either the stop applied
+            // here, or every frame counted before it.
+            let (stop, n) = {
+                let guard = lock(&self.stop_at);
+                let stop = *guard;
+                let now = stop.unwrap_or_else(Instant::now);
+                let n = pacer.due(now.saturating_duration_since(self.segment_start));
+                self.counted.store(pacer.frames(), Ordering::SeqCst);
+                (stop, n)
+            };
             if n > 0 {
                 if let Some(f) = lock(&self.latest).as_ref() {
                     if (f.width, f.height) == self.size && f.data.len() == picture.data.len() {
@@ -324,12 +349,16 @@ mod tests {
         *lock(&latest) = Some(Frame::black(320, 180));
         // no new frames for a second: the last one is repeated
         std::thread::sleep(Duration::from_millis(1000));
-        w.finish_at(start + Duration::from_millis(1000));
+        // the stop comes late (as a close on the busy audio thread would): the
+        // promise covers what the pacer already wrote past it
+        std::thread::sleep(Duration::from_millis(150));
+        let promised = w.finish_at(start + Duration::from_millis(1000));
         let written = w.close().unwrap();
+        assert_eq!(written.frames, promised);
         assert!(written.real);
         let frames = written.frames;
-        // 15, or 16 if the thread was already past 1.066 s on a busy runner
-        assert!((15..=16).contains(&frames), "{frames}");
+        // 17 by real time at 1.15 s (15 due by the stop); a busy runner may be a frame off
+        assert!((15..=19).contains(&frames), "{frames}");
         let secs = probe_video_seconds(&ffmpeg, &out).unwrap();
         assert!(
             (secs - frames as f64 / 15.0).abs() <= 1.0 / 15.0 + 0.001,
