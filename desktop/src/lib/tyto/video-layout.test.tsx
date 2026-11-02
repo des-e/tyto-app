@@ -29,8 +29,8 @@ const session = vi.hoisted(() => ({
 vi.mock('~/pages/main/session', () => ({ useSession: () => session.value }))
 
 import { TooltipProvider } from '~/components/ui/tooltip'
-import { deleteConfig, readConfig, writeConfig } from '~/lib/config-store'
-import { VIDEO_PANE_OPEN_KEY } from '~/lib/tyto/video-pane'
+import { deleteConfig, readConfig } from '~/lib/config-store'
+import { resetVideoView, VIDEO_PANE_OPEN_KEY, VIDEO_SIDE_QUERY } from '~/lib/tyto/player-media'
 import type { Segment } from '~/lib/transcript'
 import PlayerBar, { PLAYER_SEEK_EVENT, PLAYER_TIME_EVENT, type PlayerTimeDetail } from '~/pages/main/components/player-bar'
 import SessionView from '~/pages/main/components/session-view'
@@ -48,6 +48,17 @@ function makeJob(path: string) {
 // jsdom has no media pipeline: time, size and play/pause are plain fields here.
 type FakeMedia = HTMLMediaElement & { _t?: number; _w?: number }
 let created: HTMLMediaElement[] = []
+
+/** The window width the video layout sees (jsdom has no matchMedia of its own). */
+function windowIs(wide: boolean) {
+	window.matchMedia = ((query: string) => ({
+		matches: query === VIDEO_SIDE_QUERY ? wide : false,
+		media: query,
+		addEventListener: () => {},
+		removeEventListener: () => {},
+	})) as unknown as typeof window.matchMedia
+	resetVideoView()
+}
 
 beforeAll(() => {
 	setLocale('ru-RU', { reload: false })
@@ -74,8 +85,8 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-	// The layout tests look at an open video; the hidden default has its own block below.
-	writeConfig(VIDEO_PANE_OPEN_KEY, true)
+	deleteConfig(VIDEO_PANE_OPEN_KEY)
+	windowIs(true)
 	created = []
 	win.setFullscreen.mockClear()
 	const make = document.createElement.bind(document)
@@ -121,18 +132,21 @@ function loaded(el: FakeMedia, width: number) {
 	})
 }
 
-describe('экран записи с видео', () => {
-	it('проект с .mp4: видео в DOM перед текстом, внизу общая шкала', () => {
+const inSide = (v: Element) => !!document.querySelector('.tyto-video-side [data-slot="video"]')?.contains(v)
+const inThumb = (v: Element) => !!document.querySelector('[data-slot="video-thumb"]')?.contains(v)
+const inLayer = (v: Element) => !!document.querySelector('[data-slot="video-fullscreen"]')?.contains(v)
+
+describe('широкое окно: видео в колонке справа от текста (вариант E)', () => {
+	it('проект с .mp4: текст слева, видео справа, под ним место для тем; внизу одна шкала', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
 		expect(video).toBeInstanceOf(HTMLVideoElement)
 		loaded(video, 1920)
-		expect(video.isConnected).toBe(true)
+		expect(inSide(video)).toBe(true)
 		const transcript = screen.getByTestId('transcript')
-		expect(video.compareDocumentPosition(transcript) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-		expect(document.querySelector('[data-slot="topics"]')).not.toBeNull()
-		// one timeline, in the bottom player
-		expect(document.querySelectorAll('.tyto-player')).toHaveLength(1)
+		expect(transcript.compareDocumentPosition(video) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		expect(document.querySelector('.tyto-video-side [data-slot="topics"]')).not.toBeNull()
+		expect(document.querySelector('.tyto-video-thumb')).toBeNull()
 		expect(document.querySelectorAll('.tyto-timeline')).toHaveLength(1)
 	})
 
@@ -162,21 +176,33 @@ describe('экран записи с видео', () => {
 		expect(seen).toContain(30)
 	})
 
-	it('⛶ включает полный экран окна, Esc возвращает: setFullscreen(true), затем setFullscreen(false)', () => {
+	it('«На весь экран» разворачивает окно, Esc возвращает видео в колонку', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
 		loaded(video, 1920)
 		fireEvent.click(screen.getByRole('button', { name: 'На весь экран' }))
 		expect(win.setFullscreen).toHaveBeenLastCalledWith(true)
-		const layer = document.querySelector('[data-slot="video-fullscreen"]')
-		expect(layer?.contains(video)).toBe(true)
+		expect(inLayer(video)).toBe(true)
 		expect(screen.getByRole('button', { name: 'Обычный размер' })).toBeTruthy()
 
 		fireEvent.keyDown(window, { key: 'Escape' })
 		expect(win.setFullscreen).toHaveBeenLastCalledWith(false)
 		expect(document.querySelector('[data-slot="video-fullscreen"]')).toBeNull()
-		// the same element went back into the pane, still connected
-		expect(document.querySelector('[data-slot="video"]')?.contains(video)).toBe(true)
+		expect(inSide(video)).toBe(true)
+	})
+
+	it('«Скрыть видео»: колонки нет, видео миниатюрой в плеере; клик по миниатюре возвращает колонку; выбор запоминается', () => {
+		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
+		const video = media()
+		loaded(video, 1920)
+		fireEvent.click(screen.getByRole('button', { name: 'Скрыть видео' }))
+		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		expect(inThumb(video)).toBe(true)
+		expect(readConfig(VIDEO_PANE_OPEN_KEY, true)).toBe(false)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Показать видео' }))
+		expect(inSide(video)).toBe(true)
+		expect(readConfig(VIDEO_PANE_OPEN_KEY, false)).toBe(true)
 	})
 
 	it('MP4 без видеодорожки (videoWidth 0): экран как при аудио', () => {
@@ -184,25 +210,25 @@ describe('экран записи с видео', () => {
 		const video = media()
 		loaded(video, 0)
 		expect(video.isConnected).toBe(false)
-		expect(document.querySelector('[data-slot="video"]')).toBeNull()
+		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		expect(document.querySelector('.tyto-video-thumb')).toBeNull()
 		expect(screen.getByTestId('transcript')).toBeTruthy()
 	})
 
-	it('перетащенная запись Zoom (.mp4 вне Записи/) открывается так же: видео слева, текст справа', () => {
+	it('перетащенная запись Zoom (.mp4 вне Записи/) открывается так же', () => {
 		open('D:/zoom/plan.mp4')
 		const video = media()
 		loaded(video, 1280)
-		expect(document.querySelector('.tyto-video-layout')).not.toBeNull()
-		expect(document.querySelector('.tyto-video-column')?.contains(video)).toBe(true)
+		expect(inSide(video)).toBe(true)
 	})
 
-	it('аудиопроект: видеопанели нет, плеер как раньше', () => {
+	it('аудиопроект: ни колонки, ни миниатюры, плеер как раньше', () => {
 		open('C:/Users/Д/Documents/Tyto/plan/plan.m4a')
 		const audio = media()
 		expect(audio).toBeInstanceOf(HTMLAudioElement)
 		expect(audio.isConnected).toBe(false)
-		expect(document.querySelector('[data-slot="video"]')).toBeNull()
-		expect(document.querySelector('.tyto-video-layout')).toBeNull()
+		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		expect(document.querySelector('.tyto-video-thumb')).toBeNull()
 	})
 
 	it('другой проект: видео уходит с экрана и останавливается', () => {
@@ -215,38 +241,37 @@ describe('экран записи с видео', () => {
 	})
 })
 
-describe('видео можно скрыть', () => {
-	beforeEach(() => deleteConfig(VIDEO_PANE_OPEN_KEY))
+describe('узкое окно: миниатюра в плеере (вариант A)', () => {
+	beforeEach(() => windowIs(false))
 
-	it('по умолчанию видео скрыто: над текстом строка «Показать видео», звук и шкала работают', () => {
+	it('видео миниатюрой слева в плеере, колонки нет, текст на всю ширину', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
 		loaded(video, 1920)
-		expect(video.isConnected).toBe(false)
-		expect(document.querySelector('.tyto-video-layout')).toBeNull()
-		expect(screen.getByRole('button', { name: 'Показать видео' })).toBeTruthy()
-		expect(document.querySelectorAll('.tyto-timeline')).toHaveLength(1)
-		act(() => {
-			window.dispatchEvent(new CustomEvent(PLAYER_SEEK_EVENT, { detail: { seconds: 24 } }))
-		})
-		expect(video.currentTime).toBe(24)
+		expect(inThumb(video)).toBe(true)
+		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		const thumb = document.querySelector('.tyto-video-thumb')!
+		const play = screen.getByRole('button', { name: 'Воспроизвести' })
+		expect(thumb.compareDocumentPosition(play) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 	})
 
-	it('«Показать видео» открывает видео, «Скрыть видео» убирает; выбор запоминается', () => {
+	it('клик по миниатюре открывает полный экран, Esc возвращает в миниатюру', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
 		loaded(video, 1920)
-		fireEvent.click(screen.getByRole('button', { name: 'Показать видео' }))
-		expect(document.querySelector('[data-slot="video"]')?.contains(video)).toBe(true)
-		expect(readConfig(VIDEO_PANE_OPEN_KEY, false)).toBe(true)
-		fireEvent.click(screen.getByRole('button', { name: 'Скрыть видео' }))
-		expect(video.isConnected).toBe(false)
-		expect(screen.getByRole('button', { name: 'Показать видео' })).toBeTruthy()
-		expect(readConfig(VIDEO_PANE_OPEN_KEY, true)).toBe(false)
+		fireEvent.click(screen.getByRole('button', { name: 'На весь экран' }))
+		expect(win.setFullscreen).toHaveBeenLastCalledWith(true)
+		expect(inLayer(video)).toBe(true)
+		fireEvent.keyDown(window, { key: 'Escape' })
+		expect(inThumb(video)).toBe(true)
 	})
 
-	it('аудиопроект: строки «Показать видео» нет', () => {
-		open('C:/Users/Д/Documents/Tyto/plan/plan.m4a')
-		expect(screen.queryByRole('button', { name: 'Показать видео' })).toBeNull()
+	it('другой проект во время полного экрана: окно возвращается в обычный размер', () => {
+		const { unmount } = open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
+		const video = media()
+		loaded(video, 1920)
+		fireEvent.click(screen.getByRole('button', { name: 'На весь экран' }))
+		unmount()
+		expect(win.setFullscreen).toHaveBeenLastCalledWith(false)
 	})
 })

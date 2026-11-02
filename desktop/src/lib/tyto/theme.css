@@ -1311,61 +1311,60 @@ svg.lucide {
 	background: var(--background);
 }
 
-/* Video next to the text (lib/tyto/video-pane.tsx): from 1100 px video left, text right; narrower,
-   the video sits above the text and takes at most 40% of the height. */
-.tyto-video-layout {
-	display: flex;
-	flex: 1;
-	flex-direction: column;
-	min-height: 0;
-}
-
-.tyto-video-column {
+/* Video (lib/tyto/video-pane.tsx). From 900 px a 264 px column right of the text, topics under
+   it; narrower or hidden, a 76x44 thumbnail at the start of the bottom player. */
+.tyto-video-side {
 	display: flex;
 	flex-direction: column;
-	gap: var(--tyto-sp-12);
-	min-width: 0;
+	flex-shrink: 0;
+	gap: var(--tyto-sp-8);
+	width: 264px;
 	min-height: 0;
-	padding: var(--tyto-sp-16) var(--tyto-sp-16) 0;
+	padding: var(--tyto-sp-16);
+	overflow-x: hidden;
+	overflow-y: auto;
+	border-inline-start: 1px solid var(--border);
 }
 
-.tyto-video-column .tyto-video-box {
-	max-height: 32vh;
-}
-
-/* A hidden video leaves one slim row above the text. */
-.tyto-video-hidden {
+.tyto-video-side-actions {
 	display: flex;
-	align-items: center;
-	padding: var(--tyto-sp-8) var(--tyto-sp-16) 0;
+	justify-content: space-between;
 	color: var(--muted-foreground);
-}
-
-@media (min-width: 1100px) {
-	.tyto-video-layout {
-		display: grid;
-		grid-template-columns: minmax(0, 2fr) minmax(420px, 3fr);
-	}
-
-	.tyto-video-column {
-		overflow-y: auto;
-		padding-bottom: var(--tyto-sp-16);
-		border-inline-end: 1px solid var(--border);
-	}
-
-	.tyto-video-column .tyto-video-box {
-		max-height: none;
-	}
 }
 
 .tyto-video-box {
 	position: relative;
 	display: flex;
-	justify-content: center;
+	flex-shrink: 0;
 	aspect-ratio: 16 / 9;
 	overflow: hidden;
 	border-radius: var(--tyto-r-lg);
 	background: #000;
+}
+
+.tyto-video-thumb {
+	display: flex;
+	flex-shrink: 0;
+	width: 76px;
+	height: 44px;
+	padding: 0;
+	overflow: hidden;
+	cursor: pointer;
+	border: 0;
+	border-radius: var(--tyto-r-sm);
+	background: #000;
+}
+
+.tyto-video-thumb:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+
+.tyto-video-thumb-slot {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
 }
 
 .tyto-video {

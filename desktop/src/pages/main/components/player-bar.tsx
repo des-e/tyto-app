@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip
 import { usePlaybackRate } from '~/lib/playback-rate'
 import { MissingMedia } from '~/lib/tyto/media-missing'
 import { createPlayerMedia, releasePlayerMedia } from '~/lib/tyto/player-media'
+import { VideoFullscreenLayer, VideoThumb } from '~/lib/tyto/video-pane'
 import { PlayerClock, ReplicaTimeline } from '~/lib/tyto/replica-timeline'
 import type { NamedPath } from '~/lib/types'
 import type { Job } from '../hooks/use-transcribe-queue'
@@ -242,6 +243,9 @@ export default function PlayerBar({ job }: { job: Job }) {
 				<MissingMedia job={job} />
 			) : (
 				<div dir="ltr" className="flex min-w-0 flex-1 items-center gap-3">
+					{/* A video without its column (narrow window or hidden) sits here as a thumbnail. */}
+					<VideoThumb />
+					<VideoFullscreenLayer />
 					<Button iconOnly size="md" onClick={toggle} aria-label={playing ? m.pause() : m.play()} className="h-8 w-8 shrink-0">
 						{playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
 					</Button>
