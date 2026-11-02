@@ -96,7 +96,8 @@ pub fn candidates(listed: &[String], os: TargetOs) -> Vec<VideoEncoder> {
 pub fn encoder_queue(selected: VideoEncoder, listed: &[String], os: TargetOs) -> Vec<VideoEncoder> {
     let mut queue = vec![selected];
     let rest = candidates(listed, os);
-    let after = rest.iter().position(|e| *e == selected).map_or(0, |i| i + 1);
+    // Those before the selected one already failed their probes.
+    let after = rest.iter().position(|e| *e == selected).map_or(rest.len(), |i| i + 1);
     queue.extend(rest[after..].iter().copied().filter(|e| *e != selected));
     let mf_listed = listed.iter().any(|n| n == "h264_mf");
     if os == TargetOs::Windows && (mf_listed || selected == VideoEncoder::MediaFoundation) {
@@ -313,30 +314,45 @@ pub(super) mod test_support {
     }
 }
 
-/// Picks the first encoder that is listed by the bundle and passes a probe.
-/// The bundle may lack libx264, so the last resort is the platform's own encoder.
-/// Blocking (up to ~3 s + 5 s per candidate): call from `spawn_blocking`.
-/// Only a probe-verified choice is cached (per process, first call wins);
-/// a fallback after failed probes is not cached, so the next call retries.
-pub fn select_encoder(ffmpeg: &Path, os: TargetOs) -> VideoEncoder {
+/// Every encoder worth a probe, in preference order: the listed candidates,
+/// then the software Media Foundation encoder on Windows.
+pub fn probe_order(listed: &[String], os: TargetOs) -> Vec<VideoEncoder> {
+    let mut order = candidates(listed, os);
+    if os == TargetOs::Windows && listed.iter().any(|n| n == "h264_mf") {
+        order.push(VideoEncoder::MediaFoundationSoftware);
+    }
+    order
+}
+
+/// The first encoder of `order` that `works`.
+pub fn first_working(order: &[VideoEncoder], works: impl Fn(VideoEncoder) -> bool) -> Option<VideoEncoder> {
+    order.iter().copied().find(|e| works(*e))
+}
+
+/// Picks the first encoder that is listed by the bundle and passes a probe
+/// (the software MF encoder included). `None`: no encoder works here, the
+/// recording can not have video. Blocking (up to ~3 s + 5 s per candidate):
+/// call from `spawn_blocking`. A verified choice is cached per process; a
+/// failure is not (the next call probes again).
+pub fn select_encoder(ffmpeg: &Path, os: TargetOs) -> Option<VideoEncoder> {
     static CACHE: OnceLock<VideoEncoder> = OnceLock::new();
     if let Some(e) = CACHE.get() {
-        return *e;
+        return Some(*e);
     }
-    let listed = listed_encoders(ffmpeg);
-    let list = candidates(&listed, os);
-    let verified = list.iter().copied().find(|e| probe_ok(ffmpeg, *e));
-    if let Some(e) = verified {
-        tracing::info!("selected encoder {}", e.ffmpeg_name());
-        return *CACHE.get_or_init(|| e);
+    let order = probe_order(&listed_encoders(ffmpeg), os);
+    match first_working(&order, |e| probe_ok(ffmpeg, e)) {
+        Some(e) => {
+            tracing::info!("selected encoder {}", e.ffmpeg_name());
+            Some(*CACHE.get_or_init(|| e))
+        }
+        None => {
+            tracing::warn!(
+                "no video encoder passed a probe (tried {:?})",
+                order.iter().map(|e| e.ffmpeg_name()).collect::<Vec<_>>()
+            );
+            None
+        }
     }
-    let fallback = list.last().copied().unwrap_or(match os {
-        TargetOs::Windows => VideoEncoder::MediaFoundation,
-        TargetOs::MacOs => VideoEncoder::VideoToolbox,
-    });
-    tracing::warn!("no encoder probe passed, falling back to {}", fallback.ffmpeg_name());
-    tracing::info!("selected encoder {}", fallback.ffmpeg_name());
-    fallback
 }
 
 #[cfg(test)]
@@ -428,6 +444,21 @@ mod tests {
     }
 
     #[test]
+    fn probes_include_software_mf_and_none_working_is_none() {
+        use VideoEncoder::*;
+        let listed: Vec<String> = ["h264_mf", "h264_nvenc"].map(String::from).to_vec();
+        let order = probe_order(&listed, TargetOs::Windows);
+        assert_eq!(order, vec![Nvenc, MediaFoundation, MediaFoundationSoftware]);
+        // a PC without a hardware encoder: only the software MFT works
+        assert_eq!(
+            first_working(&order, |e| e == MediaFoundationSoftware),
+            Some(MediaFoundationSoftware)
+        );
+        assert_eq!(first_working(&order, |_| false), None);
+        assert_eq!(probe_order(&[], TargetOs::Windows), Vec::<VideoEncoder>::new());
+    }
+
+    #[test]
     fn a_session_falls_back_through_the_rest_and_ends_on_software_mf() {
         let listed: Vec<String> = ["h264_amf", "h264_mf", "h264_nvenc", "h264_qsv"].map(String::from).to_vec();
         use VideoEncoder::*;
@@ -438,6 +469,11 @@ mod tests {
         assert_eq!(
             encoder_queue(MediaFoundation, &[], TargetOs::Windows),
             vec![MediaFoundation, MediaFoundationSoftware]
+        );
+        // the software MFT won the probes: the hardware ones are not retried
+        assert_eq!(
+            encoder_queue(MediaFoundationSoftware, &listed, TargetOs::Windows),
+            vec![MediaFoundationSoftware]
         );
         assert_eq!(
             encoder_queue(VideoToolbox, &["h264_videotoolbox".into()], TargetOs::MacOs),

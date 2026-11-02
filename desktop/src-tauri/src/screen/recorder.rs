@@ -251,7 +251,54 @@ struct VideoTrack {
     encoders: Vec<VideoEncoder>,
     writer: Option<VideoSegmentWriter>,
     health: Arc<Health>,
+    /// Segments whose ffmpeg is finishing on a helper thread.
+    closing: Vec<Closing>,
+    /// What the helper thread runs (a test puts a slow one here).
+    close_job: CloseJob,
 }
+
+/// The outcome of one closed segment ffmpeg.
+struct Closed {
+    frames: u64,
+    /// At least one captured frame went in (otherwise only black filler).
+    real: bool,
+    /// The encoder failed: drop it from the queue.
+    failed: Option<VideoEncoder>,
+}
+
+struct Closing {
+    index: u32,
+    done: Receiver<Closed>,
+}
+
+type CloseJob = fn(VideoSegmentWriter, PathBuf, u32) -> Closed;
+
+/// Waits for the segment's ffmpeg (up to its own bounds). A failed encoder:
+/// the frames that reached the file are read back from it.
+fn close_writer(w: VideoSegmentWriter, ffmpeg: PathBuf, fps: u32) -> Closed {
+    let (enc, file) = (w.encoder, w.file.clone());
+    match w.close() {
+        Ok(f) => Closed {
+            frames: f.frames,
+            real: f.real,
+            failed: None,
+        },
+        Err(e) => {
+            tracing::error!("the {} encoder failed: {e:#}", enc.ffmpeg_name());
+            let secs = super::recovery::probe_video_seconds(&ffmpeg, &file).unwrap_or(0.0);
+            let frames = (secs * f64::from(fps)).floor() as u64;
+            tracing::warn!("{frames} frames of {} were saved", file.display());
+            Closed {
+                frames,
+                real: true,
+                failed: Some(enc),
+            }
+        }
+    }
+}
+
+/// How long a stop waits for the last segments' ffmpeg before saving anyway.
+const VIDEO_FINISH_WAIT: Duration = Duration::from_secs(60);
 
 impl VideoTrack {
     /// Starts the segment's ffmpeg; an encoder that does not start is dropped
@@ -292,32 +339,77 @@ impl VideoTrack {
         self.writer.as_ref().is_some_and(|w| w.has_failed())
     }
 
-    /// Closes the segment's ffmpeg at `at` and returns its frames. A failed
-    /// encoder is dropped (the next segment tries the next one) and the frames
-    /// that reached the file are read back from it, so the sound is cut to the
-    /// same length and the following segments stay in sync.
-    fn close(&mut self, at: Instant) -> u64 {
+    fn drop_encoder(&mut self, enc: VideoEncoder) {
+        if self.encoders.first() == Some(&enc) {
+            self.encoders.remove(0);
+        }
+        if self.encoders.is_empty() {
+            self.give_up();
+        }
+    }
+
+    /// Ends the segment's video at `at` without waiting: ffmpeg finishes on a
+    /// helper thread (an encoder may hang for seconds; the writer thread must
+    /// keep draining the audio). Returns the frames the pacer owes by `at`
+    /// (`floor(length * fps)`), zero while no frame was captured yet; the real
+    /// count arrives through `poll`. A failed encoder is dropped right away, so
+    /// the next segment starts on the next one.
+    fn begin_close(&mut self, index: u32, started: Instant, at: Instant) -> u64 {
         let Some(w) = self.writer.take() else {
             return 0;
         };
+        if w.has_failed() {
+            self.drop_encoder(w.encoder);
+        }
         w.finish_at(at);
-        let (enc, file) = (w.encoder, w.file.clone());
-        match w.close() {
-            Ok(frames) => frames,
-            Err(e) => {
-                tracing::error!("the {} encoder failed: {e:#}", enc.ffmpeg_name());
-                if self.encoders.first() == Some(&enc) {
-                    self.encoders.remove(0);
+        let fps = self.preset.fps.max(1);
+        let len = at.saturating_duration_since(started);
+        let owed = (len.as_nanos() * u128::from(fps) / 1_000_000_000) as u64;
+        let captured = self.latest.lock().map(|l| l.is_some()).unwrap_or(true);
+        let (tx, rx) = mpsc::channel();
+        let (job, ffmpeg) = (self.close_job, self.ffmpeg.clone());
+        let spawned = std::thread::Builder::new().name("tyto-video-close".into()).spawn(move || {
+            let _ = tx.send(job(w, ffmpeg, fps));
+        });
+        match spawned {
+            Ok(_) => self.closing.push(Closing { index, done: rx }),
+            // No thread: the writer is dropped here, which kills its ffmpeg; the file stays.
+            Err(e) => tracing::error!("closing the video segment: {e}"),
+        }
+        if captured {
+            owed
+        } else {
+            0
+        }
+    }
+
+    /// Segments whose ffmpeg finished; with `wait`, blocks up to it for all of them.
+    fn poll(&mut self, wait: Option<Duration>) -> Vec<(u32, Closed)> {
+        let deadline = wait.map(|w| Instant::now() + w);
+        let mut done = Vec::new();
+        loop {
+            let mut i = 0;
+            while i < self.closing.len() {
+                match self.closing[i].done.try_recv() {
+                    Ok(c) => done.push((self.closing.remove(i).index, c)),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        tracing::error!("the video close of segment {} was lost", self.closing[i].index);
+                        self.closing.remove(i);
+                    }
+                    Err(mpsc::TryRecvError::Empty) => i += 1,
                 }
-                if self.encoders.is_empty() {
-                    self.give_up();
-                }
-                let secs = super::recovery::probe_video_seconds(&self.ffmpeg, &file).unwrap_or(0.0);
-                let frames = (secs * f64::from(self.preset.fps)).floor() as u64;
-                tracing::warn!("{frames} frames of {} were saved", file.display());
-                frames
+            }
+            match deadline {
+                Some(d) if !self.closing.is_empty() && Instant::now() < d => std::thread::sleep(Duration::from_millis(20)),
+                _ => break,
             }
         }
+        for (_, c) in &done {
+            if let Some(enc) = c.failed {
+                self.drop_encoder(enc);
+            }
+        }
+        done
     }
 }
 
@@ -381,10 +473,12 @@ impl Segments {
             return Ok(());
         };
         let wall_ms = millis(now.saturating_duration_since(seg.started));
-        // The video decides the segment length: the sound is padded or cut to its frames.
+        // The video decides the segment length: the sound is padded or cut to the
+        // frames the pacer owes. The real count replaces it when ffmpeg is done
+        // (`collect_video`); the concat lists follow the real count.
         let (frames, target_ms) = match self.video.as_mut() {
             Some(v) => {
-                let frames = v.close(now);
+                let frames = v.begin_close(seg.index, seg.started, now);
                 let fps = u64::from(v.preset.fps.max(1));
                 (frames, if frames > 0 { frames * 1000 / fps } else { wall_ms })
             }
@@ -405,6 +499,29 @@ impl Segments {
             rec.closed = true;
         }
         write_manifest_atomic(&self.dir, &self.manifest)
+    }
+
+    /// Puts the frame counts of finished video segments into the manifest. A
+    /// segment with sound keeps its video even if it is only black filler (no
+    /// frame captured yet), so its sound stays in the recording; without sound
+    /// and without a captured frame it counts as empty.
+    fn collect_video(&mut self, wait: Option<Duration>) {
+        let Some(v) = self.video.as_mut() else {
+            return;
+        };
+        let done = v.poll(wait);
+        if done.is_empty() {
+            return;
+        }
+        for (index, c) in done {
+            if let Some(rec) = self.manifest.segments.iter_mut().find(|s| s.index == index) {
+                let has_sound = rec.audio.iter().any(|a| a.captured_frames > 0);
+                rec.video_frames = if c.real || has_sound { c.frames } else { 0 };
+            }
+        }
+        if let Err(e) = write_manifest_atomic(&self.dir, &self.manifest) {
+            tracing::error!("saving the manifest after a video segment failed: {e:#}");
+        }
     }
 
     /// Why the open segment must be replaced now, if it must.
@@ -490,6 +607,7 @@ impl Writer {
 
     fn tick(&mut self, now: Instant) {
         self.drain(None);
+        self.segments.collect_video(None);
         let Some(seg_start) = self.segments.open.as_ref().map(|s| s.started) else {
             return;
         };
@@ -564,6 +682,8 @@ impl Writer {
                     if let Err(e) = self.segments.close_segment(at) {
                         tracing::error!("saving the manifest on stop failed: {e:#}");
                     }
+                    // The devices are stopped: nothing left to drain while ffmpeg finishes.
+                    self.segments.collect_video(Some(VIDEO_FINISH_WAIT));
                     let _ = reply.send(self.segments.manifest.clone());
                     return;
                 }
@@ -571,6 +691,7 @@ impl Writer {
                 Err(RecvTimeoutError::Disconnected) => {
                     self.drain(None);
                     let _ = self.segments.close_segment(Instant::now());
+                    self.segments.collect_video(Some(VIDEO_FINISH_WAIT));
                     return;
                 }
             }
@@ -840,7 +961,7 @@ fn prepare_video(o: &StartOptions) -> Result<VideoSetup> {
     let (w, h) = capture::source_size(&target)?;
     let size = output_size(w, h, &p);
     let os = TargetOs::current();
-    let selected = select_encoder(&ffmpeg, os);
+    let selected = select_encoder(&ffmpeg, os).context("no video encoder works on this computer")?;
     let encoders = encoder_queue(selected, &listed_encoders(&ffmpeg), os);
     tracing::info!(
         "video {}x{} from {w}x{h} at {} fps, encoders {:?}",
@@ -943,6 +1064,8 @@ fn start_session(
             encoders: v.encoders,
             writer: None,
             health: health.clone(),
+            closing: Vec::new(),
+            close_job: close_writer,
         });
     }
     let clock = Instant::now();
@@ -1992,8 +2115,15 @@ mod tests {
             encoders,
             writer: None,
             health: health.clone(),
+            closing: Vec::new(),
+            close_job: close_writer,
         });
         (s, health)
+    }
+
+    fn settle(s: &mut Segments) {
+        s.collect_video(Some(Duration::from_secs(60)));
+        assert!(s.video.as_ref().unwrap().closing.is_empty());
     }
 
     /// Records one segment of about `ms` with a little sound in it.
@@ -2029,11 +2159,14 @@ mod tests {
         for ms in [700, 500, 700] {
             record(&mut s, ms);
         }
+        settle(&mut s);
         let frames: Vec<u64> = s.manifest.segments.iter().map(|g| g.video_frames).collect();
         assert!(frames.iter().all(|f| *f >= 7), "{frames:?}");
         for g in &s.manifest.segments {
             assert_eq!(g.encoder, Some(test_encoder()));
-            assert_eq!(g.audio[0].target_ms, g.video_frames * 1000 / 15);
+            // the sound was cut to the frames owed at the close; ffmpeg may hold one more
+            let owed_ms = g.audio[0].target_ms as i64;
+            assert!((owed_ms - (g.video_frames * 1000 / 15) as i64).abs() <= 67, "{g:?}");
         }
         assert!(!health.video_lost.load(Ordering::SeqCst));
 
@@ -2074,6 +2207,7 @@ mod tests {
         s.rotate(Instant::now()).unwrap();
         std::thread::sleep(Duration::from_millis(600));
         s.close_segment(Instant::now()).unwrap();
+        settle(&mut s);
         let segs = &s.manifest.segments;
         assert_eq!((segs[0].encoder, segs[0].video_frames), (Some(VideoEncoder::X264), 0));
         assert_eq!(segs[1].encoder, Some(test_encoder()));
@@ -2094,10 +2228,45 @@ mod tests {
         s.rotate(t1).unwrap();
         feed(&mut s, 300, t1);
         s.close_segment(t1 + Duration::from_millis(300)).unwrap();
+        settle(&mut s);
         assert!(health.video_lost.load(Ordering::SeqCst));
         assert_eq!(s.manifest.segments[1].video_file, None);
         let plan = finalize_plan(&s.manifest).unwrap();
         assert_eq!(plan.ext, "m4a");
         assert_eq!(plan.audio[0].1.len(), 2);
+    }
+
+    /// Review I1: a hung encoder must not hold the writer thread (it drains the audio).
+    #[test]
+    fn a_slow_video_close_does_not_block_the_segment_close() {
+        let Some(ffmpeg) = usable_ffmpeg() else {
+            return;
+        };
+        fn slow(w: VideoSegmentWriter, ffmpeg: PathBuf, fps: u32) -> Closed {
+            std::thread::sleep(Duration::from_secs(3));
+            close_writer(w, ffmpeg, fps)
+        }
+        let root = tempfile::tempdir().unwrap();
+        let (mut s, _health) = video_session(root.path(), &ffmpeg, vec![test_encoder()]);
+        s.video.as_mut().unwrap().close_job = slow;
+        let t0 = Instant::now();
+        s.open_segment(t0).unwrap();
+        feed(&mut s, 4_800, t0);
+        std::thread::sleep(Duration::from_millis(700));
+        let started = Instant::now();
+        // rotation: the old segment closes, the new one opens, all without waiting for ffmpeg
+        s.rotate(t0 + Duration::from_millis(700)).unwrap();
+        assert!(started.elapsed() < Duration::from_millis(1500), "{:?}", started.elapsed());
+        // the owed frames stand in until ffmpeg is done
+        assert_eq!(s.manifest.segments[0].video_frames, 10);
+        assert!(s.manifest.segments[0].closed && s.manifest.segments[0].audio[0].target_ms == 666);
+        s.collect_video(None);
+        assert_eq!(s.video.as_ref().unwrap().closing.len(), 1);
+        std::thread::sleep(Duration::from_millis(300));
+        s.close_segment(Instant::now()).unwrap();
+        settle(&mut s);
+        assert!((10..=11).contains(&s.manifest.segments[0].video_frames));
+        assert!(s.manifest.segments[1].video_frames > 0);
+        assert_eq!(read_manifest(&s.dir).unwrap(), s.manifest);
     }
 }

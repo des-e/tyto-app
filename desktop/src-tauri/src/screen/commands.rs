@@ -94,6 +94,9 @@ pub struct CaptureSupport {
     pub video: bool,
     /// The recording pill is left out of the picture by the capture itself.
     pub pill_excluded: bool,
+    /// Why there is no video: `os_too_old`, `capture_unsupported`, `no_ffmpeg`,
+    /// `no_encoder` (no encoder passed a probe), `platform`.
+    pub reason: Option<&'static str>,
 }
 
 // Built by the Windows capture; the macOS one comes with Task 14.
@@ -122,23 +125,35 @@ pub struct CaptureTargets {
     pub windows: Vec<WindowTarget>,
 }
 
-/// Video needs the OS floor, Windows.Graphics.Capture and a bundled ffmpeg that
-/// lists an H.264 encoder for this platform. Blocking (`ffmpeg -encoders`).
+/// Video needs the OS floor, Windows.Graphics.Capture and an encoder of the
+/// bundled ffmpeg that passes a probe (Windows N without the Media Feature Pack
+/// lists h264_mf, but it does not work). Blocking (probes); worked out once per run.
 #[cfg(windows)]
 fn capture_support() -> CaptureSupport {
-    use super::encoder::{bundled_ffmpeg, candidates, listed_encoders, TargetOs};
+    use super::encoder::{bundled_ffmpeg, select_encoder, TargetOs};
     use super::targets::{video_supported, windows_build};
-    let build = windows_build();
-    let os_ok = build.is_none_or(|b| video_supported(TargetOs::Windows, (10, 0, b)));
-    let encoder_ok = || bundled_ffmpeg().is_some_and(|ff| !candidates(&listed_encoders(&ff), TargetOs::Windows).is_empty());
-    let video = os_ok && super::capture::capture_api_supported() && encoder_ok();
-    if !video {
-        tracing::info!("video recording is not available (build {build:?})");
-    }
-    CaptureSupport {
-        video,
-        pill_excluded: build.is_none_or(|b| b >= super::pill::EXCLUDE_FROM_CAPTURE_BUILD),
-    }
+    static CACHE: std::sync::OnceLock<CaptureSupport> = std::sync::OnceLock::new();
+    *CACHE.get_or_init(|| {
+        let build = windows_build();
+        let reason = if !build.is_none_or(|b| video_supported(TargetOs::Windows, (10, 0, b))) {
+            Some("os_too_old")
+        } else if !super::capture::capture_api_supported() {
+            Some("capture_unsupported")
+        } else {
+            match bundled_ffmpeg() {
+                None => Some("no_ffmpeg"),
+                Some(ff) => select_encoder(&ff, TargetOs::Windows).is_none().then_some("no_encoder"),
+            }
+        };
+        if let Some(r) = reason {
+            tracing::warn!("video recording is not available: {r} (build {build:?})");
+        }
+        CaptureSupport {
+            video: reason.is_none(),
+            pill_excluded: build.is_none_or(|b| b >= super::pill::EXCLUDE_FROM_CAPTURE_BUILD),
+            reason,
+        }
+    })
 }
 
 #[cfg(not(windows))]
@@ -146,6 +161,7 @@ fn capture_support() -> CaptureSupport {
     CaptureSupport {
         video: false,
         pill_excluded: false,
+        reason: Some("platform"),
     }
 }
 
@@ -187,11 +203,12 @@ mod tests {
     fn support_and_targets_serialize_for_the_frontend() {
         assert_eq!(
             serde_json::to_value(CaptureSupport {
-                video: true,
-                pill_excluded: false
+                video: false,
+                pill_excluded: true,
+                reason: Some("no_encoder"),
             })
             .unwrap(),
-            serde_json::json!({ "video": true, "pillExcluded": false })
+            serde_json::json!({ "video": false, "pillExcluded": true, "reason": "no_encoder" })
         );
         let t = CaptureTargets {
             monitors: vec![MonitorInfo {

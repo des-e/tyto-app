@@ -31,6 +31,9 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 const CLOSE_WAIT: Duration = Duration::from_secs(15);
 /// The pacer falling this far behind the clock means the encoder is too slow.
 const LAG_WARNING: Duration = Duration::from_secs(2);
+/// This far behind, the encoder counts as failed: the session moves to the next
+/// one instead of piling up a backlog that the close would have to write out.
+const LAG_FAILURE: Duration = Duration::from_secs(10);
 /// Upper bound of one sleep, so a close is noticed quickly.
 const MAX_SLEEP: Duration = Duration::from_millis(50);
 const STDERR_KEEP: usize = 2000;
@@ -52,10 +55,12 @@ pub fn kill_all() {
     }
 }
 
-struct Written {
-    frames: u64,
+/// What a closed segment holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Written {
+    pub frames: u64,
     /// At least one captured frame (not the black filler) went into the file.
-    real: bool,
+    pub real: bool,
 }
 
 pub struct VideoSegmentWriter {
@@ -151,9 +156,10 @@ impl VideoSegmentWriter {
         lock(&self.stop_at).get_or_insert(at);
     }
 
-    /// Closes stdin, waits for ffmpeg and returns the frames written. Zero while
-    /// no captured frame ever arrived (only black filler). ffmpeg dead → `Err`.
-    pub fn close(mut self) -> Result<u64> {
+    /// Closes stdin, waits for ffmpeg and returns the frames written, and whether
+    /// a captured frame was among them (else only black filler). ffmpeg dead → `Err`.
+    /// Blocking (up to 2 × 15 s on a hung encoder): not on the audio writer thread.
+    pub fn close(mut self) -> Result<Written> {
         self.finish_at(Instant::now());
         let thread = self.thread.take();
         let written = match thread {
@@ -187,7 +193,7 @@ impl VideoSegmentWriter {
             Some(st) => bail!("ffmpeg failed ({st}): {stderr}"),
             None => bail!("ffmpeg did not finish the segment"),
         }
-        Ok(if written.real { written.frames } else { 0 })
+        Ok(written)
     }
 
     fn wait_child(&self) -> Option<std::process::ExitStatus> {
@@ -274,9 +280,13 @@ impl Pacing {
             // Next frame boundary on the absolute clock: no drift from sleeps.
             let next = self.segment_start + Duration::from_nanos((pacer.frames() + 1).saturating_mul(frame_ns));
             let now = Instant::now();
-            if !lag_warned && now.saturating_duration_since(next) > LAG_WARNING {
+            let lag = now.saturating_duration_since(next);
+            if !lag_warned && lag > LAG_WARNING {
                 lag_warned = true;
                 tracing::warn!("the video encoder is slower than real time");
+            }
+            if lag > LAG_FAILURE {
+                bail!("the video encoder is {} s behind real time", lag.as_secs());
             }
             let wait = next.saturating_duration_since(now).clamp(Duration::from_millis(1), MAX_SLEEP);
             std::thread::sleep(wait);
@@ -292,7 +302,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn writer_keeps_the_rate_without_frames_and_reports_zero_until_a_real_frame() {
+    fn writer_keeps_the_rate_without_frames_and_tells_black_filler_apart() {
         let Some(ffmpeg) = usable_ffmpeg() else {
             return;
         };
@@ -304,8 +314,9 @@ mod tests {
         let w = VideoSegmentWriter::start(&ffmpeg, test_encoder(), &p, (320, 180), &out, latest.clone(), start).unwrap();
         std::thread::sleep(Duration::from_millis(400));
         w.finish_at(start + Duration::from_millis(400));
-        // only black filler so far
-        assert_eq!(w.close().unwrap(), 0);
+        // only black filler so far: frames, but none captured
+        let black = w.close().unwrap();
+        assert!(!black.real && (6..=7).contains(&black.frames), "{black:?}");
 
         let out = dir.path().join("seg-0002.mp4");
         let start = Instant::now();
@@ -314,7 +325,9 @@ mod tests {
         // no new frames for a second: the last one is repeated
         std::thread::sleep(Duration::from_millis(1000));
         w.finish_at(start + Duration::from_millis(1000));
-        let frames = w.close().unwrap();
+        let written = w.close().unwrap();
+        assert!(written.real);
+        let frames = written.frames;
         // 15, or 16 if the thread was already past 1.066 s on a busy runner
         assert!((15..=16).contains(&frames), "{frames}");
         let secs = probe_video_seconds(&ffmpeg, &out).unwrap();
