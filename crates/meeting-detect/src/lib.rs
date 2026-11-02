@@ -35,6 +35,17 @@ pub enum Source {
     Zoom,
     Teams,
     Meet,
+    /// Yandex Telemost in a browser tab.
+    Telemost,
+    /// The Bitrix24 desktop app, only while it holds the microphone itself.
+    Bitrix24,
+}
+
+impl Source {
+    /// Recognised from a browser tab title, so the attribution is held when the tab is switched.
+    fn is_browser_tab(self) -> bool {
+        matches!(self, Source::Meet | Source::Telemost)
+    }
 }
 
 /// One snapshot of the current meeting signal.
@@ -57,6 +68,7 @@ impl MeetingState {
 pub(crate) enum ProcessKind {
     Zoom,
     Teams,
+    Bitrix24,
     Browser,
 }
 
@@ -185,12 +197,12 @@ fn poll(scan_titles: bool) -> DetectionSnapshot {
         };
     }
 
-    let processes = candidates(usage.processes, cfg!(target_os = "macos"), process::running_candidates);
+    let (processes, owners) = candidates_with_origin(usage.processes, cfg!(target_os = "macos"), process::running_candidates);
     let browser_present = processes
         .iter()
         .any(|info| process::source(info) == Some(ProcessKind::Browser));
     DetectionSnapshot {
-        state: classify_active(processes, scan_titles),
+        state: classify_active(processes, scan_titles, owners),
         mic_active: true,
         browser_present,
     }
@@ -203,20 +215,33 @@ fn poll(scan_titles: bool) -> DetectionSnapshot {
 /// unrecognised owners fall back as well: detection is never worse than before that list was
 /// used. Windows and Linux name the owner reliably, and an unrecognised owner there means "not a
 /// meeting", so the running Zoom or Teams must not be blamed for it.
+#[cfg(test)]
 fn candidates(
     owners: Vec<ProcessInfo>,
     fallback_when_unrecognised: bool,
     running: impl FnOnce() -> Vec<ProcessInfo>,
 ) -> Vec<ProcessInfo> {
+    candidates_with_origin(owners, fallback_when_unrecognised, running).0
+}
+
+/// `candidates`, plus whether the list is the microphone owners themselves (`true`) or the running
+/// apps it fell back to (`false`).
+fn candidates_with_origin(
+    owners: Vec<ProcessInfo>,
+    fallback_when_unrecognised: bool,
+    running: impl FnOnce() -> Vec<ProcessInfo>,
+) -> (Vec<ProcessInfo>, bool) {
     let recognised = owners.iter().any(|info| process::source(info).is_some());
     if owners.is_empty() || (fallback_when_unrecognised && !recognised) {
-        running()
+        (running(), false)
     } else {
-        owners
+        (owners, true)
     }
 }
 
-fn classify_active(processes: Vec<ProcessInfo>, scan_titles: bool) -> MeetingState {
+/// `owners`: the processes are the microphone owners, not running apps it fell back to. Bitrix24
+/// counts only then: its messenger is open all day, so merely running says nothing about a call.
+fn classify_active(processes: Vec<ProcessInfo>, scan_titles: bool, owners: bool) -> MeetingState {
     if processes.is_empty() {
         return MeetingState::inactive();
     }
@@ -226,6 +251,13 @@ fn classify_active(processes: Vec<ProcessInfo>, scan_titles: bool) -> MeetingSta
     }
     if processes.iter().any(|info| process::source(info) == Some(ProcessKind::Teams)) {
         return attributed(Source::Teams);
+    }
+    if owners
+        && processes
+            .iter()
+            .any(|info| process::source(info) == Some(ProcessKind::Bitrix24))
+    {
+        return attributed(Source::Bitrix24);
     }
 
     if !scan_titles {
@@ -237,8 +269,8 @@ fn classify_active(processes: Vec<ProcessInfo>, scan_titles: bool) -> MeetingSta
         .filter(|info| process::source(info) == Some(ProcessKind::Browser))
         .cloned()
         .collect();
-    if !browsers.is_empty() && window_title::meet_process(&browsers).is_some() {
-        return attributed(Source::Meet);
+    if let Some((_, source)) = (!browsers.is_empty()).then(|| window_title::call_tab(&browsers)).flatten() {
+        return attributed(source);
     }
 
     MeetingState::inactive()
@@ -344,9 +376,9 @@ where
         let mut emitted: Option<MeetingState> = None;
         let mut mic_active = false;
         let mut candidate: Option<(MeetingState, Instant)> = None;
-        // Set only when a Meet state is actually emitted. A one-poll title match must pass the
-        // debounce before it earns the sticky behavior.
-        let mut hold_meet = false;
+        // Set only when a browser-tab state (Meet, Telemost) is actually emitted. A one-poll title
+        // match must pass the debounce before it earns the sticky behavior.
+        let mut held_tab: Option<Source> = None;
         let mut last_title_scan: Option<Instant> = None;
         // The first poll always scans, and so does any poll taken while the signal is in motion.
         let mut unsettled = true;
@@ -354,8 +386,8 @@ where
         loop {
             // Skipping the window scan while Meet is held costs nothing: the hold below overrides
             // whatever the scan would have returned for the rest of this microphone session.
-            let scan_titles =
-                !hold_meet && (unsettled || last_title_scan.is_none_or(|scanned| scanned.elapsed() >= TITLE_SCAN_INTERVAL));
+            let scan_titles = held_tab.is_none()
+                && (unsettled || last_title_scan.is_none_or(|scanned| scanned.elapsed() >= TITLE_SCAN_INTERVAL));
             let snapshot = poll(scan_titles);
             if scan_titles {
                 last_title_scan = Some(Instant::now());
@@ -368,19 +400,19 @@ where
             // A browser can stop exposing the Meet title as soon as the user switches tabs. Once
             // Meet has survived the debounce, retain that attribution until the mic is released or
             // the browser itself goes away — quitting the browser must not strand the prompt.
-            if snapshot.mic_active && snapshot.browser_present && hold_meet {
-                next = attributed(Source::Meet);
+            if let Some(source) = held_tab.filter(|_| snapshot.mic_active && snapshot.browser_present) {
+                next = attributed(source);
             }
 
             if !snapshot.mic_active || !snapshot.browser_present {
-                hold_meet = false;
+                held_tab = None;
             }
 
             if emitted.is_none() {
                 if sender.send(next.clone()).is_err() {
                     break;
                 }
-                update_meet_hold(&next, &mut hold_meet);
+                update_tab_hold(&next, &mut held_tab);
                 emitted = Some(next);
                 candidate = None;
             } else if emitted.as_ref() == Some(&next) {
@@ -392,7 +424,7 @@ where
                             if sender.send(next.clone()).is_err() {
                                 break;
                             }
-                            update_meet_hold(&next, &mut hold_meet);
+                            update_tab_hold(&next, &mut held_tab);
                             emitted = Some(next);
                             candidate = None;
                         }
@@ -416,11 +448,11 @@ where
     }
 }
 
-fn update_meet_hold(state: &MeetingState, hold_meet: &mut bool) {
+fn update_tab_hold(state: &MeetingState, held_tab: &mut Option<Source>) {
     if !state.recording {
-        *hold_meet = false;
-    } else if state.source == Some(Source::Meet) {
-        *hold_meet = true;
+        *held_tab = None;
+    } else if let Some(source) = state.source.filter(|s| s.is_browser_tab()) {
+        *held_tab = Some(source);
     }
 }
 
@@ -517,18 +549,69 @@ mod tests {
     #[test]
     fn zoom_and_teams_take_priority_over_browser_fallback() {
         assert_eq!(
-            classify_active(vec![process("chrome"), process("zoom")], true).source,
+            classify_active(vec![process("chrome"), process("zoom")], true, true).source,
             Some(Source::Zoom)
         );
         assert_eq!(
-            classify_active(vec![process("firefox"), process("ms-teams")], true).source,
+            classify_active(vec![process("firefox"), process("ms-teams")], true, true).source,
             Some(Source::Teams)
         );
     }
 
+    /// 2026-11-02 probe: during a call `Bitrix24.exe` itself owns the microphone; idle, it does not.
+    #[test]
+    fn bitrix_desktop_counts_only_when_it_owns_the_microphone() {
+        assert_eq!(
+            classify_active(vec![process("Bitrix24.exe")], false, true).source,
+            Some(Source::Bitrix24)
+        );
+        // the running app the detector fell back to (owner unknown): open all day, not a call
+        assert!(!classify_active(vec![process("Bitrix24.exe")], false, false).recording);
+        // the installer is not the app
+        assert!(!classify_active(vec![process("bitrix24_desktop_ru.exe")], false, true).recording);
+    }
+
+    #[test]
+    fn zoom_still_beats_a_running_bitrix() {
+        assert_eq!(
+            classify_active(vec![process("Bitrix24.exe"), process("zoom")], false, true).source,
+            Some(Source::Zoom)
+        );
+    }
+
+    /// The fallback list is marked so Bitrix24 is not blamed for a microphone it may not hold.
+    #[test]
+    fn candidates_say_whether_they_are_the_owners() {
+        let owners = vec![process("Bitrix24.exe")];
+        assert_eq!(candidates_with_origin(owners.clone(), false, Vec::new), (owners, true));
+        assert_eq!(
+            candidates_with_origin(Vec::new(), false, || vec![process("Bitrix24.exe")]),
+            (vec![process("Bitrix24.exe")], false)
+        );
+    }
+
+    #[test]
+    fn browser_tab_attribution_is_held_for_meet_and_telemost_only() {
+        let mut held = None;
+        update_tab_hold(&attributed(Source::Telemost), &mut held);
+        assert_eq!(held, Some(Source::Telemost));
+        update_tab_hold(&attributed(Source::Bitrix24), &mut held);
+        assert_eq!(held, Some(Source::Telemost));
+        update_tab_hold(&MeetingState::inactive(), &mut held);
+        assert_eq!(held, None);
+        update_tab_hold(&attributed(Source::Meet), &mut held);
+        assert_eq!(held, Some(Source::Meet));
+    }
+
+    #[test]
+    fn new_sources_serialize_for_the_frontend() {
+        assert_eq!(serde_json::to_string(&Source::Telemost).unwrap(), "\"telemost\"");
+        assert_eq!(serde_json::to_string(&Source::Bitrix24).unwrap(), "\"bitrix24\"");
+    }
+
     #[test]
     fn ordinary_browser_microphone_use_is_not_a_meeting() {
-        let state = classify_active(vec![process("chrome")], true);
+        let state = classify_active(vec![process("chrome")], true, true);
         assert!(!state.recording);
         assert_eq!(state.source, None);
     }

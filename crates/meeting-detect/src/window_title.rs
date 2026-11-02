@@ -1,7 +1,8 @@
-use crate::{ProcessInfo, WindowInfo};
+use crate::{ProcessInfo, Source, WindowInfo};
 
-pub(crate) fn meet_process(browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
-    platform::meet_process(browsers)
+/// A browser with a call tab on screen (Meet or Telemost), and which one.
+pub(crate) fn call_tab(browsers: &[ProcessInfo]) -> Option<(ProcessInfo, Source)> {
+    platform::call_tab(browsers)
 }
 
 pub(crate) fn visible_windows() -> Vec<WindowInfo> {
@@ -23,11 +24,33 @@ pub(crate) fn is_meet_title(title: &str) -> bool {
     title == "Google Meet" || title.starts_with("Meet – ") || title.starts_with("Meet - ")
 }
 
-fn matching_browser(browsers: &[ProcessInfo], pid: u32, title: &str) -> Option<ProcessInfo> {
-    if !is_meet_title(title) {
-        return None;
+/// Telemost names the tab «<встреча> · Яндекс Телемост — <браузер>» (Yandex Browser:
+/// «1: Идёт звонок · Яндекс Телемост — Яндекс Браузер», then the meeting name in place of
+/// «Идёт звонок»). The service name is the stable part; the browser's own name may use a
+/// no-break space.
+pub(crate) fn is_telemost_title(title: &str) -> bool {
+    let title = title.replace('\u{a0}', " ").to_lowercase();
+    title.contains("яндекс телемост") || title.contains("yandex telemost")
+}
+
+/// The call service a browser tab title belongs to.
+pub(crate) fn tab_source(title: &str) -> Option<Source> {
+    if is_meet_title(title) {
+        Some(Source::Meet)
+    } else if is_telemost_title(title) {
+        Some(Source::Telemost)
+    } else {
+        None
     }
-    browsers.iter().find(|browser| browser.pid == Some(pid)).cloned()
+}
+
+fn matching_browser(browsers: &[ProcessInfo], pid: u32, title: &str) -> Option<(ProcessInfo, Source)> {
+    let source = tab_source(title)?;
+    browsers
+        .iter()
+        .find(|browser| browser.pid == Some(pid))
+        .cloned()
+        .map(|browser| (browser, source))
 }
 
 /// A Chromium browser captures audio in a utility child of the same executable, so the owner pid
@@ -126,11 +149,11 @@ mod platform {
 
     struct Search<'a> {
         browsers: &'a [ProcessInfo],
-        found: Option<ProcessInfo>,
+        found: Option<(ProcessInfo, crate::Source)>,
         /// Whether a browser's executable is known, so windows of other pids are worth reading.
         by_executable: bool,
-        /// Pids of Meet-titled windows that belong to none of the browser pids.
-        other_meet_pids: Vec<u32>,
+        /// Call-titled windows (pid, service) that belong to none of the browser pids.
+        other_call_pids: Vec<(u32, crate::Source)>,
     }
 
     unsafe extern "system" fn inspect_window(window: HWND, parameter: LPARAM) -> BOOL {
@@ -154,8 +177,10 @@ mod platform {
 
         let title = String::from_utf16_lossy(&buffer[..length as usize]);
         if !known {
-            if super::is_meet_title(&title) && !search.other_meet_pids.contains(&pid) {
-                search.other_meet_pids.push(pid);
+            if let Some(source) = super::tab_source(&title) {
+                if !search.other_call_pids.iter().any(|(p, _)| *p == pid) {
+                    search.other_call_pids.push((pid, source));
+                }
             }
             return BOOL(1);
         }
@@ -167,38 +192,39 @@ mod platform {
         }
     }
 
-    /// The browser whose executable runs one of `pids`; only those pids are looked up.
-    fn browser_by_executable(browsers: &[ProcessInfo], pids: &[u32]) -> Option<ProcessInfo> {
-        let wanted: Vec<Pid> = pids.iter().map(|pid| Pid::from_u32(*pid)).collect();
+    /// The browser whose executable runs one of `pids`, with that window's service; only those
+    /// pids are looked up.
+    fn browser_by_executable(browsers: &[ProcessInfo], pids: &[(u32, crate::Source)]) -> Option<(ProcessInfo, crate::Source)> {
+        let wanted: Vec<Pid> = pids.iter().map(|(pid, _)| Pid::from_u32(*pid)).collect();
         let mut system = System::new();
         system.refresh_processes_specifics(
             ProcessesToUpdate::Some(&wanted),
             false,
             ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
         );
-        wanted.iter().find_map(|pid| {
-            let executable = system.process(*pid)?.exe()?.to_string_lossy().into_owned();
-            super::browser_with_executable(browsers, &executable)
+        pids.iter().find_map(|(pid, source)| {
+            let executable = system.process(Pid::from_u32(*pid))?.exe()?.to_string_lossy().into_owned();
+            super::browser_with_executable(browsers, &executable).map(|browser| (browser, *source))
         })
     }
 
-    pub(super) fn meet_process(browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
+    pub(super) fn call_tab(browsers: &[ProcessInfo]) -> Option<(ProcessInfo, crate::Source)> {
         let mut search = Search {
             browsers,
             found: None,
             by_executable: browsers.iter().any(|browser| browser.executable.is_some()),
-            other_meet_pids: Vec::new(),
+            other_call_pids: Vec::new(),
         };
         let parameter = LPARAM((&mut search as *mut Search<'_>) as isize);
         // Stopping enumeration after a match reports an error, so the result itself is intentionally
         // ignored. A genuine API failure and an empty search both safely produce `None`.
         let _ = unsafe { EnumWindows(Some(inspect_window), parameter) };
-        if search.found.is_some() || search.other_meet_pids.is_empty() {
+        if search.found.is_some() || search.other_call_pids.is_empty() {
             return search.found;
         }
         // The microphone owner is a browser's audio-service child: its windows live in the main
         // process of the same executable.
-        browser_by_executable(browsers, &search.other_meet_pids)
+        browser_by_executable(browsers, &search.other_call_pids)
     }
 }
 
@@ -257,7 +283,7 @@ mod platform {
         Some(reply.value.into_iter().map(char::from).collect())
     }
 
-    pub(super) fn meet_process(browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
+    pub(super) fn call_tab(browsers: &[ProcessInfo]) -> Option<(ProcessInfo, crate::Source)> {
         if browsers.is_empty() || environment_is_wayland() {
             return None;
         }
@@ -282,8 +308,8 @@ mod platform {
             let title = property(&connection, window, name_atom, utf8_string)
                 .and_then(utf8_title)
                 .or_else(|| property(&connection, window, AtomEnum::WM_NAME.into(), AtomEnum::ANY.into()).and_then(legacy_title));
-            if let Some(browser) = title.and_then(|title| matching_browser(browsers, pid, &title)) {
-                return Some(browser);
+            if let Some(found) = title.and_then(|title| matching_browser(browsers, pid, &title)) {
+                return Some(found);
             }
         }
         None
@@ -391,14 +417,14 @@ mod platform {
         ScreenCaptureAccess.request()
     }
 
-    pub(super) fn meet_process(browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
+    pub(super) fn call_tab(browsers: &[ProcessInfo]) -> Option<(ProcessInfo, crate::Source)> {
         if browsers.is_empty() {
             return None;
         }
         if !ScreenCaptureAccess.preflight() {
             // Without this permission the window list comes back with no titles at all, which is
             // indistinguishable from "no meeting" — so say it out loud rather than return silence.
-            tracing::warn!("screen recording permission missing; Google Meet cannot be detected");
+            tracing::warn!("screen recording permission missing; Google Meet and Telemost cannot be detected");
             return None;
         }
 
@@ -414,8 +440,8 @@ mod platform {
             let Some((pid, title)) = window_identity(&dictionary) else {
                 continue;
             };
-            if let Some(browser) = matching_browser(browsers, pid, &title) {
-                return Some(browser);
+            if let Some(found) = matching_browser(browsers, pid, &title) {
+                return Some(found);
             }
         }
         None
@@ -426,7 +452,7 @@ mod platform {
 mod platform {
     use crate::ProcessInfo;
 
-    pub(super) fn meet_process(_browsers: &[ProcessInfo]) -> Option<ProcessInfo> {
+    pub(super) fn call_tab(_browsers: &[ProcessInfo]) -> Option<(ProcessInfo, crate::Source)> {
         None
     }
 }
@@ -453,12 +479,33 @@ mod tests {
         assert!(!is_meet_title("Inbox - Google Chrome"));
     }
 
+    /// Real titles from a Telemost call in Yandex Browser on Windows 11 (2026-11-02 probe).
+    #[test]
+    fn telemost_tab_titles_are_recognised() {
+        assert!(is_telemost_title("1: Идёт звонок · Яндекс Телемост — Яндекс\u{a0}Браузер"));
+        assert!(is_telemost_title("1: 1 · Яндекс Телемост — Яндекс\u{a0}Браузер"));
+        assert!(is_telemost_title("Планерка · Яндекс Телемост - Google Chrome"));
+        assert!(is_telemost_title("Standup · Yandex Telemost — Mozilla Firefox"));
+        assert_eq!(
+            tab_source("1: 1 · Яндекс Телемост — Яндекс\u{a0}Браузер"),
+            Some(Source::Telemost)
+        );
+        assert_eq!(tab_source("Meet – Daily standup"), Some(Source::Meet));
+        // Bitrix24 in a browser: too generic to tell from a title (2026-11-02 probe)
+        assert_eq!(tab_source("1: Мессенджер — Яндекс\u{a0}Браузер"), None);
+        assert_eq!(tab_source("Дубли полей лида - Google Chrome"), None);
+    }
+
     #[test]
     fn matches_only_a_supplied_browser_pid() {
         let browsers = [browser(Some(42), "chrome"), browser(None, "firefox")];
         assert_eq!(
             matching_browser(&browsers, 42, "Meet – Daily standup"),
-            Some(browsers[0].clone())
+            Some((browsers[0].clone(), Source::Meet))
+        );
+        assert_eq!(
+            matching_browser(&browsers, 42, "1: Идёт звонок · Яндекс Телемост — Яндекс\u{a0}Браузер"),
+            Some((browsers[0].clone(), Source::Telemost))
         );
         assert_eq!(matching_browser(&browsers, 7, "Google Meet"), None);
         assert_eq!(matching_browser(&browsers, 42, "Inbox"), None);

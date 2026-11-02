@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 
-export type MeetingSource = 'meet' | 'zoom' | 'teams'
+export type MeetingSource = 'meet' | 'zoom' | 'teams' | 'telemost' | 'bitrix24'
 
 export interface MeetingPromptState {
 	source: MeetingSource

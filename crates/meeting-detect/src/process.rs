@@ -31,6 +31,9 @@ const TEAMS_PROCESS_NAMES: &[&str] = &[
     "microsoft teams",
     "microsoft teams classic",
 ];
+/// The Bitrix24 desktop app (Windows: `C:\Program Files (x86)\Bitrix24\Application\<ver>\Bitrix24.exe`,
+/// 2026-11-02 probe). Its installer `bitrix24_desktop_ru.exe` is not it.
+const BITRIX24_PROCESS_NAMES: &[&str] = &["bitrix24", "bitrix24.exe"];
 const BROWSER_PROCESS_NAMES: &[&str] = &[
     "chrome",
     "chrome.exe",
@@ -83,6 +86,9 @@ pub(crate) fn source(process: &ProcessInfo) -> Option<ProcessKind> {
     }
     if exact_identity(&name, executable.as_deref(), TEAMS_PROCESS_NAMES) {
         return Some(ProcessKind::Teams);
+    }
+    if exact_identity(&name, executable.as_deref(), BITRIX24_PROCESS_NAMES) {
+        return Some(ProcessKind::Bitrix24);
     }
     if exact_identity(&name, executable.as_deref(), BROWSER_PROCESS_NAMES) {
         return Some(ProcessKind::Browser);
