@@ -98,7 +98,8 @@ const viewListeners = new Set<() => void>()
 function currentView(): VideoView {
 	if (view) return view
 	const query = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(VIDEO_SIDE_QUERY) : null
-	view = { wide: query ? query.matches : true, open: readConfig(VIDEO_PANE_OPEN_KEY, true), full: false }
+	// Hidden by default (Денис, 2026-11-02): the text is the main thing, the thumbnail is enough.
+	view = { wide: query ? query.matches : true, open: readConfig(VIDEO_PANE_OPEN_KEY, false), full: false }
 	query?.addEventListener('change', (event) => setView({ wide: event.matches }))
 	return view
 }

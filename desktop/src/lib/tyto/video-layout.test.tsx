@@ -29,7 +29,7 @@ const session = vi.hoisted(() => ({
 vi.mock('~/pages/main/session', () => ({ useSession: () => session.value }))
 
 import { TooltipProvider } from '~/components/ui/tooltip'
-import { deleteConfig, readConfig } from '~/lib/config-store'
+import { deleteConfig, readConfig, writeConfig } from '~/lib/config-store'
 import { resetVideoView, VIDEO_PANE_OPEN_KEY, VIDEO_SIDE_QUERY } from '~/lib/tyto/player-media'
 import type { Segment } from '~/lib/transcript'
 import PlayerBar, { PLAYER_SEEK_EVENT, PLAYER_TIME_EVENT, type PlayerTimeDetail } from '~/pages/main/components/player-bar'
@@ -136,7 +136,22 @@ const inSide = (v: Element) => !!document.querySelector('.tyto-video-side [data-
 const inThumb = (v: Element) => !!document.querySelector('[data-slot="video-thumb"]')?.contains(v)
 const inLayer = (v: Element) => !!document.querySelector('[data-slot="video-fullscreen"]')?.contains(v)
 
+describe('по умолчанию видео скрыто', () => {
+	it('широкое окно, выбора еще не было: колонки нет, видео миниатюрой в плеере', () => {
+		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
+		const video = media()
+		loaded(video, 1920)
+		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		expect(inThumb(video)).toBe(true)
+	})
+})
+
 describe('широкое окно: видео в колонке справа от текста (вариант E)', () => {
+	beforeEach(() => {
+		writeConfig(VIDEO_PANE_OPEN_KEY, true)
+		resetVideoView()
+	})
+
 	it('проект с .mp4: текст слева, видео справа, под ним место для тем; внизу одна шкала', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
