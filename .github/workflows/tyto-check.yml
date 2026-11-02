@@ -154,6 +154,8 @@ jobs:
                           exit 1
                       fi
                       echo "weak: $b"
+                      # For the log: the Swift runtime it loads (/usr/lib/swift, libswift_Concurrency since macOS 12).
+                      otool -L "$b" | grep -i swift || true
                   done
                   if [ "$checked" -eq 0 ]; then
                       echo "::error::no binary links ScreenCaptureKit"
