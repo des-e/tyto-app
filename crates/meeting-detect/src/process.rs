@@ -18,6 +18,8 @@ const BROWSER_BUNDLE_IDS: &[&str] = &[
     "com.brave.browser.dev",
     "com.brave.browser.nightly",
     "company.thebrowser.browser",
+    // Yandex Browser on mac: `/Applications/Yandex.app`, window owner «Yandex» (2026-11-03 probe).
+    "ru.yandex.desktop.yandex-browser",
 ];
 
 const ZOOM_PROCESS_NAMES: &[&str] = &["zoom", "zoom.exe", "zoom.us", "zoom meetings"];
