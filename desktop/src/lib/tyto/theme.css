@@ -1095,6 +1095,8 @@ svg.lucide {
 	flex-direction: column;
 	padding: var(--tyto-sp-48) var(--tyto-sp-48) var(--tyto-sp-32);
 	overflow-y: auto;
+	/* The cards stack by the width of this area, not the window: the sidebar takes 248-380px of it. */
+	container-type: inline-size;
 }
 
 .tyto-home-inner {
@@ -1169,23 +1171,9 @@ svg.lucide {
 }
 
 .tyto-home-step {
-	display: flex;
-	align-items: flex-start;
-	gap: 10px;
 	font-size: 13.5px;
 	line-height: 1.45;
-}
-
-.tyto-home-step-index {
-	display: grid;
-	place-items: center;
-	flex-shrink: 0;
-	width: 22px;
-	height: 22px;
-	border: 1px solid var(--tyto-line2);
-	border-radius: 11px;
-	font-family: var(--font-mono);
-	font-size: 12px;
+	text-align: center;
 }
 
 .tyto-home-step-title {
@@ -1206,7 +1194,8 @@ svg.lucide {
 	margin-top: 28px;
 }
 
-@media (max-width: 760px) {
+/* Two cards need about 2 × 270px; an 800px window with the sidebar open leaves ~450px of content. */
+@container (max-width: 580px) {
 	.tyto-home-cards,
 	.tyto-home-steps {
 		grid-template-columns: minmax(0, 1fr);
@@ -1241,6 +1230,19 @@ svg.lucide {
 	margin: 4px 0 0;
 	font-size: 13px;
 	line-height: 1.45;
+	color: var(--muted-foreground);
+}
+
+/* The formats fill the drop card's spare height, centred in it, instead of a blank band. */
+.tyto-home-formats {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 2px;
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.5;
 	color: var(--muted-foreground);
 }
 

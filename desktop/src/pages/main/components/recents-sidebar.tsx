@@ -135,6 +135,15 @@ function useResizableWidth() {
 	return { width, dragging, handleProps: { onPointerDown, onPointerMove, onPointerUp: endDrag, onPointerCancel: endDrag, onDoubleClick } }
 }
 
+/** «0:12», «42:10», «1:04:33»: a recording's length, in the mono figures of the side column. */
+function formatLength(seconds: number) {
+	const total = Math.max(0, Math.round(seconds))
+	const hours = Math.floor(total / 3600)
+	const minutes = Math.floor((total % 3600) / 60)
+	const rest = String(total % 60).padStart(2, '0')
+	return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
+}
+
 interface RowMenuState {
 	/** media to re-transcribe: the original file, else the project folder's copy; null when neither */
 	sourcePath: string | null
@@ -160,9 +169,11 @@ function RecentRow({
 }) {
 	const { queue } = useSession()
 	const { duration, untranscribed } = useRecordMeta(entry.path)
-	// One line: «не расшифровано» is a dot at the end, otherwise the date; the full line is the tooltip.
+	// One line: the length at the end (the day group already says when), else the time or date; a
+	// dot for «не расшифровано». The full line is the tooltip and the button's accessible name, so it
+	// does not depend on hovering (design review, UI/UX Pro Max).
 	const meta = [recentMeta(entry.createdAt, now, duration), untranscribed ? m.tytoNotTranscribed() : ''].filter(Boolean).join(' · ')
-	const when = whenLabel(entry.createdAt, now)
+	const side = duration && duration > 0 ? formatLength(duration) : whenLabel(entry.createdAt, now)
 	const [menu, setMenu] = useState<RowMenuState>({ sourcePath: null, sourceExists: false })
 	const [renaming, setRenaming] = useState(false)
 	const [retranscribing, setRetranscribing] = useState(false)
@@ -274,13 +285,16 @@ function RecentRow({
 	return (
 		<div className={cn('tyto-recent group', active && 'tyto-recent-selected')}>
 			<RetranscribeDialog open={retranscribing} onOpenChange={setRetranscribing} name={entry.name} onConfirm={retranscribe} />
-			<button type="button" onClick={onOpen} disabled={disabled} title={meta ? `${entry.name}\n${meta}` : entry.name} className="tyto-recent-main">
+			<button
+				type="button"
+				onClick={onOpen}
+				disabled={disabled}
+				title={meta ? `${entry.name}\n${meta}` : entry.name}
+				aria-label={meta ? `${entry.name}, ${meta}` : entry.name}
+				className="tyto-recent-main">
 				<span className="tyto-recent-title truncate">{entry.name}</span>
-				{untranscribed ? (
-					<span className="tyto-recent-dot" role="img" aria-label={m.tytoNotTranscribed()} />
-				) : (
-					when && <span className="tyto-recent-side group-hover:hidden group-focus-within:hidden">{when}</span>
-				)}
+				{side && <span className="tyto-recent-side group-hover:hidden group-focus-within:hidden">{side}</span>}
+				{untranscribed && <span aria-hidden className="tyto-recent-dot" title={m.tytoNotTranscribed()} />}
 			</button>
 
 			<DropdownMenu

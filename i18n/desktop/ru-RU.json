@@ -835,5 +835,7 @@
 	"tytoRecordStart": "Начать запись",
 	"tytoFileCardTitle": "Расшифровать файл",
 	"tytoFileCardDrop": "Перетащите сюда аудио, видео или папку",
+	"tytoFileCardAudio": "Аудио: MP3, M4A, WAV, OGG, FLAC, AAC",
+	"tytoFileCardVideo": "Видео: MP4, MOV, MKV, WEBM, AVI",
 	"tytoWaitingTitle": "Ждут расшифровки"
 }

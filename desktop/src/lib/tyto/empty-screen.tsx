@@ -27,16 +27,12 @@ interface EmptyScreenProps {
 	options: ReactNode
 }
 
-function Step({ index, title, body }: { index: number; title: string; body: string }) {
+/** One step of the welcome. The order reads left to right; no index numbers (design review, Taste). */
+function Step({ title, body }: { title: string; body: string }) {
 	return (
 		<li className="tyto-home-step">
-			<span aria-hidden className="tyto-home-step-index">
-				{index}
-			</span>
-			<span>
-				<span className="tyto-home-step-title">{title}</span>
-				<span className="tyto-home-step-body">{body}</span>
-			</span>
+			<span className="tyto-home-step-title">{title}</span>
+			<span className="tyto-home-step-body">{body}</span>
 		</li>
 	)
 }
@@ -85,9 +81,9 @@ export function EmptyScreen({ dragging, collectingFolder, firstRun, panel, onBro
 
 				{firstRun && (
 					<ol className="tyto-home-steps">
-						<Step index={1} title={m.tytoHomeStep1Title()} body={m.tytoHomeStep1Body()} />
-						<Step index={2} title={m.tytoHomeStep2Title()} body={m.tytoHomeStep2Body()} />
-						<Step index={3} title={m.tytoHomeStep3Title()} body={m.tytoHomeStep3Body()} />
+						<Step title={m.tytoHomeStep1Title()} body={m.tytoHomeStep1Body()} />
+						<Step title={m.tytoHomeStep2Title()} body={m.tytoHomeStep2Body()} />
+						<Step title={m.tytoHomeStep3Title()} body={m.tytoHomeStep3Body()} />
 					</ol>
 				)}
 
@@ -100,7 +96,11 @@ export function EmptyScreen({ dragging, collectingFolder, firstRun, panel, onBro
 							</h2>
 							<p className="tyto-home-card-lead">{m.tytoFileCardDrop()}</p>
 						</div>
-						<div className="flex-1" />
+						{/* What it takes fills the card's height with something worth reading (design review, Taste). */}
+						<p className="tyto-home-formats">
+							<span>{m.tytoFileCardAudio()}</span>
+							<span>{m.tytoFileCardVideo()}</span>
+						</p>
 						<div className="flex items-center gap-3">
 							<Button variant="secondary" onClick={onBrowse} className="h-10 flex-1">
 								{collectingFolder ? <Spinner /> : <FolderOpen />}

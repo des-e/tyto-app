@@ -113,12 +113,13 @@ describe('боковая панель (отличие 5)', () => {
 		expect(order).toEqual(['Сегодня', 'Созвон с бухгалтерией', 'Планерка отдела продаж', LONG_NAME, 'Вчера', 'Интервью: логист на склад'])
 	})
 
-	it('одна строка: название и время, полная мета «10:02 · 48 мин» в подсказке', async () => {
+	it('одна строка: название и длительность, полная мета «10:02 · 48 мин» в подсказке и в имени кнопки', async () => {
 		renderSidebar()
 		await screen.findByText('Планерка отдела продаж')
 		const plan = rowOf('Планерка отдела продаж')
-		expect(within(plan).getByText('10:02')).toBeTruthy()
+		expect(await within(plan).findByText('48:00')).toBeTruthy()
 		await waitFor(() => expect(plan.querySelector('button')?.getAttribute('title')).toBe('Планерка отдела продаж\n10:02 · 48 мин'))
+		expect(plan.querySelector('button')?.getAttribute('aria-label')).toBe('Планерка отдела продаж, 10:02 · 48 мин')
 		// Without a readable record the row still shows its time.
 		expect(within(rowOf('Интервью: логист на склад')).getByText('17:40')).toBeTruthy()
 	})

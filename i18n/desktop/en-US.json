@@ -835,5 +835,7 @@
 	"tytoRecordStart": "Start recording",
 	"tytoFileCardTitle": "Transcribe a file",
 	"tytoFileCardDrop": "Drop audio, video or a folder here",
+	"tytoFileCardAudio": "Audio: MP3, M4A, WAV, OGG, FLAC, AAC",
+	"tytoFileCardVideo": "Video: MP4, MOV, MKV, WEBM, AVI",
 	"tytoWaitingTitle": "Waiting to be transcribed"
 }

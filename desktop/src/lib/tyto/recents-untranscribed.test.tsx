@@ -102,11 +102,14 @@ async function deleteRow(name: string) {
 describe('записи без расшифровки и удаление с файлом', () => {
 	it('проект без реплик: точка «Не расшифровано» в строке, длительность из durationSeconds в подсказке', async () => {
 		renderSidebar()
-		expect(await screen.findByRole('img', { name: 'Не расшифровано' })).toBeTruthy()
+		// The state is in the button's name, so it does not depend on seeing the dot or hovering.
+		expect(await screen.findByRole('button', { name: 'Запись экрана, 10:02 · 48 мин · Не расшифровано' })).toBeTruthy()
+		expect(rowOf('Запись экрана').querySelector('.tyto-recent-dot')).toBeTruthy()
+		expect(within(rowOf('Запись экрана')).getByText('48:00')).toBeTruthy()
 		const title = (name: string) => rowOf(name).querySelector('button')?.getAttribute('title')
-		await waitFor(() => expect(title('Запись экрана')).toBe('Запись экрана\n10:02 · 48 мин · Не расшифровано'))
 		await waitFor(() => expect(title('Созвон с подрядчиком')).toBe('Созвон с подрядчиком\n09:15 · 22 мин'))
-		expect(within(rowOf('Созвон с подрядчиком')).getByText('09:15')).toBeTruthy()
+		expect(rowOf('Созвон с подрядчиком').querySelector('.tyto-recent-dot')).toBeNull()
+		expect(within(rowOf('Созвон с подрядчиком')).getByText('22:00')).toBeTruthy()
 	})
 
 	it('удаление записи из Записи/ спрашивает про файл: «Удалить с файлом» → deleteMedia: true', async () => {
