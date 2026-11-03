@@ -29,6 +29,9 @@ const BROWSER_BUNDLE_IDS: &[&str] = &[
     "ai.perplexity.comet",
     "app.zen-browser.zen",
     "org.mozilla.nightly",
+    // Safari captures in the system `com.apple.WebKit.GPU` service; the parent walk cannot reach
+    // Safari, so it is found through the running-apps fallback and its tab address.
+    "com.apple.safari",
     // Yandex Browser on mac: `/Applications/Yandex.app`, window owner «Yandex» (2026-11-03 probe).
     "ru.yandex.desktop.yandex-browser",
 ];

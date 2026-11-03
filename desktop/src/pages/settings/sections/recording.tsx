@@ -147,6 +147,47 @@ function MeetPermissionRow({ enabled }: { enabled: boolean }) {
 	)
 }
 
+/**
+ * Accessibility lets Tyto read a browser tab's address on macOS: Bitrix24 in a browser and Safari
+ * are recognised only that way. The system prompt is shown on click, not on enable, so turning
+ * detection on does not raise two system dialogs at once.
+ */
+function TabAddressPermissionRow({ enabled }: { enabled: boolean }) {
+	const [status, setStatus] = useState<PermissionStatus | null>(null)
+
+	const refresh = useCallback(async () => {
+		try {
+			setStatus(await invoke<PermissionStatus>('get_accessibility_permission_status'))
+		} catch (error) {
+			console.error('Could not check accessibility permission:', error)
+			setStatus(null)
+		}
+	}, [])
+
+	useEffect(() => {
+		if (!enabled) return
+		void refresh()
+		window.addEventListener('focus', refresh)
+		return () => window.removeEventListener('focus', refresh)
+	}, [enabled, refresh])
+
+	if (!enabled || status === null || status === 'granted' || status === 'not_applicable') return null
+
+	const open = async () => {
+		// Adds Tyto to the Accessibility list, so the switch is there when the settings open.
+		await invoke<PermissionStatus>('request_accessibility_permission').catch((error) => console.error('Could not request accessibility permission:', error))
+		void invoke('open_accessibility_settings')
+	}
+
+	return (
+		<SettingsRow label={m.tytoTabAddressPermission()} description={m.tytoTabAddressPermissionInfo()}>
+			<button type="button" onClick={() => void open()} className="cursor-pointer text-xs font-medium text-primary underline-offset-4 hover:underline">
+				{m.openSystemSettings()}
+			</button>
+		</SettingsRow>
+	)
+}
+
 export function RecordingSection() {
 	const shortcut = useRecordingShortcut()
 	const { meetingDetectionEnabled, setMeetingDetectionEnabled, autoTranscribeAfterRecording, setAutoTranscribeAfterRecording, screenQuality, setScreenQuality } =
@@ -160,6 +201,7 @@ export function RecordingSection() {
 					<Switch checked={meetingDetectionEnabled} onCheckedChange={setMeetingDetectionEnabled} aria-label={m.meetingDetection()} />
 				</SettingsRow>
 				<MeetPermissionRow enabled={meetingDetectionEnabled} />
+				<TabAddressPermissionRow enabled={meetingDetectionEnabled} />
 			</SettingsGroup>
 
 			<SettingsGroup title={m.recordingControls()}>

@@ -197,6 +197,58 @@ pub fn open_screen_recording_settings() {
     }
 }
 
+/// Accessibility, on macOS, lets Tyto read the address of a browser tab: how Bitrix24 in a browser,
+/// Safari, and calls without Screen Recording are recognised.
+#[tauri::command]
+pub fn get_accessibility_permission_status() -> PermissionStatus {
+    #[cfg(target_os = "macos")]
+    {
+        if meeting_detect::accessibility_granted() {
+            PermissionStatus::Granted
+        } else {
+            PermissionStatus::NotDetermined
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        PermissionStatus::NotApplicable
+    }
+}
+
+/// Shows the macOS prompt that adds Tyto to the Accessibility list; the switch itself is in
+/// System Settings, so the answer stays "not granted" until the user turns it on there.
+#[tauri::command]
+pub async fn request_accessibility_permission() -> PermissionStatus {
+    #[cfg(target_os = "macos")]
+    {
+        if tokio::task::spawn_blocking(meeting_detect::request_accessibility)
+            .await
+            .unwrap_or(false)
+        {
+            PermissionStatus::Granted
+        } else {
+            PermissionStatus::Denied
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        PermissionStatus::NotApplicable
+    }
+}
+
+#[tauri::command]
+pub fn open_accessibility_settings() {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .spawn()
+            .ok();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
