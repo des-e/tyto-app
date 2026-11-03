@@ -92,7 +92,7 @@ export function recentsGroupLabel(key: RecentsGroupKey): string {
 }
 
 /** When, in the precision the group leaves open: the time today and yesterday, the weekday this week, the date before. */
-function whenLabel(date: Date, now: Date) {
+export function whenLabel(date: Date, now: Date) {
 	if (!hasDate(date)) return ''
 	const locale = getLocale()
 	const group = recentsGroupOf(date, now)

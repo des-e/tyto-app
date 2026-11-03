@@ -15,6 +15,17 @@ function withoutMediaExtension(name: string): string {
 	return mediaExtensions.has(extension) ? name.slice(0, dot) : name
 }
 
+/**
+ * A new recording's project name: «Запись 10∶35» (Tyto, design round C). The separator is U+2236
+ * RATIO, which looks like a colon but is allowed in folder names on Windows, so the name survives
+ * the round trip through the project folder unchanged.
+ */
+export function recordProjectName(date: Date, label: (time: string) => string): string {
+	const hours = String(date.getHours()).padStart(2, '0')
+	const minutes = String(date.getMinutes()).padStart(2, '0')
+	return label(`${hours}∶${minutes}`)
+}
+
 /** Build the default saved-project name. User-entered names never pass through this helper. */
 export function autoProjectName(name: string, source: ProjectSource = 'file'): string {
 	return `${sourcePrefixes[source]}${withoutMediaExtension(name)}`

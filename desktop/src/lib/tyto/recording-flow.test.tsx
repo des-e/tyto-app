@@ -211,7 +211,8 @@ describe('запись аудио через новый модуль', () => {
 		// hydrate puts the project into the session and selects it
 		expect(queue.hydrate).toHaveBeenCalledWith(
 			expect.objectContaining({ sourcePath: FILE, durationSeconds: 65, segments: [] }),
-			expect.stringMatching(/2026-10-31 14-05-33\/transcript\.vibe\.json$/),
+			// «Запись 14∶05»: the time it was saved, with U+2236 so the folder name keeps it.
+			expect.stringMatching(/\/Запись \d\d∶\d\d\/transcript\.vibe\.json$/),
 			FILE,
 			'record',
 		)

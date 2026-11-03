@@ -20,6 +20,11 @@ const cache = new Map<string, Promise<RecordMeta | null>>()
 
 let listening = false
 
+/** The cached meta of one saved record; null when it cannot be read yet. Shared with «Ждут расшифровки». */
+export function loadRecordMeta(path: string) {
+	return load(path)
+}
+
 function load(path: string) {
 	// Rows scrolled out of view are not listening; their entries are dropped here.
 	if (!listening && typeof window !== 'undefined') {

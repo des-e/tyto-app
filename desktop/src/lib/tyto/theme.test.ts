@@ -64,14 +64,14 @@ describe('tyto theme tokens', () => {
 	const light = tokens(css, ':root')
 	const dark = tokens(css, '.dark')
 
-	it('light theme: near-black on white', () => {
+	it('light theme: Geist ink on white', () => {
 		expect(light).toMatchObject({
 			background: '#ffffff',
-			foreground: '#0a0a0a',
+			foreground: '#171717',
 			sidebar: '#fafafa',
-			border: '#e5e5e5',
-			'sidebar-border': '#ededed',
-			'muted-foreground': '#6b6b6b',
+			border: '#eaeaea',
+			'sidebar-border': '#eaeaea',
+			'muted-foreground': '#666666',
 		})
 	})
 
@@ -84,14 +84,14 @@ describe('tyto theme tokens', () => {
 		}
 	})
 
-	it('dark theme: light grey on near-black', () => {
+	it('dark theme: Geist light grey on near-black', () => {
 		expect(dark).toMatchObject({
-			background: '#0b0b0c',
+			background: '#0a0a0a',
 			foreground: '#ededed',
-			sidebar: '#111113',
-			border: '#1f1f22',
-			input: '#2a2a2f',
-			'muted-foreground': '#84848c',
+			sidebar: '#111111',
+			border: '#262626',
+			input: '#2e2e2e',
+			'muted-foreground': '#a1a1a1',
 		})
 	})
 

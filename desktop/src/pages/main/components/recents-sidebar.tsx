@@ -24,7 +24,7 @@ import { getVersionNumber } from '~/lib/logs'
 import { FEATURES } from '~/lib/tyto/features'
 import { FinishBlinkWordmark } from '~/lib/tyto/wordmark'
 import { useMainAreaOffset } from '~/lib/tyto/main-area'
-import { groupRecents, recentMeta, recentsGroupLabel, useNow } from '~/lib/tyto/recents-groups'
+import { groupRecents, recentMeta, recentsGroupLabel, useNow, whenLabel } from '~/lib/tyto/recents-groups'
 import { useRecordMeta } from '~/lib/tyto/recents-duration'
 import { isInFolder, recordingsFolderFor } from '~/lib/tyto/media-path'
 import { TOGGLE_SIDEBAR_EVENT } from '~/components/layout'
@@ -45,8 +45,8 @@ const MAX_WIDTH = 380
  * the minimum that it can't happen by accident.
  */
 const CLOSE_EDGE = 56
-/** A recent row is two lines of text plus its padding; the virtualizer measures the real height after mount. */
-const ROW_HEIGHT = 52
+/** A recent row is one 32 px line plus its gap; the virtualizer measures the real height after mount. */
+const ROW_HEIGHT = 34
 /** A day label: 16 px above, 4 px below a 12 px line. */
 const LABEL_HEIGHT = 34
 const WIDTH_STORAGE_KEY = 'vibe_sidebar_width'
@@ -160,7 +160,9 @@ function RecentRow({
 }) {
 	const { queue } = useSession()
 	const { duration, untranscribed } = useRecordMeta(entry.path)
+	// One line: «не расшифровано» is a dot at the end, otherwise the date; the full line is the tooltip.
 	const meta = [recentMeta(entry.createdAt, now, duration), untranscribed ? m.tytoNotTranscribed() : ''].filter(Boolean).join(' · ')
+	const when = whenLabel(entry.createdAt, now)
 	const [menu, setMenu] = useState<RowMenuState>({ sourcePath: null, sourceExists: false })
 	const [renaming, setRenaming] = useState(false)
 	const [retranscribing, setRetranscribing] = useState(false)
@@ -272,9 +274,13 @@ function RecentRow({
 	return (
 		<div className={cn('tyto-recent group', active && 'tyto-recent-selected')}>
 			<RetranscribeDialog open={retranscribing} onOpenChange={setRetranscribing} name={entry.name} onConfirm={retranscribe} />
-			<button type="button" onClick={onOpen} disabled={disabled} title={entry.name} className="tyto-recent-main">
-				<p className="tyto-recent-title truncate">{entry.name}</p>
-				<p className="tyto-recent-meta truncate">{meta}</p>
+			<button type="button" onClick={onOpen} disabled={disabled} title={meta ? `${entry.name}\n${meta}` : entry.name} className="tyto-recent-main">
+				<span className="tyto-recent-title truncate">{entry.name}</span>
+				{untranscribed ? (
+					<span className="tyto-recent-dot" role="img" aria-label={m.tytoNotTranscribed()} />
+				) : (
+					when && <span className="tyto-recent-side group-hover:hidden group-focus-within:hidden">{when}</span>
+				)}
 			</button>
 
 			<DropdownMenu
@@ -321,7 +327,7 @@ function SessionRow({ job, active, onOpen }: { job: Job; active: boolean; onOpen
 
 	return (
 		<div className={cn('tyto-recent group', active && 'tyto-recent-selected')}>
-			<button type="button" onClick={onOpen} title={job.name} className="tyto-recent-main">
+			<button type="button" onClick={onOpen} title={job.name} className="tyto-recent-main tyto-recent-stack">
 				<p className="tyto-recent-title truncate">{job.name}</p>
 				{job.status === 'running' ? (
 					<div className="tyto-recent-run">
@@ -429,6 +435,8 @@ export default function RecentsSidebar() {
 	useMainAreaOffset(width)
 	const [entries, setEntries] = useState<TranscriptEntry[]>([])
 	const [query, setQuery] = useState('')
+	// Search hides behind an icon in the header; it stays open while it holds text.
+	const [searchOpen, setSearchOpen] = useState(false)
 
 	const refresh = useCallback(() => {
 		void listTranscripts(preference.projectsPath).then(setEntries)
@@ -492,33 +500,57 @@ export default function RecentsSidebar() {
 		<aside className="tyto-sidebar relative flex h-full shrink-0 flex-col border-r border-border" style={{ width, direction: getTextDirection() }}>
 			{/* Titlebar strip: hosts the toggle beside the macOS traffic lights (ChatGPT style). */}
 			<div data-tauri-drag-region className="h-14 shrink-0" />
-			{/* Codex-style: the wordmark gets its own row under the titlebar strip. */}
-			<div className="mt-0.5 mb-2 flex h-[26px] items-center px-4">
-				<FinishBlinkWordmark jobs={queue.jobs} className="h-[26px] w-auto shrink-0 select-none text-foreground" />
+			{/* The wordmark row, with search and «new» as quiet icons at its end (design round C). */}
+			<div className="mt-0.5 mb-2 flex h-8 items-center gap-0.5 ps-4 pe-2">
+				<FinishBlinkWordmark jobs={queue.jobs} className="h-[22px] w-auto shrink-0 select-none text-foreground" />
+				<span className="flex-1" />
+				{(entries.length > 0 || liveJobs.length > 0) && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								aria-label={m.searchRecents()}
+								aria-expanded={searchOpen || !!query}
+								onClick={() => setSearchOpen((open) => !open || !!query)}
+								className="tyto-icon-button">
+								<Search className="h-[15px] w-[15px]" strokeWidth={1.75} />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">{m.searchRecents()}</TooltipContent>
+					</Tooltip>
+				)}
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button type="button" aria-label={m.newTranscription()} onClick={startNew} className="tyto-icon-button">
+							<Plus className="h-4 w-4" strokeWidth={1.75} />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">{m.newTranscription()}</TooltipContent>
+				</Tooltip>
 			</div>
-			{/* Search on top (difference 5), whenever there is anything to search. */}
-			{(entries.length > 0 || liveJobs.length > 0) && (
+			{(searchOpen || query) && (entries.length > 0 || liveJobs.length > 0) && (
 				<div className="relative px-2 pb-2">
 					<Search className="pointer-events-none absolute start-4 top-4 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
 					<input
+						autoFocus
 						autoComplete="off"
 						autoCorrect="off"
 						autoCapitalize="none"
 						spellCheck={false}
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key !== 'Escape') return
+							setQuery('')
+							setSearchOpen(false)
+						}}
+						onBlur={() => !query && setSearchOpen(false)}
 						placeholder={m.searchRecents()}
 						aria-label={m.searchRecents()}
 						className="h-8 w-full rounded-[var(--tyto-r-sm)] border border-border bg-background ps-[29px] pe-2 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground"
 					/>
 				</div>
 			)}
-			<div className="px-2">
-				<Button variant="secondary" size="sm" onClick={startNew} className="w-full justify-start gap-2 px-2">
-					<Plus className="text-muted-foreground" />
-					{m.newTranscription()}
-				</Button>
-			</div>
 
 			{rows.length === 0 ? (
 				<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">

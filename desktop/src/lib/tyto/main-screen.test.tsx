@@ -236,31 +236,44 @@ describe('пустой экран', () => {
 	const props = () => ({
 		dragging: false,
 		collectingFolder: false,
+		firstRun: false,
 		panel: 'none' as const,
 		onBrowse: vi.fn(),
 		onSelectPanel: vi.fn(),
+		recordCard: <section>карточка записи</section>,
 		options: null,
 	})
 
-	it('три подписанные кнопки и строка «Файлы не покидают компьютер»', () => {
+	it('записи есть: «Звонок станет текстом», три метки, карточка записи и карточка файла', () => {
 		const p = props()
-		render(<EmptyScreen {...p} />)
-		expect(screen.getByRole('heading', { name: 'Перетащите запись встречи' })).toBeTruthy()
+		render(<EmptyScreen {...p} waiting={<p>ждут расшифровки</p>} />)
+		expect(screen.getByRole('heading', { name: 'Звонок станет текстом' })).toBeTruthy()
+		expect(screen.getByText('Без интернета')).toBeTruthy()
+		expect(screen.getByText('Кто что сказал')).toBeTruthy()
+		expect(screen.getByText('карточка записи')).toBeTruthy()
+		expect(screen.getByText('ждут расшифровки')).toBeTruthy()
+		expect(screen.queryByText('Добро пожаловать в Tyto')).toBeNull()
 		fireEvent.click(screen.getByRole('button', { name: 'Выбрать файл' }))
-		fireEvent.click(screen.getByRole('button', { name: 'Записать' }))
 		fireEvent.click(screen.getByRole('button', { name: 'По ссылке' }))
 		expect(p.onBrowse).toHaveBeenCalledTimes(1)
-		expect(p.onSelectPanel.mock.calls).toEqual([['record'], ['link']])
-		expect(screen.getByText('Файлы не покидают компьютер')).toBeTruthy()
+		expect(p.onSelectPanel.mock.calls).toEqual([['link']])
 		expect(screen.getByText('Язык встречи:')).toBeTruthy()
 	})
 
-	it('повторное нажатие активного источника возвращает к файлу', () => {
-		const p = { ...props(), panel: 'record' as const }
-		render(<EmptyScreen {...p} panelContent={<p>панель записи</p>} />)
-		expect(screen.getByRole('button', { name: 'Записать' }).getAttribute('aria-pressed')).toBe('true')
-		expect(screen.getByText('панель записи')).toBeTruthy()
-		fireEvent.click(screen.getByRole('button', { name: 'Записать' }))
+	it('первый запуск: приветствие и три шага вместо меток', () => {
+		render(<EmptyScreen {...props()} firstRun />)
+		expect(screen.getByRole('heading', { name: 'Добро пожаловать в Tyto' })).toBeTruthy()
+		expect(screen.getByText('Запишите звонок')).toBeTruthy()
+		expect(screen.getByText('пока вы заняты другим')).toBeTruthy()
+		expect(screen.queryByText('Без интернета')).toBeNull()
+	})
+
+	it('«По ссылке» открывает панель ссылки, повторное нажатие закрывает', () => {
+		const p = { ...props(), panel: 'link' as const }
+		render(<EmptyScreen {...p} linkContent={<p>панель ссылки</p>} />)
+		expect(screen.getByRole('button', { name: 'По ссылке' }).getAttribute('aria-expanded')).toBe('true')
+		expect(screen.getByText('панель ссылки')).toBeTruthy()
+		fireEvent.click(screen.getByRole('button', { name: 'По ссылке' }))
 		expect(p.onSelectPanel).toHaveBeenCalledWith('none')
 	})
 

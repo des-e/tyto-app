@@ -8,28 +8,36 @@
  * The single accent IS the foreground colour: black in light, white in dark. No blue anywhere.
  * Both blocks below must override exactly the same tokens (theme.test.ts checks it): the light block
  * comes after upstream's `.dark`, so a token set only here would leak into the dark theme.
+ *
+ * Type and greys follow Geist (vercel.com/geist, 2026-11-03 design round): Geist Sans and Mono
+ * (SIL OFL 1.1, Cyrillic included), a 10-step grey scale with #171717 ink and #eaeaea hairlines.
  */
+
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
 
 :root {
 	--radius: 0.5rem;
+	--font-sans: 'Geist Variable', 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+	--font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
 	--background: #ffffff;
-	--foreground: #0a0a0a;
+	--foreground: #171717;
 	--card: #ffffff;
-	--card-foreground: #0a0a0a;
+	--card-foreground: #171717;
 	--popover: #ffffff;
-	--popover-foreground: #0a0a0a;
-	--primary: #0a0a0a;
+	--popover-foreground: #171717;
+	--primary: #171717;
 	--primary-foreground: #ffffff;
-	--secondary: #f5f5f5;
-	--secondary-foreground: #0a0a0a;
-	--muted: #f5f5f5;
-	--muted-foreground: #6b6b6b;
-	--accent: #f5f5f5;
-	--accent-foreground: #0a0a0a;
-	--border: #e5e5e5;
-	--input: #e5e5e5;
-	--ring: rgb(10 10 10 / 0.35);
+	--secondary: #f2f2f2;
+	--secondary-foreground: #171717;
+	--muted: #f2f2f2;
+	--muted-foreground: #666666;
+	--accent: #f2f2f2;
+	--accent-foreground: #171717;
+	--border: #eaeaea;
+	--input: #e1e1e1;
+	--ring: rgb(23 23 23 / 0.35);
 
 	--aurora-1: #0a0a0a;
 	--aurora-2: #525252;
@@ -38,13 +46,13 @@
 	--chart-5: #737373;
 
 	--sidebar: #fafafa;
-	--sidebar-foreground: #0a0a0a;
-	--sidebar-primary: #0a0a0a;
+	--sidebar-foreground: #171717;
+	--sidebar-primary: #171717;
 	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: #f0f0f0;
-	--sidebar-accent-foreground: #0a0a0a;
-	--sidebar-border: #ededed;
-	--sidebar-ring: rgb(10 10 10 / 0.35);
+	--sidebar-accent: #ebebeb;
+	--sidebar-accent-foreground: #171717;
+	--sidebar-border: #eaeaea;
+	--sidebar-ring: rgb(23 23 23 / 0.35);
 
 	--shadow-2xs: none;
 	--shadow-xs: none;
@@ -68,23 +76,25 @@
 
 .dark {
 	--radius: 0.5rem;
+	--font-sans: 'Geist Variable', 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+	--font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-	--background: #0b0b0c;
+	--background: #0a0a0a;
 	--foreground: #ededed;
-	--card: #111113;
+	--card: #111111;
 	--card-foreground: #ededed;
-	--popover: #141416;
+	--popover: #161616;
 	--popover-foreground: #ededed;
 	--primary: #ededed;
-	--primary-foreground: #0b0b0c;
-	--secondary: #17171a;
+	--primary-foreground: #0a0a0a;
+	--secondary: #1a1a1a;
 	--secondary-foreground: #ededed;
-	--muted: #17171a;
-	--muted-foreground: #84848c;
-	--accent: #1c1c20;
+	--muted: #1a1a1a;
+	--muted-foreground: #a1a1a1;
+	--accent: #1f1f1f;
 	--accent-foreground: #ededed;
-	--border: #1f1f22;
-	--input: #2a2a2f;
+	--border: #262626;
+	--input: #2e2e2e;
 	--ring: rgb(237 237 237 / 0.4);
 
 	--aurora-1: #ededed;
@@ -93,13 +103,13 @@
 	--aurora-4: #3f3f46;
 	--chart-5: #8a8a90;
 
-	--sidebar: #111113;
+	--sidebar: #111111;
 	--sidebar-foreground: #ededed;
 	--sidebar-primary: #ededed;
-	--sidebar-primary-foreground: #0b0b0c;
-	--sidebar-accent: #1c1c20;
+	--sidebar-primary-foreground: #0a0a0a;
+	--sidebar-accent: #222222;
 	--sidebar-accent-foreground: #ededed;
-	--sidebar-border: #1f1f22;
+	--sidebar-border: #262626;
 	--sidebar-ring: rgb(237 237 237 / 0.4);
 
 	--shadow-2xs: none;
@@ -157,7 +167,17 @@ html:not(.mac-vibrancy) .tyto-sidebar {
 	background-color: var(--tyto-selected-tint);
 }
 
-/* Inter everywhere; numbers that must line up (timestamps, player times, percentages) are tabular Inter. */
+/* Geist everywhere, over upstream's Inter; numbers that must line up are tabular Geist. */
+html,
+body,
+.font-sans {
+	font-family: var(--font-sans);
+}
+
+.font-mono {
+	font-family: var(--font-mono);
+}
+
 .tabular-nums,
 .font-mono.tabular-nums {
 	font-family: var(--font-sans);
@@ -1058,8 +1078,242 @@ svg.lucide {
 	transition: opacity 200ms var(--tyto-ease);
 }
 
-.tyto-empty[data-dragging='true'] .tyto-empty-drop {
+.tyto-empty[data-dragging='true'] .tyto-empty-drop,
+.tyto-home[data-dragging='true'] .tyto-empty-drop {
 	opacity: 1;
+}
+
+/*
+ * Main screen, design round C (lib/tyto/empty-screen.tsx): owl and greeting centred over two cards
+ * and «Ждут расшифровки». Geist greys: #eaeaea hairlines, dashed #c9c9c9 for the drop card.
+ */
+.tyto-home {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+	padding: var(--tyto-sp-48) var(--tyto-sp-48) var(--tyto-sp-32);
+	overflow-y: auto;
+}
+
+.tyto-home-inner {
+	position: relative;
+	width: 100%;
+	max-width: 680px;
+	margin: auto;
+	display: flex;
+	flex-direction: column;
+}
+
+.tyto-home-head {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+
+.tyto-home-owl {
+	width: 30px;
+	height: 41px;
+	color: var(--foreground);
+}
+
+.tyto-home-title {
+	margin: var(--tyto-sp-16) 0 0;
+	font-size: 22px;
+	line-height: 1.25;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	color: var(--foreground);
+}
+
+.tyto-home-lead {
+	margin: 6px 0 0;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--muted-foreground);
+}
+
+.tyto-home-labels {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--tyto-sp-8) 22px;
+	margin: 14px 0 0;
+	padding: 0;
+	list-style: none;
+	font-size: 13px;
+	color: var(--muted-foreground);
+}
+
+.tyto-home-labels li {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.tyto-home-labels svg {
+	width: 14px;
+	height: 14px;
+	color: var(--foreground);
+}
+
+.tyto-home-steps {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--tyto-sp-16);
+	margin: 28px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tyto-home-step {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	font-size: 13.5px;
+	line-height: 1.45;
+}
+
+.tyto-home-step-index {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border: 1px solid var(--tyto-line2);
+	border-radius: 11px;
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.tyto-home-step-title {
+	display: block;
+	font-weight: 500;
+	color: var(--foreground);
+}
+
+.tyto-home-step-body {
+	display: block;
+	color: var(--muted-foreground);
+}
+
+.tyto-home-cards {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--tyto-sp-16);
+	margin-top: 28px;
+}
+
+@media (max-width: 760px) {
+	.tyto-home-cards,
+	.tyto-home-steps {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.tyto-home-card {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: var(--tyto-sp-20, 20px);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--background);
+}
+
+.tyto-home-card-drop {
+	border-style: dashed;
+	border-color: var(--tyto-line2);
+	background: var(--sidebar);
+}
+
+.tyto-home-card-title {
+	margin: 0;
+	font-size: 16px;
+	line-height: 1.3;
+	font-weight: 600;
+	color: var(--foreground);
+}
+
+.tyto-home-card-lead {
+	margin: 4px 0 0;
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--muted-foreground);
+}
+
+.tyto-link-button {
+	color: var(--foreground);
+	text-decoration: underline;
+	text-decoration-color: var(--tyto-line2);
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+
+.tyto-link-button:hover,
+.tyto-link-button[aria-expanded='true'] {
+	text-decoration-color: currentColor;
+}
+
+.tyto-home-switch-row {
+	display: flex;
+	align-items: center;
+	gap: var(--tyto-sp-12);
+	padding: 10px 0;
+	border-top: 1px solid var(--border);
+	border-bottom: 1px solid var(--border);
+	cursor: pointer;
+}
+
+/* The red recording dot on «Начать запись»; the only colour on the screen. */
+.tyto-rec-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 4px;
+	background: #ff5b4f;
+}
+
+.tyto-home-panel {
+	margin-top: var(--tyto-sp-16);
+	padding: var(--tyto-sp-16) var(--tyto-sp-20, 20px);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+}
+
+.tyto-home .tyto-empty-options {
+	justify-content: flex-start;
+	margin-top: var(--tyto-sp-16);
+	padding: 0 4px;
+}
+
+.tyto-home-waiting {
+	margin-top: var(--tyto-sp-24);
+}
+
+.tyto-home-waiting-title {
+	margin: 0;
+	padding: 0 4px var(--tyto-sp-8);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--muted-foreground);
+}
+
+.tyto-home-waiting ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	border-top: 1px solid var(--border);
+}
+
+.tyto-home-waiting-row {
+	display: flex;
+	align-items: center;
+	gap: var(--tyto-sp-12);
+	min-height: 46px;
+	padding: 0 4px;
+	border-bottom: 1px solid var(--border);
 }
 
 .tyto-empty-owl {
@@ -1208,30 +1462,79 @@ svg.lucide {
 	color: var(--muted-foreground);
 }
 
-/* Selected: a white row with a 2 px rule at its start, instead of Vibe's ink plate. */
+/* Selected: a quiet grey fill, the same as hover but held (design round C, 2026-11-03). */
 .tyto-recent-selected,
 .tyto-recent-selected:hover {
-	background-color: var(--background);
-	box-shadow: 0 0 0 1px var(--border);
+	background-color: var(--sidebar-accent);
 }
 
-.tyto-recent-selected::before {
-	content: '';
-	position: absolute;
-	inset-inline-start: 0;
-	top: var(--tyto-sp-8);
-	bottom: var(--tyto-sp-8);
-	width: 2px;
-	border-radius: 2px;
-	background: var(--foreground);
-}
-
+/* One line: the title, then the date or a dot for «не расшифровано» at the end. */
 .tyto-recent-main {
 	min-width: 0;
 	flex: 1;
-	padding: var(--tyto-sp-8);
+	display: flex;
+	align-items: center;
+	gap: var(--tyto-sp-8);
+	min-height: 32px;
+	padding: 0 var(--tyto-sp-8);
 	text-align: start;
 	cursor: pointer;
+}
+
+.tyto-recent-main > .tyto-recent-title {
+	min-width: 0;
+	flex: 1;
+}
+
+.tyto-recent-side {
+	flex-shrink: 0;
+	font-size: 12px;
+	line-height: 16px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.tyto-recent-dot {
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	border-radius: 3px;
+	background: var(--tyto-track);
+}
+
+/* Quiet 28 px icon buttons (sidebar header: search, new). */
+.tyto-icon-button {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	flex-shrink: 0;
+	border-radius: var(--tyto-r-sm);
+	color: var(--muted-foreground);
+	cursor: pointer;
+	transition:
+		background-color 150ms var(--tyto-ease),
+		color 150ms var(--tyto-ease);
+}
+
+.tyto-icon-button:hover,
+.tyto-icon-button[aria-expanded='true'] {
+	background-color: var(--sidebar-accent);
+	color: var(--foreground);
+}
+
+.tyto-icon-button:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: -2px;
+}
+
+/* A running job keeps two lines: the title above its progress. */
+.tyto-recent-main.tyto-recent-stack {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0;
+	padding: 7px var(--tyto-sp-8);
 }
 
 .tyto-recent-main:disabled {
@@ -1251,7 +1554,7 @@ svg.lucide {
 }
 
 .tyto-recent-selected .tyto-recent-title {
-	font-weight: 600;
+	font-weight: 500;
 }
 
 .tyto-recent-meta {

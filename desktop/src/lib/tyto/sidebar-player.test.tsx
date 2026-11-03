@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -113,22 +113,25 @@ describe('боковая панель (отличие 5)', () => {
 		expect(order).toEqual(['Сегодня', 'Созвон с бухгалтерией', 'Планерка отдела продаж', LONG_NAME, 'Вчера', 'Интервью: логист на склад'])
 	})
 
-	it('под названием мета «10:02 · 48 мин»', async () => {
+	it('одна строка: название и время, полная мета «10:02 · 48 мин» в подсказке', async () => {
 		renderSidebar()
-		expect(await screen.findByText('10:02 · 48 мин')).toBeTruthy()
+		await screen.findByText('Планерка отдела продаж')
+		const plan = rowOf('Планерка отдела продаж')
+		expect(within(plan).getByText('10:02')).toBeTruthy()
+		await waitFor(() => expect(plan.querySelector('button')?.getAttribute('title')).toBe('Планерка отдела продаж\n10:02 · 48 мин'))
 		// Without a readable record the row still shows its time.
 		expect(within(rowOf('Интервью: логист на склад')).getByText('17:40')).toBeTruthy()
 	})
 
-	it('выбранная запись отмечена чертой слева, а не черной плашкой', async () => {
+	it('выбранная запись отмечена серым фоном, без черты и черной плашки', async () => {
 		renderSidebar()
 		await screen.findByText('Планерка отдела продаж')
 		const selected = rowOf('Планерка отдела продаж')
 		expect(selected.classList.contains('tyto-recent-selected')).toBe(true)
 		expect(selected.classList.contains('tyto-selected')).toBe(false)
 		expect(rowOf('Интервью: логист на склад').classList.contains('tyto-recent-selected')).toBe(false)
-		expect(css).toMatch(/\.tyto-recent-selected::before\s*\{[^}]*width: 2px[^}]*background: var\(--foreground\)/)
-		expect(css).toMatch(/\.tyto-recent-selected[^{]*\{[^}]*background(?:-color)?: var\(--background\)/)
+		expect(css).not.toMatch(/\.tyto-recent-selected::before/)
+		expect(css).toMatch(/\.tyto-recent-selected[^{]*\{[^}]*background(?:-color)?: var\(--sidebar-accent\)/)
 	})
 
 	it('идущая расшифровка показывает мини-полосу прогресса', async () => {
@@ -143,12 +146,14 @@ describe('боковая панель (отличие 5)', () => {
 		renderSidebar()
 		const title = await screen.findByText(LONG_NAME)
 		expect(title.className).toContain('truncate')
-		expect(title.closest('[title]')?.getAttribute('title')).toBe(LONG_NAME)
+		expect(title.closest('[title]')?.getAttribute('title')?.startsWith(LONG_NAME)).toBe(true)
 	})
 
-	it('поиск сверху фильтрует по названию', async () => {
+	it('поиск за значком в шапке фильтрует по названию', async () => {
 		renderSidebar()
 		await screen.findByText('Планерка отдела продаж')
+		expect(screen.queryByPlaceholderText('Поиск')).toBeNull()
+		fireEvent.click(screen.getByRole('button', { name: 'Поиск' }))
 		fireEvent.change(screen.getByPlaceholderText('Поиск'), { target: { value: 'логист' } })
 		expect(screen.queryByText('Планерка отдела продаж')).toBeNull()
 		expect(screen.queryByText('Созвон с бухгалтерией')).toBeNull()
@@ -297,10 +302,11 @@ describe('боковая панель: пока идет расшифровка 
 
 	it('длительность перечитывается, когда хранилище сообщает об изменении', async () => {
 		renderSidebar()
-		expect(await screen.findByText('09:15 · 22 мин')).toBeTruthy()
+		const button = () => rowOf(LONG_NAME).querySelector('button')
+		await waitFor(() => expect(button()?.getAttribute('title')).toContain('09:15 · 22 мин'))
 		store.durations['/p/long/transcript.vibe.json'] = 31 * 60
 		window.dispatchEvent(new CustomEvent('transcripts-changed'))
-		expect(await screen.findByText('09:15 · 31 мин')).toBeTruthy()
+		await waitFor(() => expect(button()?.getAttribute('title')).toContain('09:15 · 31 мин'))
 	})
 })
 

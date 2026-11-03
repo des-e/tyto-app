@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const backend = vi.hoisted(() => ({
@@ -43,7 +43,7 @@ vi.mock('~/pages/main/components/quiet-row', () => ({ default: () => null }))
 vi.mock('~/lib/tyto/empty-screen', () => ({ EmptyScreen: () => null }))
 vi.mock('~/lib/ytdlp', () => ({ parseMediaLinks: () => [] }))
 
-import { RecordPanel } from '~/pages/main/components/idle-hero'
+import { RecordCard } from '~/pages/main/components/idle-hero'
 import { useRecording } from '~/pages/home/hooks/use-recording'
 import { createRecordingHandlers } from '~/mock-tauri/handlers/recording'
 import { setLocale } from '~/paraglide/runtime.js'
@@ -55,7 +55,7 @@ const monitor = (id: string, width: number, height: number, primary = false) => 
 
 function Harness() {
 	h.recording = useRecording(() => {})
-	return <RecordPanel />
+	return <RecordCard />
 }
 
 function renderPanel() {
@@ -87,29 +87,39 @@ beforeEach(() => {
 afterEach(cleanup)
 
 async function ready() {
-	const audio = await screen.findByRole('button', { name: /Запись аудио/ })
-	await waitFor(() => expect((audio as HTMLButtonElement).disabled).toBe(false))
-	return audio
+	const start = await screen.findByRole('button', { name: /Начать запись/ })
+	await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false))
+	return start
 }
 
-describe('кнопки записи на главном экране', () => {
-	it('две кнопки: «Запись аудио» и «Запись видео»', async () => {
+/** «Записывать экран» on, then «Начать запись» opens «Что записывать». */
+async function openPicker() {
+	const start = await ready()
+	fireEvent.click(await screen.findByRole('switch', { name: 'Записывать экран' }))
+	fireEvent.click(start)
+	return within(await screen.findByRole('dialog'))
+}
+
+describe('карточка «Записать звонок» на главном экране', () => {
+	it('«Начать запись» и тумблер «Записывать экран»', async () => {
 		renderPanel()
 		await ready()
-		await waitFor(() => expect(screen.getByRole('button', { name: /Запись видео/ })).toBeTruthy())
+		expect(await screen.findByRole('switch', { name: 'Записывать экран' })).toBeTruthy()
+		expect(screen.getByText(/Микрофон и звук собеседников/)).toBeTruthy()
 	})
 
-	it('video: false → кнопки «Запись видео» нет, «Запись аудио» работает', async () => {
+	it('video: false → тумблера нет, «Начать запись» пишет звук', async () => {
 		backend.handlers.screen_capture_support = () => ({ video: false, pillExcluded: false })
 		renderPanel()
-		const audio = await ready()
+		const start = await ready()
 		await waitFor(() => expect(backend.calls.some((call) => call.cmd === 'screen_capture_support')).toBe(true))
-		expect(screen.queryByRole('button', { name: /Запись видео/ })).toBeNull()
-		fireEvent.click(audio)
+		expect(screen.queryByRole('switch', { name: 'Записывать экран' })).toBeNull()
+		fireEvent.click(start)
 		await waitFor(() => expect(startCall()).toBeTruthy())
+		expect(startCall()?.args).toMatchObject({ options: { mode: 'audio', target: null } })
 	})
 
-	it('«Запись аудио» сразу вызывает recording_start с mode audio и без target', async () => {
+	it('тумблер выключен: «Начать запись» сразу вызывает recording_start с mode audio и без target', async () => {
 		renderPanel()
 		fireEvent.click(await ready())
 		await waitFor(() => expect(startCall()).toBeTruthy())
@@ -119,14 +129,20 @@ describe('кнопки записи на главном экране', () => {
 		expect(screen.queryByText('Что записывать')).toBeNull()
 	})
 
-	it('«Запись видео» открывает «Что записывать»; один монитор: выбор экрана не показан, target = этот монитор', async () => {
-		backend.handlers.list_capture_targets = () => ({ monitors: [monitor('only', 1920, 1080, true)], windows: [] })
+	it('«Устройства» раскрывают выбор микрофона и звука', async () => {
 		renderPanel()
 		await ready()
-		fireEvent.click(await screen.findByRole('button', { name: /Запись видео/ }))
-		expect(await screen.findByText('Что записывать')).toBeTruthy()
-		expect(screen.queryByText(/Экран 1/)).toBeNull()
-		const start = screen.getByRole('button', { name: 'Начать запись' }) as HTMLButtonElement
+		fireEvent.click(screen.getByRole('button', { name: 'Устройства' }))
+		expect(screen.getByRole('button', { name: 'Устройства' }).getAttribute('aria-expanded')).toBe('true')
+	})
+
+	it('тумблер включен: открывается «Что записывать»; один монитор → target = этот монитор', async () => {
+		backend.handlers.list_capture_targets = () => ({ monitors: [monitor('only', 1920, 1080, true)], windows: [] })
+		renderPanel()
+		const dialog = await openPicker()
+		expect(dialog.getByText('Что записывать')).toBeTruthy()
+		expect(dialog.queryByText(/Экран 1/)).toBeNull()
+		const start = dialog.getByRole('button', { name: 'Начать запись' }) as HTMLButtonElement
 		await waitFor(() => expect(start.disabled).toBe(false))
 		fireEvent.click(start)
 		await waitFor(() => expect(startCall()).toBeTruthy())
@@ -136,10 +152,9 @@ describe('кнопки записи на главном экране', () => {
 	it('два монитора: «Начать запись» → recording_start { mode: video, target: { kind: monitor, id }, quality }', async () => {
 		h.pref.screenQuality = 'high'
 		renderPanel()
-		await ready()
-		fireEvent.click(await screen.findByRole('button', { name: /Запись видео/ }))
-		fireEvent.click(await screen.findByRole('radio', { name: 'Экран 2, 2560×1440' }))
-		fireEvent.click(screen.getByRole('button', { name: 'Начать запись' }))
+		const dialog = await openPicker()
+		fireEvent.click(await dialog.findByRole('radio', { name: 'Экран 2, 2560×1440' }))
+		fireEvent.click(dialog.getByRole('button', { name: 'Начать запись' }))
 		await waitFor(() => expect(startCall()).toBeTruthy())
 		expect(startCall()?.args).toEqual({
 			options: { mode: 'video', target: { kind: 'monitor', id: 'm2' }, devices: [mic, speakers], recordingsDir: RECORDINGS, quality: 'high', name: null },
@@ -148,11 +163,10 @@ describe('кнопки записи на главном экране', () => {
 
 	it('«Одно окно»: выбор окна → target { kind: window, id }', async () => {
 		renderPanel()
-		await ready()
-		fireEvent.click(await screen.findByRole('button', { name: /Запись видео/ }))
-		fireEvent.click(await screen.findByRole('radio', { name: 'Одно окно' }))
-		fireEvent.click(screen.getByRole('radio', { name: /Созвон с командой/ }))
-		fireEvent.click(screen.getByRole('button', { name: 'Начать запись' }))
+		const dialog = await openPicker()
+		fireEvent.click(await dialog.findByRole('radio', { name: 'Одно окно' }))
+		fireEvent.click(dialog.getByRole('radio', { name: /Созвон с командой/ }))
+		fireEvent.click(dialog.getByRole('button', { name: 'Начать запись' }))
 		await waitFor(() => expect(startCall()).toBeTruthy())
 		expect(startCall()?.args).toMatchObject({ options: { mode: 'video', target: { kind: 'window', id: 'w1' } } })
 	})

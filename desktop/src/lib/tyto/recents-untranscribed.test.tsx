@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null), convertFileSrc: (path: string) => `asset://${path}` }))
@@ -100,10 +100,13 @@ async function deleteRow(name: string) {
 }
 
 describe('записи без расшифровки и удаление с файлом', () => {
-	it('проект без реплик: строка показывает «Не расшифровано» и длительность из durationSeconds', async () => {
+	it('проект без реплик: точка «Не расшифровано» в строке, длительность из durationSeconds в подсказке', async () => {
 		renderSidebar()
-		expect(await screen.findByText('10:02 · 48 мин · Не расшифровано')).toBeTruthy()
-		expect(await screen.findByText('09:15 · 22 мин')).toBeTruthy()
+		expect(await screen.findByRole('img', { name: 'Не расшифровано' })).toBeTruthy()
+		const title = (name: string) => rowOf(name).querySelector('button')?.getAttribute('title')
+		await waitFor(() => expect(title('Запись экрана')).toBe('Запись экрана\n10:02 · 48 мин · Не расшифровано'))
+		await waitFor(() => expect(title('Созвон с подрядчиком')).toBe('Созвон с подрядчиком\n09:15 · 22 мин'))
+		expect(within(rowOf('Созвон с подрядчиком')).getByText('09:15')).toBeTruthy()
 	})
 
 	it('удаление записи из Записи/ спрашивает про файл: «Удалить с файлом» → deleteMedia: true', async () => {

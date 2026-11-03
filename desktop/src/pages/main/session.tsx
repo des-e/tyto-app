@@ -9,7 +9,7 @@ import { m } from '~/paraglide/messages.js'
 import * as config from '~/lib/config'
 import { pathToNamedPath } from '~/lib/fs'
 import { cleanupPartialDownloads, listInstalledModels, type InstalledModel } from '~/lib/model'
-import { autoProjectName } from '~/lib/project-name'
+import { recordProjectName } from '~/lib/project-name'
 import { findProjectBySource, notifyTranscriptsChanged, saveTranscript, TRANSCRIPT_VERSION, type TranscriptRecord } from '~/lib/transcripts-store'
 import { onRecordingFailed, onRecordingFinished, onRecordingState, WARNING_DEVICE_LOST, WARNING_VIDEO_FAILED, WARNING_WRITE_FAILED } from '~/lib/tyto/screen-recording'
 import { useRecordingRecovery } from '~/lib/tyto/recording-recovery'
@@ -181,8 +181,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			else if (payload.warning === WARNING_VIDEO_FAILED) toast.warning(m.tytoRecordingVideoFailed(), { position: 'bottom-center' })
 			else if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
 
-			const name = autoProjectName(payload.name, 'record')
 			const createdAt = new Date()
+			// «Запись 10∶35»: the time is the name a person looks for in the list.
+			const name = recordProjectName(createdAt, (time) => m.tytoRecordName({ time }))
 			const saved = await saveTranscript({
 				name,
 				sourcePath: payload.path,
@@ -247,8 +248,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			if (payload.warning) toast.warning(m.recordingRecoveredWarning(), { description: payload.warning, position: 'bottom-center' })
 
 			const { preference: current, hydrate, transcribeJob } = recordingCompletionRef.current
-			const name = autoProjectName(payload.name, 'record')
 			const createdAt = new Date()
+			// «Запись 10∶35»: the time is the name a person looks for in the list.
+			const name = recordProjectName(createdAt, (time) => m.tytoRecordName({ time }))
 			const saved = await saveTranscript({
 				name,
 				sourcePath: payload.path,

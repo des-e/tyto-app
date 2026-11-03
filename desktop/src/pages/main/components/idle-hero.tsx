@@ -1,16 +1,20 @@
 import { listen } from '@tauri-apps/api/event'
+import * as fs from '@tauri-apps/plugin-fs'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Link2, Mic, Pause, Play, Plus, Square, Video, X } from 'lucide-react'
+import { Link2, Pause, Play, Plus, Square, X } from 'lucide-react'
 import { siFacebook, siInstagram, siTiktok, siX, siYoutube } from 'simple-icons'
 import { useEffect, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
 import AudioDeviceInput from '~/components/audio-device-input'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { Switch } from '~/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
 import { cn } from '~/lib/style'
+import { listTranscripts, readTranscript, resolveProjectAudio, TRANSCRIPTS_CHANGED_EVENT, type TranscriptEntry } from '~/lib/transcripts-store'
 import { CaptureTargetDialog } from '~/lib/tyto/capture-target-dialog'
 import { EmptyScreen } from '~/lib/tyto/empty-screen'
+import { loadRecordMeta } from '~/lib/tyto/recents-duration'
 import { ensureScreenRecordingPermission } from '~/lib/tyto/screen-permission'
 import { getCaptureSupport } from '~/lib/tyto/screen-recording'
 import { parseMediaLinks } from '~/lib/ytdlp'
@@ -83,10 +87,17 @@ function LevelMeter() {
 	)
 }
 
-export function RecordPanel() {
+/**
+ * «Записать звонок» (design round C): one card with the sources line, «Записывать экран» as a switch
+ * and «Начать запись». The devices fold away under «Устройства». While recording, the same card
+ * shows the meter, the clock, pause and stop.
+ */
+export function RecordCard() {
 	const { recording, recordElapsed, preference } = useSession()
 	const [videoSupported, setVideoSupported] = useState(false)
 	const [pickingTarget, setPickingTarget] = useState(false)
+	const [withScreen, setWithScreen] = useState(false)
+	const [devicesOpen, setDevicesOpen] = useState(false)
 
 	useEffect(() => {
 		// The recording hook loads audio devices for this tab only.
@@ -94,71 +105,86 @@ export function RecordPanel() {
 	}, [])
 
 	useEffect(() => {
-		// Builds without video capture show no video button.
+		// Builds without video capture show no screen switch.
 		getCaptureSupport()
 			.then((support) => setVideoSupported(support.video))
 			.catch((error) => console.error('getCaptureSupport error: ', error))
 	}, [])
 
-	if (recording.isRecording) {
-		return (
-			<div className="flex flex-col items-center gap-4 py-2.5">
-				<div className="flex items-center gap-3">
-					<LevelMeter />
-					<span className="font-mono text-2xl tracking-tight tabular-nums">{formatElapsed(recordElapsed)}</span>
-				</div>
-				<div className="flex w-full gap-2">
-					<Button
-						variant="secondary"
-						disabled={recording.isFinishing}
-						onClick={() => (recording.isPaused ? recording.resumeRecord() : recording.pauseRecord())}
-						className="h-10 flex-1">
-						{recording.isPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
-						{recording.isPaused ? m.tytoRecordingResume() : m.tytoRecordingPause()}
-					</Button>
-					<Button disabled={recording.isFinishing} onClick={() => recording.stopRecord()} className="h-10 flex-1">
-						<Square className="h-3.5 w-3.5 fill-current" />
-						{recording.isFinishing ? m.tytoRecordingSaving() : m.stopRecording()}
-					</Button>
-				</div>
-			</div>
-		)
+	const cannotStart = !preference.modelPath || (!recording.inputDevice && !recording.outputDevice)
+
+	function start() {
+		// On a Mac the list of screens and windows needs Screen Recording first.
+		if (videoSupported && withScreen) void ensureScreenRecordingPermission().then((ok) => ok && setPickingTarget(true))
+		else void recording.startRecord('audio')
 	}
 
 	return (
-		// Device labels become eyebrows and the triggers drop to h-10 so the panel stays a compact
-		// tool row instead of a form. Restyled from here to keep AudioDeviceInput's API untouched.
-		<div
-			className={cn(
-				'flex w-full flex-col gap-5 py-2.5',
-				// The .tyto-eyebrow look (12 px, 500, muted, normal case) on labels this file does not own.
-				'[&_label]:text-[12px] [&_label]:font-medium [&_label]:tracking-normal [&_label]:text-muted-foreground',
-			)}>
-			<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>div]:space-y-1.5 [&_button]:h-10 [&_button]:rounded-[var(--tyto-r-md)]">
-				<AudioDeviceInput type="input" devices={recording.devices} device={recording.inputDevice} setDevice={recording.setInputDevice} />
-				<AudioDeviceInput type="output" devices={recording.devices} device={recording.outputDevice} setDevice={recording.setOutputDevice} />
-			</div>
-			{/* Two ways to start: audio right away, video after choosing what to capture. */}
-			<div className="flex w-full gap-2">
-				<Button
-					onClick={() => void recording.startRecord('audio')}
-					disabled={!preference.modelPath || (!recording.inputDevice && !recording.outputDevice)}
-					className="h-10 flex-1">
-					<Mic className="h-4 w-4" />
-					{m.tytoRecordAudio()}
-				</Button>
-				{videoSupported && (
-					<Button
-						variant="secondary"
-						// On a Mac the list of screens and windows needs Screen Recording first.
-						onClick={() => void ensureScreenRecordingPermission().then((ok) => ok && setPickingTarget(true))}
-						disabled={!preference.modelPath || (!recording.inputDevice && !recording.outputDevice)}
-						className="h-10 flex-1">
-						<Video className="h-4 w-4" />
-						{m.tytoRecordVideo()}
-					</Button>
+		<section className="tyto-home-card" aria-labelledby="tyto-record-card-title">
+			<div>
+				<h2 id="tyto-record-card-title" className="tyto-home-card-title">
+					{m.tytoRecordCardTitle()}
+				</h2>
+				{!recording.isRecording && (
+					<p className="tyto-home-card-lead">
+						{m.tytoRecordCardSources()}
+						<span aria-hidden> · </span>
+						<button type="button" aria-expanded={devicesOpen} onClick={() => setDevicesOpen((open) => !open)} className="tyto-link-button">
+							{m.tytoRecordDevices()}
+						</button>
+					</p>
 				)}
 			</div>
+
+			{recording.isRecording ? (
+				<>
+					<div className="flex items-center gap-3">
+						<LevelMeter />
+						<span className="font-mono text-2xl tracking-tight tabular-nums">{formatElapsed(recordElapsed)}</span>
+					</div>
+					<div className="flex w-full gap-2">
+						<Button
+							variant="secondary"
+							disabled={recording.isFinishing}
+							onClick={() => (recording.isPaused ? recording.resumeRecord() : recording.pauseRecord())}
+							className="h-10 flex-1">
+							{recording.isPaused ? <Play className="h-3.5 w-3.5 fill-current" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
+							{recording.isPaused ? m.tytoRecordingResume() : m.tytoRecordingPause()}
+						</Button>
+						<Button disabled={recording.isFinishing} onClick={() => recording.stopRecord()} className="h-10 flex-1">
+							<Square className="h-3.5 w-3.5 fill-current" />
+							{recording.isFinishing ? m.tytoRecordingSaving() : m.stopRecording()}
+						</Button>
+					</div>
+				</>
+			) : (
+				<>
+					{devicesOpen && (
+						// Device labels become eyebrows and the triggers drop to h-9 so the card stays compact.
+						<div
+							className={cn(
+								'grid grid-cols-1 gap-3 [&>div]:space-y-1.5 [&_button]:h-9 [&_button]:rounded-[var(--tyto-r-md)]',
+								'[&_label]:text-[12px] [&_label]:font-medium [&_label]:tracking-normal [&_label]:text-muted-foreground',
+							)}>
+							<AudioDeviceInput type="input" devices={recording.devices} device={recording.inputDevice} setDevice={recording.setInputDevice} />
+							<AudioDeviceInput type="output" devices={recording.devices} device={recording.outputDevice} setDevice={recording.setOutputDevice} />
+						</div>
+					)}
+					{videoSupported && (
+						<label className="tyto-home-switch-row">
+							<span className="min-w-0 flex-1">
+								<span className="block text-[13.5px] font-medium">{m.tytoRecordScreen()}</span>
+								<span className="block text-[12px] text-muted-foreground">{m.tytoRecordScreenInfo()}</span>
+							</span>
+							<Switch checked={withScreen} onCheckedChange={setWithScreen} aria-label={m.tytoRecordScreen()} />
+						</label>
+					)}
+					<Button onClick={start} disabled={cannotStart} className="h-10 w-full">
+						<span aria-hidden className="tyto-rec-dot" />
+						{m.tytoRecordStart()}
+					</Button>
+				</>
+			)}
 			<CaptureTargetDialog
 				open={pickingTarget}
 				onCancel={() => setPickingTarget(false)}
@@ -167,8 +193,79 @@ export function RecordPanel() {
 					void recording.startRecord('video', target)
 				}}
 			/>
-		</div>
+		</section>
 	)
+}
+
+/** How many recordings «Ждут расшифровки» lists; the rest stay in the sidebar. */
+const WAITING_LIMIT = 3
+/** How many of the newest projects are checked for a missing transcript. */
+const WAITING_SCAN = 20
+
+/** Saved projects without a transcript (recordings, mostly), newest first, with «Расшифровать». */
+function WaitingList({ entries }: { entries: TranscriptEntry[] }) {
+	const { queue, preference } = useSession()
+	const [waiting, setWaiting] = useState<{ entry: TranscriptEntry; duration: number | null }[]>([])
+
+	useEffect(() => {
+		let alive = true
+		const newest = entries.slice(0, WAITING_SCAN)
+		void Promise.all(newest.map((entry) => loadRecordMeta(entry.path).then((meta) => ({ entry, meta })))).then((rows) => {
+			if (!alive) return
+			setWaiting(
+				rows
+					.filter((row) => row.meta?.untranscribed)
+					.slice(0, WAITING_LIMIT)
+					.map((row) => ({ entry: row.entry, duration: row.meta?.duration ?? null })),
+			)
+		})
+		return () => {
+			alive = false
+		}
+	}, [entries])
+
+	async function transcribe(entry: TranscriptEntry) {
+		const record = await readTranscript(entry.path)
+		if (!record) return
+		let source: string | null = null
+		try {
+			if (record.sourcePath && (await fs.exists(record.sourcePath))) source = record.sourcePath
+		} catch (error) {
+			console.warn('failed to check source file:', error)
+		}
+		source ??= await resolveProjectAudio(entry.path, record)
+		if (!source) return
+		queue.enqueue([{ name: entry.name, path: source, projectName: entry.name }])
+	}
+
+	if (waiting.length === 0) return null
+	return (
+		<section className="tyto-home-waiting" aria-labelledby="tyto-waiting-title">
+			<h3 id="tyto-waiting-title" className="tyto-home-waiting-title">
+				{m.tytoWaitingTitle()}
+			</h3>
+			<ul>
+				{waiting.map(({ entry, duration }) => (
+					<li key={entry.path} className="tyto-home-waiting-row">
+						<span className="min-w-0 flex-1 truncate text-[14px] font-medium">{entry.name}</span>
+						{duration ? <span className="font-mono text-[12px] tabular-nums text-muted-foreground">{formatClock(duration)}</span> : null}
+						<Button variant="secondary" size="sm" disabled={queue.running || !preference.modelPath} onClick={() => void transcribe(entry)}>
+							{m.transcribe()}
+						</Button>
+					</li>
+				))}
+			</ul>
+		</section>
+	)
+}
+
+/** «0:12», «42:10», «1:04:33». */
+function formatClock(seconds: number) {
+	const total = Math.max(0, Math.round(seconds))
+	const hours = Math.floor(total / 3600)
+	const minutes = Math.floor((total % 3600) / 60)
+	const rest = String(total % 60).padStart(2, '0')
+	return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
 }
 
 // Bundled monochrome brand marks of the most-used yt-dlp sources — fills the panel with a
@@ -340,8 +437,29 @@ function LinkPanel() {
 	)
 }
 
+/** Saved projects, kept fresh: the welcome shows only while there are none. */
+function useProjectEntries() {
+	const { preference } = useSession()
+	const [entries, setEntries] = useState<TranscriptEntry[] | null>(null)
+	useEffect(() => {
+		let alive = true
+		const refresh = () =>
+			void listTranscripts(preference.projectsPath).then((found) => {
+				if (alive) setEntries(found)
+			})
+		refresh()
+		window.addEventListener(TRANSCRIPTS_CHANGED_EVENT, refresh)
+		return () => {
+			alive = false
+			window.removeEventListener(TRANSCRIPTS_CHANGED_EVENT, refresh)
+		}
+	}, [preference.projectsPath])
+	return entries
+}
+
 export default function IdleHero() {
 	const { dragging, browse, collectingFolder, panel, setPanel, link, recording } = useSession()
+	const entries = useProjectEntries()
 
 	function selectPanel(next: IdlePanel) {
 		if (recording.isRecording || next === panel) return
@@ -354,10 +472,14 @@ export default function IdleHero() {
 		<EmptyScreen
 			dragging={dragging}
 			collectingFolder={collectingFolder}
+			// Until the list is read, the short labels: a returning user must not flash the welcome.
+			firstRun={entries !== null && entries.length === 0}
 			panel={panel}
 			onBrowse={() => void browse()}
 			onSelectPanel={selectPanel}
-			panelContent={panel === 'record' ? <RecordPanel /> : panel === 'link' ? <LinkPanel /> : null}
+			recordCard={<RecordCard />}
+			linkContent={<LinkPanel />}
+			waiting={entries && entries.length > 0 ? <WaitingList entries={entries} /> : null}
 			options={<QuietRow />}
 		/>
 	)
