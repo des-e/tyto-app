@@ -2,6 +2,7 @@ import { fetch } from '@tauri-apps/plugin-http'
 import { m } from '~/paraglide/messages.js'
 import { joinApiUrl } from '~/lib/tyto/proxy-format'
 import { CLAUDE_BASE_URL, PLACEHOLDERS, type AiConnection } from './config'
+import { formatHours, tytoStatus } from './tyto'
 
 /** Output ceiling; the input side of the context is what is left after it and a margin. */
 const MAX_OUTPUT_TOKENS = 8_192
@@ -269,7 +270,16 @@ function proxyClient(connection: AiConnection): AiClient {
 	return new OpenAICompatible({ ...connection, openaiBaseUrl: base, openaiApiKey: key }, m.aiProxyLabel())
 }
 
+/** Tyto AI answers only its own tasks (summary, review) through `tyto.ts`; free-form prompts are not sold by the hour. */
+function tytoClient(): AiClient {
+	const unsupported = async (): Promise<string> => {
+		throw new Error(m.tytoAiNoChat())
+	}
+	return { ask: unsupported, stream: unsupported }
+}
+
 export function createClient(connection: AiConnection): AiClient {
+	if (connection.platform === 'tyto') return tytoClient()
 	if (connection.platform === 'proxy') return proxyClient(connection)
 	if (connection.platform === 'ollama') return new Ollama(connection)
 	if (connection.platform === 'openai') return new OpenAICompatible(connection)
@@ -280,6 +290,12 @@ export function createClient(connection: AiConnection): AiClient {
 export async function testConnection(connection: AiConnection): Promise<{ ok: true; ms: number; reply: string } | { ok: false; error: string }> {
 	const started = performance.now()
 	try {
+		if (connection.platform === 'tyto') {
+			if (!connection.tytoCode?.trim()) throw new Error(m.tytoAiNoCode())
+			const status = await tytoStatus(connection.tytoCode)
+			const reply = m.tytoAiStatus({ tier: status.tier_name, left: formatHours(status.left_s), limit: formatHours(status.limit_s) })
+			return { ok: true, ms: Math.round(performance.now() - started), reply }
+		}
 		const reply = await createClient(connection).ask('Reply with the single word OK.')
 		return { ok: true, ms: Math.round(performance.now() - started), reply: reply.trim().slice(0, 40) }
 	} catch (error) {

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_AI, migrateLegacy, modernizePrompt, presetPrompt } from './config'
+import { m } from '~/paraglide/messages.js'
+import { DEFAULT_AI, migrateLegacy, modernizePrompt, normalizeAi, presetPrompt } from './config'
 import { chunkLines, createClient, fillPrompt, inputBudgetBytes, testConnection } from './client'
+import { recordingSeconds, summaryMarkdown, tytoTranscript } from './tyto'
 
 const fetchMock = vi.fn()
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: (...args: unknown[]) => fetchMock(...args) }))
@@ -107,7 +109,37 @@ describe('createClient', () => {
 
 	it('reports a working connection with its latency', async () => {
 		fetchMock.mockResolvedValue({ ok: true, json: async () => ({ content: [{ text: 'OK' }] }) })
-		const result = await testConnection(DEFAULT_AI.connection)
+		const result = await testConnection({ ...DEFAULT_AI.connection, platform: 'claude', model: 'claude-sonnet-5' })
 		expect(result).toMatchObject({ ok: true, reply: 'OK' })
+	})
+})
+
+describe('Tyto AI', () => {
+	it('is the default for new installs and keeps old platforms', () => {
+		expect(DEFAULT_AI.connection.platform).toBe('tyto')
+		expect(normalizeAi({ connection: { platform: 'ollama' } } as never).connection.platform).toBe('ollama')
+	})
+
+	it('refuses free-form prompts with a clear message', async () => {
+		await expect(createClient({ ...DEFAULT_AI.connection, platform: 'tyto' }).ask('p')).rejects.toThrow(m.tytoAiNoChat())
+	})
+
+	it('needs a code before checking', async () => {
+		const result = await testConnection({ ...DEFAULT_AI.connection, platform: 'tyto', tytoCode: '' })
+		expect(result).toMatchObject({ ok: false, error: m.tytoAiNoCode() })
+	})
+
+	it('sends stamped lines and the recording length', () => {
+		const segments = [
+			{ start: 500, stop: 900, text: ' Привет ', speaker: 0 },
+			{ start: 372_000, stop: 375_050, text: 'Итог' },
+		]
+		expect(tytoTranscript(segments, (n) => `Анна${n}`)).toBe('00:00:05 Анна0: Привет\n01:02:00 Итог')
+		expect(recordingSeconds(segments)).toBe(3751)
+	})
+
+	it('saves topics under the summary', () => {
+		expect(summaryMarkdown(' Итог ', [{ start: '00:01:00', title: 'Релиз' }], 'Темы')).toBe('Итог\n\n### Темы\n\n- **00:01:00** Релиз')
+		expect(summaryMarkdown('Итог', [], 'Темы')).toBe('Итог')
 	})
 })

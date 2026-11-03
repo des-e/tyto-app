@@ -117,7 +117,7 @@ export function viewModel() {
 	const progressToast = useToastProvider()
 	const modelGates = useModelGates()
 	/** Result of the last AI connection test, shown inline next to the button. */
-	const [aiTest, setAiTest] = useState<{ status: 'testing' } | { status: 'ok'; ms: number } | { status: 'error'; error: string } | null>(null)
+	const [aiTest, setAiTest] = useState<{ status: 'testing' } | { status: 'ok'; ms: number; reply: string } | { status: 'error'; error: string } | null>(null)
 	const [aiErrorCopied, setAiErrorCopied] = useState(false)
 	const aiErrorCopyTimer = useRef<number | null>(null)
 
@@ -129,7 +129,7 @@ export function viewModel() {
 	async function testAi() {
 		setAiTest({ status: 'testing' })
 		const result = await testConnection(preference.ai.connection)
-		if (result.ok) setAiTest({ status: 'ok', ms: result.ms })
+		if (result.ok) setAiTest({ status: 'ok', ms: result.ms, reply: result.reply })
 		else {
 			console.error('AI connection test failed:', result.error)
 			setAiTest({ status: 'error', error: result.error })

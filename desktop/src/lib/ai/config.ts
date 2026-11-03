@@ -22,13 +22,15 @@ export interface LegacyLlmConfig {
  * does to a sentence. Prompts belong to tasks, so changing the platform keeps them.
  */
 
-export type AiPlatform = 'ollama' | 'claude' | 'openai' | 'proxy'
+export type AiPlatform = 'tyto' | 'ollama' | 'claude' | 'openai' | 'proxy'
 
 /** Claude's official address; the Claude platform can point elsewhere through `claudeBaseUrl`. */
 export const CLAUDE_BASE_URL = 'https://api.anthropic.com'
 
 export interface AiConnection {
 	platform: AiPlatform
+	/** Tyto AI access code from the Telegram bot (TYTO-XXXX-XXXX). */
+	tytoCode: string
 	model: string
 	contextTokens: number
 	claudeApiKey: string
@@ -125,8 +127,10 @@ export function presetPrompt(id: string) {
 
 export const DEFAULT_AI: AiSettings = {
 	connection: {
-		platform: 'claude',
-		model: defaultModel('claude'),
+		// New installs start on Tyto AI: a code from the bot is all it takes.
+		platform: 'tyto',
+		tytoCode: '',
+		model: '',
 		contextTokens: 65_536,
 		claudeApiKey: '',
 		claudeBaseUrl: CLAUDE_BASE_URL,
@@ -149,7 +153,7 @@ export const DEFAULT_AI: AiSettings = {
  * A proxy service names its own models, so it starts empty and the field shows an example.
  */
 export function defaultModel(platform: AiPlatform) {
-	if (platform === 'proxy') return ''
+	if (platform === 'proxy' || platform === 'tyto') return ''
 	return platform === 'ollama' ? 'gemma4:e2b' : platform === 'openai' ? 'gpt-5.6-luna' : 'claude-sonnet-5'
 }
 

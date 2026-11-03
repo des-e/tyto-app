@@ -41,7 +41,10 @@ export default function SummaryView({ job, options }: { job: Job; options: Trans
 	const asking = Boolean(summaries.asking[job.id])
 	const answerDraft = summaries.answerDrafts[job.id]
 	const thread = job.thread ?? []
-	const canAsk = summaries.enabled && job.segments.length > 0
+	const reviewing = Boolean(summaries.reviewing[job.id])
+	// Tyto AI has no free-form questions; it offers the AI review instead.
+	const canAsk = summaries.enabled && job.segments.length > 0 && !summaries.tyto
+	const canReview = summaries.enabled && summaries.tyto && job.segments.length > 0
 
 	// Follow the answer as it grows, the way a chat does: the bottom of the page, padding included,
 	// so the newest line sits above the floating box.
@@ -103,9 +106,20 @@ export default function SummaryView({ job, options }: { job: Job; options: Trans
 						</p>
 					)}
 
+					{canReview && (
+						<div className="mt-8">
+							<Button variant="outline" size="sm" disabled={reviewing} onClick={() => void summaries.review(job)}>
+								{reviewing ? <Spinner className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+								{reviewing ? m.tytoAiReviewLoading() : m.tytoAiReviewRun()}
+							</Button>
+						</div>
+					)}
+
 					{(thread.length > 0 || asking) && (
 						<section className="mt-12 border-t border-border/60 pt-8">
-							<p className="mb-5 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">{m.askTranscript()}</p>
+							<p className="mb-5 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+								{summaries.tyto ? m.tytoAiReview() : m.askTranscript()}
+							</p>
 
 							<div className="space-y-6">
 								{thread.map((entry, index) => (

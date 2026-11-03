@@ -233,7 +233,7 @@ describe('миграция настроек', () => {
 	})
 
 	it('очищенный адрес Claude остаётся пустым, а запросы идут на официальный', async () => {
-		const ai = normalizeAi({ ...DEFAULT_AI, connection: { ...DEFAULT_AI.connection, claudeBaseUrl: '' } })
+		const ai = normalizeAi({ ...DEFAULT_AI, connection: { ...DEFAULT_AI.connection, platform: 'claude', claudeBaseUrl: '' } })
 		expect(ai.connection.claudeBaseUrl).toBe('')
 		fetchMock.mockResolvedValue(claudeReply)
 		await createClient(ai.connection).ask('p')

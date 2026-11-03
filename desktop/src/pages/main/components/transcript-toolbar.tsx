@@ -158,7 +158,7 @@ function SummaryMenu({ job, tab, setTab }: { job: Job | null; tab: TranscriptTab
 									{summaryError ? m.retrySummary() : hasSummary ? m.regenerateSummary() : m.summarizeTranscript()}
 								</button>
 							)}
-							{canSummarize && (
+							{canSummarize && !summaries.tyto && (
 								<button
 									type="button"
 									disabled={summarizing}
@@ -342,11 +342,7 @@ export default function TranscriptToolbar({
 
 							<div className="flex items-center gap-1">
 								{queue.running && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={queue.cancelAll}
-										disabled={queue.isAborting}>
+									<Button variant="ghost" size="sm" onClick={queue.cancelAll} disabled={queue.isAborting}>
 										{queue.isAborting ? m.aborting() : m.cancel()}
 									</Button>
 								)}

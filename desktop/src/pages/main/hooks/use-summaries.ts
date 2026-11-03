@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { m } from '~/paraglide/messages.js'
-import { appLanguageName, chunkLines, createClient, fillPrompt, inputBudgetBytes, utf8Bytes, type AiClient } from '~/lib/ai'
-import { asText } from '~/lib/transcript'
+import {
+	appLanguageName,
+	chunkLines,
+	createClient,
+	fillPrompt,
+	inputBudgetBytes,
+	recordingSeconds,
+	summaryMarkdown,
+	tytoReview,
+	tytoSummary,
+	tytoTranscript,
+	utf8Bytes,
+	type AiClient,
+} from '~/lib/ai'
+import { asText, speakerName } from '~/lib/transcript'
 import { usePreferenceProvider } from '~/providers/preference'
 import type { Job, TranscribeQueue } from './use-transcribe-queue'
 
@@ -34,6 +47,12 @@ export interface Summaries {
 	/** Job whose summary just started or arrived, so the view can switch to it once. */
 	showSummary: string | null
 	clearShowSummary: () => void
+	/** Tyto AI is the connection: summaries come from our server, and the AI review is available. */
+	tyto: boolean
+	/** Tyto AI review of the transcript; lands in the thread under the "AI review" heading. */
+	review: (job: Job) => Promise<boolean>
+	/** Job ids waiting on a review. */
+	reviewing: Record<string, boolean>
 }
 
 export function shouldAutoSummarize(job: Pick<Job, 'status' | 'hydrated' | 'summary' | 'segments'>, previousStatus?: Job['status']) {
@@ -75,6 +94,7 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 	const [errors, setError, clearError] = useRecord<string>()
 	const [answerDrafts, setAnswerDraft, clearAnswerDraft] = useRecord<string>()
 	const [asking, setAskingFor, clearAsking] = useRecord<boolean>()
+	const [reviewing, setReviewingFor, clearReviewing] = useRecord<boolean>()
 	const [showSummary, setShowSummary] = useState<string | null>(null)
 	// State updates are not synchronous; these sets close the gap where two callers can start the
 	// same job before `pending` renders.
@@ -86,6 +106,17 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 	const task = tasks.summary
 	const enabled = task.enabled
 	const client = useMemo<AiClient>(() => createClient(connection), [connection])
+	const tyto = connection.platform === 'tyto'
+
+	/** Tyto AI gets «00:12:30 Name: text» lines; the server counts hours from the stamps. */
+	const tytoInput = useCallback(
+		(job: Job) => {
+			if (!connection.tytoCode?.trim()) throw new Error(m.tytoAiNoCode())
+			const transcript = tytoTranscript(job.segments, (speaker) => speakerName(speaker, m.speakerPrefix(), job.speakerNames))
+			return { code: connection.tytoCode, transcript, seconds: recordingSeconds(job.segments) }
+		},
+		[connection.tytoCode],
+	)
 
 	const transcriptOf = useCallback((job: Job) => asText(job.segments, m.speakerPrefix(), job.speakerNames), [])
 	const speakersOf = useCallback((job: Job) => Object.values(job.speakerNames ?? {}).join(', '), [])
@@ -93,13 +124,20 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 	const summarize = useCallback(
 		async (job: Job, prompt?: string) => {
 			const template = prompt ?? task.prompt
-			if (!template.trim() || !job.segments.length || inFlight.current.has(job.id)) return false
+			if ((!tyto && !template.trim()) || !job.segments.length || inFlight.current.has(job.id)) return false
 			inFlight.current.add(job.id)
 			setPendingFor(job.id, true)
 			clearError(job.id)
 			setDraft(job.id, '')
 			setShowSummary(job.id)
 			try {
+				if (tyto) {
+					// The server's prompt is fixed: a short summary and topics with times. Custom prompts need your own key.
+					const input = tytoInput(job)
+					const result = await tytoSummary(input.code, input.transcript, input.seconds)
+					queue.setJobSummary(job.id, summaryMarkdown(result.summary, result.topics, m.tytoAiTopics()))
+					return true
+				}
 				const values = { language: appLanguageName(), speakers: speakersOf(job) }
 				const frame = fillPrompt(template, { ...values, transcript: '' })
 				const chunks = chunkLines(transcriptOf(job).split('\n'), frame, connection.contextTokens)
@@ -124,8 +162,10 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 				return true
 			} catch (error) {
 				console.error('summarize failed:', error)
-				setError(job.id, String(error instanceof Error ? error.message : error))
-				toast.error(m.summaryFailed(), { position: 'bottom-center' })
+				const message = String(error instanceof Error ? error.message : error)
+				setError(job.id, message)
+				// Tyto AI explains itself (no hours left, wrong code): say it right away.
+				toast.error(m.summaryFailed(), { position: 'bottom-center', description: tyto ? message : undefined })
 				return false
 			} finally {
 				inFlight.current.delete(job.id)
@@ -135,6 +175,8 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 			}
 		},
 		[
+			tyto,
+			tytoInput,
 			task.prompt,
 			connection.contextTokens,
 			client,
@@ -197,6 +239,30 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 		[client, connection.contextTokens, queue, transcriptOf, setAskingFor, setAnswerDraft, clearAsking, clearAnswerDraft],
 	)
 
+	const review = useCallback(
+		async (job: Job) => {
+			const key = `review:${job.id}`
+			if (!tyto || !job.segments.length || inFlight.current.has(key)) return false
+			inFlight.current.add(key)
+			setReviewingFor(job.id, true)
+			try {
+				const input = tytoInput(job)
+				const result = await tytoReview(input.code, input.transcript, input.seconds)
+				const current = queue.jobs.find((candidate) => candidate.id === job.id)
+				queue.setJobThread(job.id, [...(current?.thread ?? job.thread ?? []), { question: m.tytoAiReview(), answer: result.markdown }])
+				return true
+			} catch (error) {
+				console.error('review failed:', error)
+				toast.error(m.tytoAiReviewFailed(), { position: 'bottom-center', description: String(error instanceof Error ? error.message : error) })
+				return false
+			} finally {
+				inFlight.current.delete(key)
+				clearReviewing(job.id)
+			}
+		},
+		[tyto, tytoInput, queue, setReviewingFor, clearReviewing],
+	)
+
 	const removeThreadEntry = useCallback(
 		(job: Job, index: number) => {
 			const thread = job.thread ?? []
@@ -233,5 +299,21 @@ export function useSummaries(queue: TranscribeQueue): Summaries {
 
 	const clearShowSummary = useCallback(() => setShowSummary(null), [])
 
-	return { enabled, pending, drafts, progress, errors, summarize, ask, answerDrafts, asking, removeThreadEntry, showSummary, clearShowSummary }
+	return {
+		enabled,
+		pending,
+		drafts,
+		progress,
+		errors,
+		summarize,
+		ask,
+		answerDrafts,
+		asking,
+		removeThreadEntry,
+		showSummary,
+		clearShowSummary,
+		tyto,
+		review,
+		reviewing,
+	}
 }

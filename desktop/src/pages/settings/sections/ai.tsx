@@ -5,7 +5,7 @@ import { OPENAI_PATH } from '~/components/brand-glyph'
 import { m } from '~/paraglide/messages.js'
 import { ReactComponent as LinkIcon } from '~/icons/link.svg'
 import * as config from '~/lib/config'
-import { defaultModel, type AiPlatform, type AiSettings } from '~/lib/ai'
+import { TYTO_BOOSTY_URL, TYTO_BOT_URL, defaultModel, type AiPlatform, type AiSettings } from '~/lib/ai'
 import { ClaudeAddressRow, ProxyFields } from '~/lib/tyto/proxy-fields'
 import NumberField from '~/components/number-field'
 import { Button } from '~/components/ui/button'
@@ -29,13 +29,26 @@ function LabelWithLink({ label, tooltip, onClick }: { label: string; tooltip: st
 }
 
 /** Brand marks for the providers, so the picker reads at a glance. */
-const platformIcons: Record<Exclude<AiPlatform, 'proxy'>, { path: string; title: string }> = {
+const platformIcons: Record<Exclude<AiPlatform, 'proxy' | 'tyto'>, { path: string; title: string }> = {
 	claude: { path: siClaude.path, title: siClaude.title },
 	ollama: { path: siOllama.path, title: siOllama.title },
 	openai: { path: OPENAI_PATH, title: 'OpenAI' },
 }
 
+/** The owl from the app icon, as the mark for our own service. */
+const TYTO_OWL_PATH =
+	'M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z'
+
 function PlatformOption({ platform }: { platform: AiPlatform }) {
+	if (platform === 'tyto')
+		return (
+			<span className="flex items-center gap-2">
+				<svg viewBox="262 200 500 680" role="img" aria-hidden className="h-4 w-4 shrink-0">
+					<path d={TYTO_OWL_PATH} fill="currentColor" fillRule="evenodd" />
+				</svg>
+				<span>{m.tytoAiPlatform()}</span>
+			</span>
+		)
 	if (platform === 'proxy')
 		return (
 			<span className="flex items-center gap-2">
@@ -80,14 +93,17 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 	const setTask = <T extends AiTaskId>(task: T, patch: Partial<AiSettings['tasks'][T]>) =>
 		setAi({ ...ai, tasks: { ...tasks, [task]: { ...tasks[task], ...patch } } })
 	const test = vm.aiTest
+	const tyto = connection.platform === 'tyto'
 
 	return (
 		<div className="space-y-6">
 			<SettingsGroup title={m.aiTasks()}>
-				<SettingsRow label={m.aiSummaryTask()} description={presetLabel(tasks.summary.preset)}>
-					<Button variant="outline" size="sm" onClick={() => onOpenPrompt('summary')}>
-						{m.aiEditPrompt()}
-					</Button>
+				<SettingsRow label={m.aiSummaryTask()} description={tyto ? m.tytoAiSummaryFixed() : presetLabel(tasks.summary.preset)}>
+					{!tyto && (
+						<Button variant="outline" size="sm" onClick={() => onOpenPrompt('summary')}>
+							{m.aiEditPrompt()}
+						</Button>
+					)}
 					<Switch checked={tasks.summary.enabled} onCheckedChange={(enabled) => setTask('summary', { enabled })} />
 				</SettingsRow>
 				{tasks.summary.enabled && (
@@ -95,11 +111,13 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 						<Switch checked={tasks.summary.autoOnFinish} onCheckedChange={(autoOnFinish) => setTask('summary', { autoOnFinish })} />
 					</SettingsRow>
 				)}
-				<SettingsRow label={m.aiDictationTask()} description={presetLabel(tasks.dictation.preset)}>
-					<Button variant="outline" size="sm" onClick={() => onOpenPrompt('dictation')}>
-						{m.aiEditPrompt()}
-					</Button>
-					<Switch checked={tasks.dictation.enabled} onCheckedChange={(enabled) => setTask('dictation', { enabled })} />
+				<SettingsRow label={m.aiDictationTask()} description={tyto ? m.tytoAiDictationOff() : presetLabel(tasks.dictation.preset)}>
+					{!tyto && (
+						<Button variant="outline" size="sm" onClick={() => onOpenPrompt('dictation')}>
+							{m.aiEditPrompt()}
+						</Button>
+					)}
+					<Switch checked={tasks.dictation.enabled && !tyto} disabled={tyto} onCheckedChange={(enabled) => setTask('dictation', { enabled })} />
 				</SettingsRow>
 			</SettingsGroup>
 
@@ -110,7 +128,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
-							{(['claude', 'ollama', 'openai', 'proxy'] as const).map((name) => (
+							{(['tyto', 'claude', 'ollama', 'openai', 'proxy'] as const).map((name) => (
 								<SelectItem key={name} value={name}>
 									<PlatformOption platform={name} />
 								</SelectItem>
@@ -118,6 +136,23 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 						</SelectContent>
 					</Select>
 				</SettingsRow>
+
+				{tyto && (
+					<SettingsRow label={m.tytoAiCode()} description={m.tytoAiCodeInfo()}>
+						<Input
+							value={connection.tytoCode}
+							onChange={(e) => {
+								const tytoCode = e.target.value.trim().toUpperCase()
+								// A pasted code means "I want summaries": switch them on, or nothing visible happens.
+								const summary = tytoCode && !connection.tytoCode ? { ...tasks.summary, enabled: true } : tasks.summary
+								setAi({ ...ai, connection: { ...connection, tytoCode }, tasks: { ...tasks, summary } })
+							}}
+							placeholder="TYTO-XXXX-XXXX"
+							spellCheck={false}
+							className={`w-64 font-mono ${rowControlClass}`}
+						/>
+					</SettingsRow>
+				)}
 
 				{connection.platform === 'claude' && (
 					<>
@@ -210,25 +245,29 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 
 				{connection.platform === 'proxy' && <ProxyFields connection={connection} setConnection={setConnection} />}
 
-				<SettingsRow label={m.contextSize()} description={m.infoContextSize()}>
-					<NumberField
-						aria-label={m.contextSize()}
-						value={connection.contextTokens}
-						min={4096}
-						max={1_048_576}
-						step={4096}
-						onChange={(contextTokens) => setConnection({ contextTokens })}
-					/>
-				</SettingsRow>
-				<SettingsNote>
-					<span className="italic">{m.contextSizeRuleOfThumb()}</span>
-				</SettingsNote>
+				{!tyto && (
+					<>
+						<SettingsRow label={m.contextSize()} description={m.infoContextSize()}>
+							<NumberField
+								aria-label={m.contextSize()}
+								value={connection.contextTokens}
+								min={4096}
+								max={1_048_576}
+								step={4096}
+								onChange={(contextTokens) => setConnection({ contextTokens })}
+							/>
+						</SettingsRow>
+						<SettingsNote>
+							<span className="italic">{m.contextSizeRuleOfThumb()}</span>
+						</SettingsNote>
+					</>
+				)}
 
 				<SettingsRow
-					label={m.aiTestConnection()}
+					label={tyto ? m.tytoAiCheck() : m.aiTestConnection()}
 					description={
 						test?.status === 'ok' ? (
-							<span className="text-success">{m.aiTestOk({ ms: String(test.ms) })}</span>
+							<span className="text-success">{tyto ? test.reply : m.aiTestOk({ ms: String(test.ms) })}</span>
 						) : test?.status === 'error' ? (
 							<span className="text-destructive">{m.checkError()}</span>
 						) : (
@@ -253,6 +292,13 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 					</div>
 				)}
 			</SettingsGroup>
+
+			{tyto && (
+				<SettingsGroup title={m.settingsUsageAndBilling()}>
+					<ActionRow label={m.tytoAiGetCode()} icon={<LinkIcon className="h-4 w-4" />} onClick={() => openUrl(TYTO_BOT_URL)} />
+					<ActionRow label={m.tytoAiPlans()} icon={<LinkIcon className="h-4 w-4" />} onClick={() => openUrl(TYTO_BOOSTY_URL)} />
+				</SettingsGroup>
+			)}
 
 			{connection.platform === 'claude' && (
 				<SettingsGroup title={m.settingsUsageAndBilling()}>
