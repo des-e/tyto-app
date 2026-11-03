@@ -859,5 +859,10 @@
 	"tytoAiMinutes": "{min} min",
 	"tytoAiHoursMinutes": "{h} h {min} min",
 	"tytoAiDictationOff": "Not available with Tyto AI",
-	"tytoAiSummaryFixed": "A short summary and topics with times"
+	"tytoAiSummaryFixed": "A short summary and topics with times",
+	"tytoSupport": "Support Tyto",
+	"tytoSupportBoosty": "Subscribe on Boosty",
+	"tytoSupportBoostyInfo": "Levels with Tyto AI hours",
+	"tytoSupportTelegram": "Tyto channel on Telegram",
+	"tytoSupportTelegramInfo": "News and updates"
 }

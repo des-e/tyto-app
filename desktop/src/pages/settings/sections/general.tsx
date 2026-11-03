@@ -1,15 +1,16 @@
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart'
 import { openUrl } from '@tauri-apps/plugin-opener'
-import { Moon, Sun } from 'lucide-react'
+import { ExternalLink, Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { m } from '~/paraglide/messages.js'
 import * as config from '~/lib/config'
+import { TYTO_BOOSTY_URL, TYTO_CHANNEL_URL } from '~/lib/ai'
 import { DisplayLanguageInput } from '~/components/display-language-input'
 import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
 import { SegmentedControl } from '~/lib/tyto/segmented-control'
-import { SettingsGroup, SettingsRow, type SettingsViewModel } from './shared'
+import { ActionRow, SettingsGroup, SettingsRow, type SettingsViewModel } from './shared'
 
 /**
  * The OS owns this setting, not our config: the user can remove the login item from
@@ -96,6 +97,21 @@ export function GeneralSection({ vm }: { vm: SettingsViewModel }) {
 				<SettingsRow label={m.preventSleep()} description={m.generalAwakeInfo()}>
 					<Switch checked={vm.preference.preventSleep} onCheckedChange={vm.preference.setPreventSleep} />
 				</SettingsRow>
+			</SettingsGroup>
+
+			<SettingsGroup title={m.tytoSupport()}>
+				<ActionRow
+					label={m.tytoSupportBoosty()}
+					description={m.tytoSupportBoostyInfo()}
+					icon={<ExternalLink className="h-4 w-4" />}
+					onClick={() => openUrl(TYTO_BOOSTY_URL)}
+				/>
+				<ActionRow
+					label={m.tytoSupportTelegram()}
+					description={m.tytoSupportTelegramInfo()}
+					icon={<ExternalLink className="h-4 w-4" />}
+					onClick={() => openUrl(TYTO_CHANNEL_URL)}
+				/>
 			</SettingsGroup>
 
 			<div className="mt-6 flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">

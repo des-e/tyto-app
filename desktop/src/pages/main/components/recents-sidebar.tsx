@@ -3,7 +3,8 @@ import { invoke } from '@tauri-apps/api/core'
 import * as pathApi from '@tauri-apps/api/path'
 import * as dialog from '@tauri-apps/plugin-dialog'
 import * as fs from '@tauri-apps/plugin-fs'
-import { Download, MoreHorizontal, Plus, Search, Settings, Smartphone } from 'lucide-react'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { Download, Heart, MoreHorizontal, Plus, Search, Settings, Smartphone } from 'lucide-react'
 import { type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
@@ -22,6 +23,7 @@ import {
 import { openSettingsSection } from '~/lib/app'
 import { getVersionNumber } from '~/lib/logs'
 import { FEATURES } from '~/lib/tyto/features'
+import { TYTO_BOOSTY_URL, TYTO_CHANNEL_URL } from '~/lib/ai'
 import { FinishBlinkWordmark } from '~/lib/tyto/wordmark'
 import { useMainAreaOffset } from '~/lib/tyto/main-area'
 import { groupRecents, recentMeta, recentsGroupLabel, useNow, whenLabel } from '~/lib/tyto/recents-groups'
@@ -346,7 +348,13 @@ function SessionRow({ job, active, onOpen }: { job: Job; active: boolean; onOpen
 				{job.status === 'running' ? (
 					<div className="tyto-recent-run">
 						<span className="tyto-recent-meta">{m.transcribingPercent({ percent: String(percent) })}</span>
-						<div role="progressbar" aria-label={job.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="tyto-mini-progress">
+						<div
+							role="progressbar"
+							aria-label={job.name}
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-valuenow={percent}
+							className="tyto-mini-progress">
 							<div style={{ transform: `scaleX(${Math.min(Math.max(percent, 0), 100) / 100})` }} />
 						</div>
 					</div>
@@ -359,10 +367,7 @@ function SessionRow({ job, active, onOpen }: { job: Job; active: boolean; onOpen
 }
 
 /** One line of the windowed list: a day label, a job of the open session, or a saved transcript. */
-type ListRow =
-	| { kind: 'label'; key: string; label: string }
-	| { kind: 'job'; key: string; job: Job }
-	| { kind: 'entry'; key: string; entry: TranscriptEntry }
+type ListRow = { kind: 'label'; key: string; label: string } | { kind: 'job'; key: string; job: Job } | { kind: 'entry'; key: string; entry: TranscriptEntry }
 
 /**
  * The recents list, windowed: only the rows near the viewport are mounted, so a folder holding
@@ -568,7 +573,9 @@ export default function RecentsSidebar() {
 
 			{rows.length === 0 ? (
 				<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-					<p className="px-2 py-4 text-[13px] text-muted-foreground">{entries.length === 0 && liveJobs.length === 0 ? m.noRecentTranscripts() : m.noMatches()}</p>
+					<p className="px-2 py-4 text-[13px] text-muted-foreground">
+						{entries.length === 0 && liveJobs.length === 0 ? m.noRecentTranscripts() : m.noMatches()}
+					</p>
 				</div>
 			) : (
 				<RecentsList
@@ -592,18 +599,39 @@ export default function RecentsSidebar() {
 						<Settings className="text-muted-foreground" />
 						{m.settings()}
 					</Button>
-					{FEATURES.phone && <Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								aria-label={m.phone()}
-								onClick={() => openSettingsSection('phone')}
-								className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[var(--tyto-r-md)] transition-colors duration-150 hover:bg-muted/60">
-								<Smartphone className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="top">{m.phone()}</TooltipContent>
-					</Tooltip>}
+					<DropdownMenu>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<DropdownMenuTrigger asChild>
+									<button
+										type="button"
+										aria-label={m.tytoSupport()}
+										className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[var(--tyto-r-md)] transition-colors duration-150 hover:bg-muted/60">
+										<Heart className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+									</button>
+								</DropdownMenuTrigger>
+							</TooltipTrigger>
+							<TooltipContent side="top">{m.tytoSupport()}</TooltipContent>
+						</Tooltip>
+						<DropdownMenuContent side="top" align="start">
+							<DropdownMenuItem onSelect={() => void openUrl(TYTO_BOOSTY_URL)}>{m.tytoSupportBoosty()}</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => void openUrl(TYTO_CHANNEL_URL)}>{m.tytoSupportTelegram()}</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+					{FEATURES.phone && (
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<button
+									type="button"
+									aria-label={m.phone()}
+									onClick={() => openSettingsSection('phone')}
+									className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[var(--tyto-r-md)] transition-colors duration-150 hover:bg-muted/60">
+									<Smartphone className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+								</button>
+							</TooltipTrigger>
+							<TooltipContent side="top">{m.phone()}</TooltipContent>
+						</Tooltip>
+					)}
 					{availableUpdate && (
 						<Tooltip>
 							<TooltipTrigger asChild>

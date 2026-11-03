@@ -9,6 +9,8 @@ import type { Segment } from '~/lib/transcript'
 export const TYTO_AI_URL = 'https://eliseevdenis.ru/tyto-ai'
 export const TYTO_BOT_URL = 'https://t.me/Tytotranscribe_bot'
 export const TYTO_BOOSTY_URL = 'https://boosty.to/tytoapp'
+/** Public channel: news and updates. */
+export const TYTO_CHANNEL_URL = 'https://t.me/tytoapp'
 
 export interface TytoStatus {
 	tier: string
