@@ -13,6 +13,9 @@ use std::time::{Duration, Instant};
 /// A meeting that has just started should surface almost immediately, so a new recording state
 /// only has to survive a couple of polls.
 const DEFAULT_ONSET_DEBOUNCE: Duration = Duration::from_millis(400);
+/// A browser holding the microphone without a recognised call tab is offered only after this long
+/// (OpenWhispr waits for "sustained microphone activity" the same way).
+const DEFAULT_BROWSER_ONSET_DEBOUNCE: Duration = Duration::from_secs(20);
 /// The microphone being closed outright ends the call unambiguously, so it is confirmed almost as
 /// quickly as it is reported.
 const DEFAULT_RELEASE_DEBOUNCE: Duration = Duration::from_millis(600);
@@ -39,6 +42,9 @@ pub enum Source {
     Telemost,
     /// The Bitrix24 desktop app, only while it holds the microphone itself.
     Bitrix24,
+    /// A browser holding the microphone for a while with no recognised call tab: Bitrix24 in a
+    /// browser, Kontur.Talk, SaluteJazz, Jitsi and the like.
+    Browser,
 }
 
 impl Source {
@@ -128,6 +134,7 @@ fn shows_meeting(window: &WindowInfo, source: Source) -> bool {
         Source::Zoom => kind == Some(ProcessKind::Zoom),
         Source::Teams => kind == Some(ProcessKind::Teams),
         Source::Bitrix24 => kind == Some(ProcessKind::Bitrix24),
+        Source::Browser => kind == Some(ProcessKind::Browser),
         Source::Meet | Source::Telemost => {
             kind == Some(ProcessKind::Browser) && window_title::tab_source(&window.title) == Some(source)
         }
@@ -298,19 +305,25 @@ fn classify_active(processes: Vec<ProcessInfo>, scan_titles: bool, owners: bool)
         return attributed(Source::Bitrix24);
     }
 
-    if !scan_titles {
-        return MeetingState::inactive();
-    }
-
     let browsers: Vec<_> = processes
         .iter()
         .filter(|info| process::source(info) == Some(ProcessKind::Browser))
         .cloned()
         .collect();
-    if let Some((_, source)) = (!browsers.is_empty()).then(|| window_title::call_tab(&browsers)).flatten() {
-        return attributed(source);
+    if browsers.is_empty() {
+        return MeetingState::inactive();
     }
-
+    if scan_titles {
+        if let Some((_, source)) = window_title::call_tab(&browsers) {
+            return attributed(source);
+        }
+    }
+    // A browser that holds the microphone itself, with no known call tab: an unnamed browser call.
+    // The watcher waits `browser_onset` before offering it. Running browsers that the fallback
+    // only guessed at (`owners` false) say nothing.
+    if owners {
+        return attributed(Source::Browser);
+    }
     MeetingState::inactive()
 }
 
@@ -364,6 +377,9 @@ impl Drop for Watcher {
 pub(crate) struct Debounce {
     /// Applied to any change that reports a meeting.
     onset: Duration,
+    /// Applied instead of `onset` to an unnamed call in a browser: voice messages, voice search and
+    /// dictation hold the microphone for seconds, a call for minutes.
+    browser_onset: Duration,
     /// Applied to losing a meeting because the microphone was closed.
     release: Duration,
     /// Applied to losing a meeting while the microphone stays open.
@@ -373,6 +389,7 @@ pub(crate) struct Debounce {
 impl Debounce {
     fn for_change(&self, next: &MeetingState, mic_active: bool) -> Duration {
         match (next.recording, mic_active) {
+            (true, _) if next.source == Some(Source::Browser) => self.browser_onset,
             (true, _) => self.onset,
             (false, false) => self.release,
             (false, true) => self.attribution,
@@ -384,6 +401,7 @@ impl Default for Debounce {
     fn default() -> Self {
         Self {
             onset: DEFAULT_ONSET_DEBOUNCE,
+            browser_onset: DEFAULT_BROWSER_ONSET_DEBOUNCE,
             release: DEFAULT_RELEASE_DEBOUNCE,
             attribution: DEFAULT_ATTRIBUTION_DEBOUNCE,
         }
@@ -502,6 +520,7 @@ mod tests {
     fn debounce(onset_ms: u64, loss_ms: u64) -> Debounce {
         Debounce {
             onset: Duration::from_millis(onset_ms),
+            browser_onset: Duration::from_millis(onset_ms),
             release: Duration::from_millis(loss_ms),
             attribution: Duration::from_millis(loss_ms),
         }
@@ -699,10 +718,36 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_browser_microphone_use_is_not_a_meeting() {
-        let state = classify_active(vec![process("chrome")], true, true);
-        assert!(!state.recording);
-        assert_eq!(state.source, None);
+    fn browser_holding_the_microphone_is_an_unnamed_browser_call() {
+        // The title scan finds no call tab on the test machine.
+        assert_eq!(
+            classify_active(vec![process("chrome")], false, true).source,
+            Some(Source::Browser)
+        );
+        assert_eq!(
+            classify_active(vec![process("chrome")], true, true).source,
+            Some(Source::Browser)
+        );
+    }
+
+    #[test]
+    fn a_merely_running_browser_is_not_a_call() {
+        assert!(!classify_active(vec![process("chrome")], false, false).recording);
+        assert!(!classify_active(vec![process("Telegram.exe")], false, true).recording);
+    }
+
+    #[test]
+    fn an_unnamed_browser_call_waits_for_the_long_onset() {
+        let debounce = Debounce::default();
+        assert_eq!(
+            debounce.for_change(&attributed(Source::Browser), true),
+            Duration::from_secs(20)
+        );
+        assert_eq!(
+            debounce.for_change(&attributed(Source::Telemost), true),
+            DEFAULT_ONSET_DEBOUNCE
+        );
+        assert_eq!(serde_json::to_string(&Source::Browser).unwrap(), "\"browser\"");
     }
 
     #[test]
@@ -792,6 +837,7 @@ mod tests {
         };
         let debounce = Debounce {
             onset: Duration::from_millis(10),
+            browser_onset: Duration::from_millis(10),
             release: Duration::from_millis(50),
             attribution: Duration::from_secs(30),
         };

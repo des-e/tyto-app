@@ -18,12 +18,14 @@ import { m } from '~/paraglide/messages.js'
 import { getLocale, getTextDirection, setLocale } from '~/paraglide/runtime.js'
 import { OwlMark } from '~/lib/tyto/owl-mark'
 
-const serviceNames: Record<MeetingSource, string> = {
-	meet: 'Google Meet',
-	zoom: 'Zoom',
-	teams: 'Microsoft Teams',
-	telemost: 'Яндекс Телемост',
-	bitrix24: 'Битрикс24',
+const serviceNames: Record<MeetingSource, () => string> = {
+	meet: () => 'Google Meet',
+	zoom: () => 'Zoom',
+	teams: () => 'Microsoft Teams',
+	telemost: () => 'Яндекс Телемост',
+	bitrix24: () => 'Битрикс24',
+	// A browser has held the microphone for a while, the service is not known.
+	browser: () => m.tytoMeetingRowBrowser(),
 }
 
 /** Both sides of the call: the person's microphone and what the others say. */
@@ -144,7 +146,7 @@ export default function MeetingPromptWindow() {
 			<section className="tyto-meeting-row">
 				<OwlMark className="tyto-meeting-row-owl" />
 				<div className="min-w-0 flex-1">
-					<h1 className="tyto-meeting-row-title">{m.tytoMeetingRowTitle({ source: serviceNames[state.source] })}</h1>
+					<h1 className="tyto-meeting-row-title">{m.tytoMeetingRowTitle({ source: serviceNames[state.source]() })}</h1>
 					<p className="tyto-meeting-row-sub">{m.tytoMeetingRowSources()}</p>
 				</div>
 				<button type="button" className="tyto-meeting-row-primary" disabled={busy} onClick={() => void startRecording('audio')}>

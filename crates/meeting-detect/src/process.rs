@@ -31,6 +31,7 @@ const BROWSER_BUNDLE_IDS: &[&str] = &[
     "org.mozilla.nightly",
     // Yandex Browser on mac: `/Applications/Yandex.app`, window owner «Yandex» (2026-11-03 probe).
     "ru.yandex.desktop.yandex-browser",
+    "com.apple.safari",
 ];
 
 const ZOOM_PROCESS_NAMES: &[&str] = &["zoom", "zoom.exe", "zoom.us", "zoom meetings"];
@@ -72,6 +73,11 @@ const BROWSER_PROCESS_NAMES: &[&str] = &[
     "opera.exe",
     // Yandex Browser on Windows. Only the `.exe` form: a bare `browser` is too generic elsewhere.
     "browser.exe",
+    // Window owner names on mac, used to pick the window for a video recording.
+    "yandex",
+    "safari",
+    // Safari captures the microphone in this system WebKit service, whose parent is not Safari.
+    "com.apple.webkit.gpu",
 ];
 
 pub(crate) fn source(process: &ProcessInfo) -> Option<ProcessKind> {

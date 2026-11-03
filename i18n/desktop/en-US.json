@@ -805,6 +805,7 @@
 	"tytoVideoWindowOpen": "Open the video in its own window",
 	"tytoVideoWindowClose": "Close the video window",
 	"tytoMeetingRowTitle": "Call in {source}",
+	"tytoMeetingRowBrowser": "the browser",
 	"tytoMeetingRowSources": "Your microphone and the other side",
 	"tytoMeetingRowRecord": "Record",
 	"tytoMeetingRowVideo": "With video",
