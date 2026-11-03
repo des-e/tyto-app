@@ -28,12 +28,7 @@ pub(crate) fn url_source(url: &str) -> Option<Source> {
     let split = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let (authority, path) = rest.split_at(split);
     let host = authority.rsplit('@').next().unwrap_or(authority);
-    let host = host
-        .split(':')
-        .next()
-        .unwrap_or(host)
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
+    let host = host.split(':').next().unwrap_or(host).trim_end_matches('.').to_ascii_lowercase();
     let host = host.strip_prefix("www.").unwrap_or(&host);
     let path = path.to_ascii_lowercase();
     if host.is_empty() || !host.contains('.') {
@@ -65,10 +60,8 @@ pub(crate) fn url_source(url: &str) -> Option<Source> {
 }
 
 fn is_telemost_host(host: &str) -> bool {
-    matches!(
-        host,
-        "telemost.yandex.ru" | "telemost.yandex.com" | "telemost.360.yandex.ru" | "telemost.yandex.com.tr"
-    ) || (host.starts_with("telemost.") && host.contains(".yandex."))
+    matches!(host, "telemost.yandex.ru" | "telemost.yandex.com" | "telemost.360.yandex.ru" | "telemost.yandex.com.tr")
+        || (host.starts_with("telemost.") && host.contains(".yandex."))
 }
 
 /// Where the last call found by address was, so the video recording can pick that window.
@@ -306,9 +299,7 @@ mod platform {
     use crate::WindowInfo;
     use std::ffi::c_void;
     use windows::Win32::Foundation::HWND;
-    use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
-    };
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
     use windows::Win32::System::Variant::VARIANT;
     use windows::Win32::UI::Accessibility::{
         CUIAutomation, IUIAutomation, IUIAutomationValuePattern, TreeScope_Descendants, UIA_ControlTypePropertyId,
@@ -442,30 +433,19 @@ mod tests {
             window(5, 902, "browser.exe", 1900, 1000),
         ];
         // mac: the mic owner's parent app owns the windows.
-        let mac = candidate_windows(
-            &windows,
-            &[browser(732, "Yandex", Some("/Applications/Yandex.app/Contents/MacOS/Yandex"))],
-        );
+        let mac = candidate_windows(&windows, &[browser(732, "Yandex", Some("/Applications/Yandex.app/Contents/MacOS/Yandex"))]);
         assert_eq!(mac.iter().map(|w| w.id).collect::<Vec<_>>(), vec![1]);
         // Windows: the mic sits in a utility child; its windows are the same executable.
         let win = candidate_windows(
             &windows,
-            &[browser(
-                4242,
-                "browser.exe",
-                Some(r"C:\Users\me\AppData\Local\Yandex\YandexBrowser\Application\browser.exe"),
-            )],
+            &[browser(4242, "browser.exe", Some(r"C:\Users\me\AppData\Local\Yandex\YandexBrowser\Application\browser.exe"))],
         );
         assert_eq!(win.iter().map(|w| w.id).collect::<Vec<_>>(), vec![5, 3]);
     }
 
     #[test]
     fn remembered_window_is_the_same_one_or_the_largest_of_that_browser() {
-        let windows = [
-            window(10, 732, "Yandex", 1728, 1084),
-            window(11, 732, "Yandex", 800, 600),
-            window(12, 5, "Finder", 2000, 1200),
-        ];
+        let windows = [window(10, 732, "Yandex", 1728, 1084), window(11, 732, "Yandex", 800, 600), window(12, 5, "Finder", 2000, 1200)];
         remember(732, Some(11), Source::Bitrix24);
         assert_eq!(remembered_window(&windows, Source::Bitrix24).map(|w| w.id), Some(11));
         assert_eq!(remembered_window(&windows, Source::Telemost), None);
