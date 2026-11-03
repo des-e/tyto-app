@@ -76,9 +76,22 @@ const BROWSER_PROCESS_NAMES: &[&str] = &[
     // Window owner names on mac, used to pick the window for a video recording.
     "yandex",
     "safari",
-    // Safari captures the microphone in this system WebKit service, whose parent is not Safari.
-    "com.apple.webkit.gpu",
 ];
+
+/// Safari, and every app built on WebKit (new Teams on mac too), captures the microphone in this
+/// system service, whose parent is not the app. It stays unrecognised so the running-apps
+/// fallback can still find Teams; only failing that does it mean Safari.
+pub(crate) fn is_webkit_capture(process: &ProcessInfo) -> bool {
+    normalize(&process.name) == "com.apple.webkit.gpu"
+        || process
+            .executable
+            .as_deref()
+            .is_some_and(|path| executable_name(path) == "com.apple.webkit.gpu")
+}
+
+pub(crate) fn is_safari(process: &ProcessInfo) -> bool {
+    process.bundle_id.as_deref().map(normalize).as_deref() == Some("com.apple.safari") || normalize(&process.name) == "safari"
+}
 
 pub(crate) fn source(process: &ProcessInfo) -> Option<ProcessKind> {
     let bundle_id = process.bundle_id.as_deref().map(normalize);

@@ -242,14 +242,26 @@ fn poll(scan_titles: bool) -> DetectionSnapshot {
         };
     }
 
+    let webkit = usage.processes.iter().any(process::is_webkit_capture);
     let (processes, owners) = candidates_with_origin(usage.processes, cfg!(target_os = "macos"), process::running_candidates);
     let browser_present = processes
         .iter()
         .any(|info| process::source(info) == Some(ProcessKind::Browser));
+    let safari_running = processes.iter().any(process::is_safari);
     DetectionSnapshot {
-        state: classify_active(processes, scan_titles, owners),
+        state: safari_fallback(classify_active(processes, scan_titles, owners), webkit, safari_running),
         mic_active: true,
         browser_present,
+    }
+}
+
+/// The WebKit capture service holds the microphone, no meeting app or call tab explains it, and
+/// Safari is running: an unnamed call in Safari.
+fn safari_fallback(state: MeetingState, webkit_owner: bool, safari_running: bool) -> MeetingState {
+    if !state.recording && webkit_owner && safari_running {
+        attributed(Source::Browser)
+    } else {
+        state
     }
 }
 
@@ -728,6 +740,23 @@ mod tests {
             classify_active(vec![process("chrome")], true, true).source,
             Some(Source::Browser)
         );
+    }
+
+    #[test]
+    fn webkit_capture_is_safari_only_when_nothing_else_explains_it() {
+        assert_eq!(
+            safari_fallback(MeetingState::inactive(), true, true).source,
+            Some(Source::Browser)
+        );
+        // New Teams on mac also captures through WebKit: Teams wins.
+        assert_eq!(
+            safari_fallback(attributed(Source::Teams), true, true).source,
+            Some(Source::Teams)
+        );
+        assert!(!safari_fallback(MeetingState::inactive(), true, false).recording);
+        assert!(!safari_fallback(MeetingState::inactive(), false, true).recording);
+        assert!(process::is_webkit_capture(&process("com.apple.WebKit.GPU")));
+        assert!(process::source(&process("com.apple.WebKit.GPU")).is_none());
     }
 
     #[test]
