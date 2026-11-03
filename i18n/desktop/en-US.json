@@ -811,7 +811,5 @@
 	"tytoHideVideo": "Hide video",
 	"tytoScreenPermissionTitle": "Screen recording permission needed",
 	"tytoScreenPermissionBody": "Open System Settings, Privacy & Security, Screen Recording, and turn on Tyto. Then restart Tyto.",
-	"tytoScreenPermissionOpen": "Open settings",
-	"tytoTabAddressPermission": "Calls by tab address",
-	"tytoTabAddressPermissionInfo": "Tyto recognises Bitrix24 in a browser and calls in Safari by the tab address. Turn on Tyto under Accessibility for that."
+	"tytoScreenPermissionOpen": "Open settings"
 }

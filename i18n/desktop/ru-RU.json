@@ -223,7 +223,7 @@
 	"runLlmCheck": "Запустить проверку",
 	"recordingSettings": "Запись",
 	"meetingDetection": "Обнаружение встреч",
-	"meetingDetectionInfo": "Предлагать запись, когда Яндекс Телемост, Битрикс24, Google Meet, Zoom или Microsoft Teams начинает использовать микрофон.",
+	"meetingDetectionInfo": "Уведомлять, когда Google Meet, Zoom или Microsoft Teams начинает использовать микрофон, чтобы можно было выбрать, начинать ли запись.",
 	"supportedMeetingServices": "Поддерживаемые сервисы встреч",
 	"recordingControls": "Управление записью",
 	"recordingPermissions": "Разрешения",
@@ -239,8 +239,8 @@
 	"recordingShortcutEnabledInfo": "Запускайте или останавливайте запись из любого места. Готовые записи сохраняются как проекты.",
 	"recordingShortcut": "Сочетание клавиш",
 	"recordingShortcutInfo": "Нажмите один раз, чтобы начать запись, и ещё раз, чтобы остановить.",
-	"meetPermission": "Звонки по названию вкладки",
-	"meetPermissionInfo": "Телемост и Google Meet в браузере Tyto узнает по названию вкладки. Для этого нужно разрешение «Запись экрана». Приложения Zoom, Teams и Битрикс24 работают без него.",
+	"meetPermission": "Распознавание Google Meet",
+	"meetPermissionInfo": "Требуется разрешение «Запись экрана». Zoom и Teams работают без него.",
 	"microphonePermission": "Микрофон",
 	"microphonePermissionInfo": "Требуется для записи звука с микрофона.",
 	"systemAudioPermission": "Системный звук",
@@ -811,7 +811,5 @@
 	"tytoHideVideo": "Скрыть видео",
 	"tytoScreenPermissionTitle": "Нужно разрешение на запись экрана",
 	"tytoScreenPermissionBody": "Откройте Системные настройки, раздел Конфиденциальность и безопасность, пункт про запись экрана, и включите Tyto. Затем перезапустите Tyto.",
-	"tytoScreenPermissionOpen": "Открыть настройки",
-	"tytoTabAddressPermission": "Звонки по адресу вкладки",
-	"tytoTabAddressPermissionInfo": "Битрикс24 в браузере и звонки в Safari Tyto узнает по адресу вкладки. Для этого включите Tyto в разделе «Универсальный доступ»."
+	"tytoScreenPermissionOpen": "Открыть настройки"
 }

@@ -4,10 +4,7 @@
 
 mod mic;
 mod process;
-mod tab_url;
 mod window_title;
-
-pub use tab_url::{accessibility_granted, request_accessibility};
 
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::{self, JoinHandle};
@@ -40,8 +37,7 @@ pub enum Source {
     Meet,
     /// Yandex Telemost in a browser tab.
     Telemost,
-    /// The Bitrix24 desktop app while it holds the microphone itself, or a portal open in the
-    /// browser that holds it (found by the tab address).
+    /// The Bitrix24 desktop app, only while it holds the microphone itself.
     Bitrix24,
 }
 
@@ -150,9 +146,7 @@ pub fn pick_meeting_window(windows: &[WindowInfo], source: Source) -> Option<Win
 
 /// `pick_meeting_window` over the windows on screen now.
 pub fn meeting_window(source: Source) -> Option<WindowInfo> {
-    let windows = visible_windows();
-    // A call found by the tab address has no telling title: use the window it was found in.
-    pick_meeting_window(&windows, source).or_else(|| tab_url::remembered_window(&windows, source))
+    pick_meeting_window(&visible_windows(), source)
 }
 
 /// A raw snapshot used to learn how new meeting apps look to the OS.
@@ -166,25 +160,16 @@ pub struct ProbeReport {
     pub mic_owners: Vec<String>,
     /// Empty while the microphone is idle: the windows are only enumerated when it is in use.
     pub windows: Vec<WindowInfo>,
-    /// `pid | address` of the open browser tabs, while the microphone is in use.
-    pub tab_urls: Vec<String>,
 }
 
 /// Read the microphone owners and, while the microphone is in use, the visible windows.
 pub fn probe() -> ProbeReport {
     let usage = mic::current_usage();
-    let windows = if usage.active { visible_windows() } else { Vec::new() };
-    let tab_urls = if usage.active {
-        tab_url::probe_lines(&windows, &usage.processes)
-    } else {
-        Vec::new()
-    };
     ProbeReport {
         mic_active: usage.active,
         owners_known: usage.owners_known,
         mic_owners: usage.processes.iter().map(owner_line).collect(),
-        windows,
-        tab_urls,
+        windows: if usage.active { visible_windows() } else { Vec::new() },
     }
 }
 
@@ -323,11 +308,6 @@ fn classify_active(processes: Vec<ProcessInfo>, scan_titles: bool, owners: bool)
         .cloned()
         .collect();
     if let Some((_, source)) = (!browsers.is_empty()).then(|| window_title::call_tab(&browsers)).flatten() {
-        return attributed(source);
-    }
-    // The title did not say; the address of the tab may (Bitrix24 «Мессенджер», Safari, mac
-    // without Screen Recording).
-    if let Some(source) = tab_url::call_by_url(&browsers) {
         return attributed(source);
     }
 
@@ -558,7 +538,6 @@ mod tests {
                 width: 800,
                 height: 600,
             }],
-            tab_urls: vec!["42 | https://telemost.yandex.ru/j/1".into()],
         };
         let json = serde_json::to_string(&report).unwrap();
         assert!(json.contains("\"owners_known\":true") && json.contains("Встреча"));
