@@ -1,7 +1,7 @@
 import { subDays, isAfter } from 'date-fns'
 import { useMemo, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
-import { getI18nLanguageName, getLocalizedLanguageName } from '~/lib/i18n'
+import { getLocalizedLanguageName } from '~/lib/i18n'
 import { cn } from '~/lib/style'
 import { usePreferenceProvider } from '~/providers/preference'
 import { Label } from '~/components/ui/label'
@@ -60,7 +60,9 @@ export default function LanguageInput({ variant = 'default' }: LanguageInputProp
 
 	// Grouped view for browsing; a flat filtered list the moment the user types.
 	const cutoff = subDays(new Date(), 7)
-	const popularLanguages = new Set(['english', 'en', 'hindi', 'hi', 'spanish', 'es', getI18nLanguageName()])
+	// Tyto is made for Russian-speaking calls: Russian first, then English.
+	const popularOrder = ['ru', 'en']
+	const popularLanguages = new Set(popularOrder)
 	const recentCodes = new Set(preference.recentLanguages.filter((r) => isAfter(r.ts, cutoff)).map((r) => r.code))
 	const needle = query.trim().toLowerCase()
 
@@ -84,6 +86,7 @@ export default function LanguageInput({ variant = 'default' }: LanguageInputProp
 		}
 		const recentOrder = preference.recentLanguages.map((r) => r.code)
 		recent.sort((a, b) => recentOrder.indexOf(a.code) - recentOrder.indexOf(b.code))
+		popular.sort((a, b) => popularOrder.indexOf(a.code.toLowerCase()) - popularOrder.indexOf(b.code.toLowerCase()))
 		const result: LanguageGroup[] = []
 		if (autoEntry) result.push({ label: null, items: [autoEntry] })
 		if (recent.length) result.push({ label: m.recentlyUsed(), items: recent })
