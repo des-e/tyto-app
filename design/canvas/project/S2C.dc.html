@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Запись до расшифровки, вариант C</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <main style="flex: 1; min-height: 0; padding: 64px 56px 0 56px; display: flex; flex-direction: column; gap: 24px; overflow: hidden;">
+      <header>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Запись 10∶35</h1>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #666;">3 ноября, 10:35 · <span style="font-family: 'Geist Mono', monospace;">0:12</span> · звук и экран</p>
+      </header>
+      <section aria-labelledby="s2c-run" style="display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 16px; border: 1px solid #eaeaea; border-radius: 12px; background: #fafafa;">
+        <h2 id="s2c-run" style="margin: 0; flex: 1; font-size: 14px; font-weight: 500;">Запись еще не расшифрована</h2>
+        <span style="height: 34px; border: 1px solid #e1e1e1; border-radius: 8px; background: #fff; padding: 0 10px; display: flex; align-items: center; gap: 8px; font-size: 13.5px;">Русский <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+        <button type="button" aria-label="Еще настройки" style="width: 34px; height: 34px; border: 1px solid #e1e1e1; border-radius: 8px; background: #fff; color: #666; display: grid; place-items: center; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></button>
+        <button type="button" style="height: 34px; padding: 0 16px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 13.5px; font-weight: 500; cursor: pointer;">Расшифровать</button>
+      </section>
+      <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 22px; opacity: 0.55;">
+        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 16px;">
+          <span style="font-size: 12.5px; color: #8f8f8f;">Говорящий 1<br><span style="font-family: 'Geist Mono', monospace;">00:00</span></span>
+          <span style="display: flex; flex-direction: column; gap: 8px; padding-top: 3px;"><span style="height: 9px; border-radius: 4px; background: #ebebeb; width: 92%;"></span><span style="height: 9px; border-radius: 4px; background: #ebebeb; width: 64%;"></span></span>
+        </div>
+        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 16px;">
+          <span style="font-size: 12.5px; color: #8f8f8f;">Говорящий 2<br><span style="font-family: 'Geist Mono', monospace;">00:04</span></span>
+          <span style="display: flex; flex-direction: column; gap: 8px; padding-top: 3px;"><span style="height: 9px; border-radius: 4px; background: #ebebeb; width: 78%;"></span></span>
+        </div>
+        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 16px;">
+          <span style="font-size: 12.5px; color: #8f8f8f;">Говорящий 1<br><span style="font-family: 'Geist Mono', monospace;">00:07</span></span>
+          <span style="display: flex; flex-direction: column; gap: 8px; padding-top: 3px;"><span style="height: 9px; border-radius: 4px; background: #ebebeb; width: 86%;"></span><span style="height: 9px; border-radius: 4px; background: #ebebeb; width: 40%;"></span></span>
+        </div>
+      </div>
+    </main>
+    <dc-import name="Player" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

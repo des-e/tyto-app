@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Расшифровка, вариант C</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <div style="height: 48px; flex-shrink: 0; display: flex; align-items: center; padding: 0 16px 0 32px; gap: 4px;">
+      <div role="tablist" aria-label="Вид записи" style="display: flex; gap: 2px;">
+        <button type="button" role="tab" aria-selected="true" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: #ebebeb; font-size: 13px; font-weight: 500;">Текст</button>
+        <button type="button" role="tab" aria-selected="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: #666;">Сводка</button>
+      </div>
+      <span style="flex: 1;"></span>
+      <button type="button" aria-label="Поиск по тексту" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+      <button type="button" style="margin-left: 6px; height: 30px; padding: 0 12px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500;">Экспорт</button>
+    </div>
+    <main style="flex: 1; min-height: 0; padding: 16px 32px 0 32px; overflow: hidden;">
+      <header style="margin: 0 0 22px 0;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Планерка отдела продаж</h1>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #666;">29 октября · <span style="font-family: 'Geist Mono', monospace;">48:00</span> · русский · 3 участника</p>
+      </header>
+      <sc-for list="{{lines}}" as="line" hint-placeholder-count="6">
+        <div style="display: grid; grid-template-columns: 136px minmax(0, 1fr) 44px; column-gap: 16px; padding-top: {{line.gap}}; border-top: 1px solid {{line.rule}};">
+          <span style="display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0;">
+            <sc-if value="{{line.first}}" hint-placeholder-val="{{true}}"><span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 11px; background: {{line.tint}}; display: grid; place-items: center; font-size: 11px; font-weight: 600;">{{line.initial}}</span><span style="font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{line.who}}</span></sc-if>
+          </span>
+          <p style="margin: 0; padding: 2px 8px; margin-left: -8px; border-radius: 6px; background: {{line.bg}}; font-size: 15px; line-height: 1.6; max-width: 560px;">{{line.text}}</p>
+          <span style="text-align: right; font-family: 'Geist Mono', monospace; font-size: 11.5px; color: {{line.timeColor}}; padding-top: 6px;">{{line.time}}</span>
+        </div>
+      </sc-for>
+    </main>
+    <dc-import name="Player" time="0:14" total="48:00" progress="1%" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tint = { 'Денис': '#e6effd', 'Ольга Смирнова': '#fdeee2', 'Андрей': '#e3f4ea' };
+    const raw = [
+      ['00:00', 'Денис', 'Давайте начнем с поставок. По второму складу сроки сдвигаются на неделю.'],
+      ['00:09', 'Ольга Смирнова', 'Это из-за перевозчика? Они обещали машину на четверг.'],
+      ['00:14', 'Ольга Смирнова', 'Если не успеют, клиенту надо сказать сегодня, а не в пятницу.', true],
+      ['00:21', 'Денис', 'Да, перевозчик. Я напишу клиенту после созвона и предложу частичную отгрузку.'],
+      ['00:33', 'Андрей', 'Частичную можем собрать к среде, остатки есть на первом складе.'],
+      ['00:41', 'Денис', 'Отлично. Тогда фиксируем: среда, частичная отгрузка, остальное по факту.'],
+    ];
+    const lines = raw.map((r, i) => {
+      const first = i === 0 || raw[i - 1][1] !== r[1];
+      return { time: r[0], who: r[1], initial: r[1][0], tint: tint[r[1]], text: r[2], first: first,
+        gap: first && i > 0 ? '12px' : '2px', rule: first && i > 0 ? '#f0f0f0' : 'transparent',
+        timeColor: r[3] ? '#171717' : '#8f8f8f', bg: r[3] ? '#f2f2f2' : 'transparent' };
+    });
+    return { lines: lines };
+  }
+}
+</script>
+</body>
+</html>

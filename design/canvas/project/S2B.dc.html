@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Запись до расшифровки, вариант B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <main style="flex: 1; min-height: 0; padding: 64px 48px 0 48px; display: flex; flex-direction: column; gap: 24px;">
+      <header>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Запись 10∶35</h1>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #666;">3 ноября, 10:35 · <span style="font-family: 'Geist Mono', monospace;">0:12</span> · не расшифровано</p>
+      </header>
+      <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 20px; align-items: start;">
+        <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px;">
+          <div style="aspect-ratio: 16 / 9; border-radius: 10px; background: #1a1a1a; position: relative; overflow: hidden;">
+            <span style="position: absolute; left: 8%; top: 12%; width: 22%; height: 76%; border-radius: 4px; background: #2a2a2a;"></span>
+            <span style="position: absolute; left: 34%; top: 12%; width: 58%; height: 54%; border-radius: 4px; background: #333;"></span>
+            <span style="position: absolute; left: 34%; top: 70%; width: 58%; height: 18%; border-radius: 4px; background: #262626;"></span>
+            <button type="button" aria-label="Воспроизвести" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; border: 0; border-radius: 22px; background: rgba(255,255,255,0.92); color: #171717; display: grid; place-items: center; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"></path></svg></button>
+          </div>
+          <figcaption style="font-size: 12px; color: #666;">Окно Яндекс Телемоста · 1920×1080</figcaption>
+        </figure>
+        <section aria-labelledby="s2b-run" style="border: 1px solid #eaeaea; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+          <h2 id="s2b-run" style="margin: 0; font-size: 15px; font-weight: 600;">Расшифровать</h2>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 500; color: #666;">Язык встречи
+            <span style="height: 36px; border: 1px solid #e1e1e1; border-radius: 8px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; font-size: 13.5px; font-weight: 400; color: #171717;">Русский <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+          </label>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="flex: 1;"><span style="display: block; font-size: 13.5px; font-weight: 500;">Разделить по говорящим</span><span style="display: block; font-size: 12px; color: #666;">Кто что сказал</span></span>
+            <button type="button" role="switch" aria-checked="true" aria-label="Разделить по говорящим" style="width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 10px; background: #171717; display: flex; justify-content: flex-end;"><span style="width: 16px; height: 16px; border-radius: 8px; background: #fff;"></span></button>
+          </div>
+          <button type="button" style="height: 40px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">Расшифровать</button>
+          <button type="button" style="align-self: flex-start; border: 0; background: transparent; padding: 0; font-size: 13px; color: #666; text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px; cursor: pointer;">Еще настройки</button>
+        </section>
+      </div>
+    </main>
+    <dc-import name="Player" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Меню настроек</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<nav aria-label="Разделы настроек" style="width: 232px; height: 592px; box-sizing: border-box; background: #fafafa; border-right: 1px solid #eaeaea; padding: 24px 10px 12px 10px; display: flex; flex-direction: column; font-family: Geist, system-ui, sans-serif; color: #171717;">
+  <div style="padding: 0 8px 14px 8px; font-size: 15px; font-weight: 600;">Настройки</div>
+  <sc-for list="{{items}}" as="it" hint-placeholder-count="12">
+    <sc-if value="{{it.isLabel}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; font-weight: 500; color: #666; padding: 14px 8px 4px 8px;">{{it.label}}</div></sc-if>
+    <sc-if value="{{it.isItem}}" hint-placeholder-val="{{true}}"><a href="#" style="{{it.style}}">{{it.label}}</a></sc-if>
+  </sc-for>
+  <span style="margin-top: auto; padding: 0 8px; font-family: 'Geist Mono', monospace; font-size: 12px; color: #8f8f8f;">Tyto 0.2.1</span>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"text","default":"Запись"},"$preview":{"width":232,"height":592}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = this.props.active ?? 'Запись';
+    const base = 'display: flex; align-items: center; height: 32px; padding: 0 8px; border-radius: 6px; color: inherit; text-decoration: none; font-size: 13.5px;';
+    const list = ['Общие', 'Конфиденциальность', '#Расшифровка', 'Распознавание', 'Модели', 'Тонкая настройка', '#Запись и голос', 'Запись', 'Диктовка', '#Дополнительно', 'ИИ-ассистент', 'Агенты', 'Для опытных'];
+    const items = list.map((x) => x[0] === '#'
+      ? { isLabel: true, isItem: false, label: x.slice(1) }
+      : { isLabel: false, isItem: true, label: x, style: base + (x === active ? ' background: #ebebeb; font-weight: 500;' : '') });
+    return { items: items };
+  }
+}
+</script>
+</body>
+</html>

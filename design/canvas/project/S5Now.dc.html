@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Настройки сейчас</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="width: 1000px; height: 640px; background: #8a8a8a; display: flex; align-items: center; justify-content: center; font-family: Geist, system-ui, sans-serif; color: #171717;">
+  <div role="dialog" aria-label="Настройки" style="width: 952px; height: 592px; border-radius: 16px; overflow: hidden; display: flex; background: #fff;">
+    <nav style="width: 232px; flex-shrink: 0; background: #fafafa; border-right: 1px solid #eaeaea; padding: 28px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; font-size: 14px;">
+      <div style="padding: 0 10px 14px 10px; font-size: 16px; font-weight: 600;">Настройки</div>
+      <span style="padding: 7px 10px;">Общие</span>
+      <span style="padding: 7px 10px;">Конфиденциальность</span>
+      <span style="padding: 12px 10px 4px 10px; font-size: 12.5px; color: #666;">Расшифровка</span>
+      <span style="padding: 7px 10px;">Распознавание</span>
+      <span style="padding: 7px 10px;">Модели</span>
+      <span style="padding: 7px 10px;">Тонкая настройка</span>
+      <span style="padding: 12px 10px 4px 10px; font-size: 12.5px; color: #666;">Запись и голос</span>
+      <span style="position: relative; padding: 7px 10px; background: #fff; border-radius: 6px; box-shadow: 0 0 0 1px #eaeaea; font-weight: 600;"><span style="position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: #171717;"></span>Запись</span>
+      <span style="padding: 7px 10px;">Диктовка</span>
+      <span style="padding: 12px 10px 4px 10px; font-size: 12.5px; color: #666;">Дополнительно</span>
+      <span style="padding: 7px 10px;">ИИ-ассистент</span>
+      <span style="padding: 7px 10px;">Агенты</span>
+    </nav>
+    <main style="flex: 1; min-width: 0; padding: 28px 36px; overflow: hidden;">
+      <h1 style="margin: 0 0 22px 0; font-size: 26px; font-weight: 700;">Запись</h1>
+      <h2 style="margin: 0; padding-bottom: 10px; border-bottom: 1px solid #eaeaea; font-size: 15px; font-weight: 600;">Обнаружение встреч</h2>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid #eaeaea;">
+        <div style="flex: 1;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span style="height: 32px; padding: 0 10px; border: 1px solid #eaeaea; border-radius: 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666;"><span style="width: 18px; height: 14px; border-radius: 3px; background: #f4b400;"></span>Google Meet</span>
+            <span style="height: 32px; padding: 0 10px; border: 1px solid #eaeaea; border-radius: 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666;"><span style="font-size: 9px; color: #0b5cff; font-weight: 700;">zoom</span>Zoom</span>
+            <span style="height: 32px; padding: 0 10px; border: 1px solid #eaeaea; border-radius: 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666;"><span style="width: 16px; height: 16px; border-radius: 4px; background: #5059c9;"></span>Microsoft Teams</span>
+          </div>
+          <p style="margin: 6px 0 0 0; font-size: 13px; line-height: 1.45; color: #666;">Уведомлять, когда Google Meet, Zoom или Microsoft Teams начинает использовать микрофон, чтобы можно было выбрать, начинать ли запись.</p>
+        </div>
+        <span style="width: 36px; height: 20px; border-radius: 10px; background: #171717; display: flex; justify-content: flex-end; padding: 2px; box-sizing: border-box;"><span style="width: 16px; height: 16px; border-radius: 8px; background: #fff;"></span></span>
+      </div>
+      <h2 style="margin: 28px 0 0 0; padding-bottom: 10px; border-bottom: 1px solid #eaeaea; font-size: 15px; font-weight: 600;">Управление записью</h2>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid #eaeaea;">
+        <div style="flex: 1;"><div style="font-size: 14px;">Автоматически расшифровывать записи</div><div style="font-size: 13px; color: #666;">Автоматически запускать расшифровку после завершения записи.</div></div>
+        <span style="width: 36px; height: 20px; border-radius: 10px; background: #e1e1e1; padding: 2px; box-sizing: border-box;"><span style="display: block; width: 16px; height: 16px; border-radius: 8px; background: #fff;"></span></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 14px 0;">
+        <div style="flex: 1;"><div style="font-size: 14px;">Качество видео</div><div style="font-size: 13px; color: #666;">До 1080p, 15 кадров в секунду, около 1 ГБ в час</div></div>
+        <span style="display: flex; border: 1px solid #e1e1e1; border-radius: 8px; padding: 2px;"><span style="padding: 6px 12px; border-radius: 6px; background: #171717; color: #fff; font-size: 13px;">Хорошее</span><span style="padding: 6px 12px; font-size: 13px;">Высокое</span></span>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

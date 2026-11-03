@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Таблица сервисов</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 640px; height: 260px; box-sizing: border-box; padding: 28px 32px; background: #fff; font-family: Geist, system-ui, sans-serif; color: #171717; display: flex; flex-direction: column; gap: 10px;">
+  <div style="font-size: 14px; font-weight: 500;">Предлагать запись, когда начинается звонок</div>
+  <table style="border-collapse: collapse; font-size: 12.5px; width: 100%;">
+    <tbody>
+      <tr style="border-top: 1px solid transparent;"><td style="padding: 3px 0; width: 30px;"><span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f2f2; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #444;">Т</span></td><td>Яндекс Телемост</td><td style="text-align: right; color: #666;">сразу, по вкладке браузера</td></tr>
+      <tr style="border-top: 1px solid #f0f0f0;"><td style="padding: 3px 0; width: 30px;"><span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f2f2; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #444;">Б</span></td><td>Битрикс24</td><td style="text-align: right; color: #666;">сразу, в приложении</td></tr>
+      <tr style="border-top: 1px solid #f0f0f0;"><td style="padding: 3px 0; width: 30px;"><span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f2f2; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #444;">G</span></td><td>Google Meet</td><td style="text-align: right; color: #666;">сразу, по вкладке браузера</td></tr>
+      <tr style="border-top: 1px solid #f0f0f0;"><td style="padding: 3px 0; width: 30px;"><span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f2f2; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #444;">Z</span></td><td>Zoom</td><td style="text-align: right; color: #666;">сразу</td></tr>
+      <tr style="border-top: 1px solid #f0f0f0;"><td style="padding: 3px 0; width: 30px;"><span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f2f2; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #444;">T</span></td><td>Microsoft Teams</td><td style="text-align: right; color: #666;">сразу</td></tr>
+      <tr style="border-top: 1px solid #f0f0f0;"><td style="padding: 3px 0; width: 30px;"><span style="width: 22px; height: 22px; border-radius: 6px; background: #f2f2f2; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #444;">…</span></td><td>Другой сервис в браузере</td><td style="text-align: right; color: #666;">через 20 секунд</td></tr>
+    </tbody>
+  </table>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":260}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

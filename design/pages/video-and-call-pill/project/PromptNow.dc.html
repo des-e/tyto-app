@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плашка созвона сейчас</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#555}a:hover{color:#111}
+</style>
+</helmet>
+<div style="width: 320px; height: 168px; box-sizing: border-box; padding: 8px; background: #dfe3e8; font-family: Inter, system-ui, sans-serif; color: #141414">
+  <section style="height: 152px; box-sizing: border-box; background: #fff; border: 1px solid #e3e3e0; border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,0.14); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <div style="width: 48px; height: 36px; display: flex; align-items: center">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8a8a86" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"></rect><path d="m16 10 5-3v10l-5-3"></path></svg>
+      </div>
+      <div style="min-width: 0">
+        <div style="font-size: 14px; font-weight: 600; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Идет созвон в Яндекс Телемост</div>
+        <div style="font-size: 12px; color: #77776f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Записать встречу и расшифровать?</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 6px">
+      <span style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #e3e3e0; border-radius: 6px; font-size: 11px; font-weight: 500">☑ Микрофон</span>
+      <span style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #e3e3e0; border-radius: 6px; font-size: 11px; font-weight: 500">☑ Системный звук</span>
+    </div>
+    <div style="margin-top: auto; display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid #ececea; padding-top: 8px">
+      <button type="button" style="height: 28px; padding: 0 8px; border: 0; background: transparent; font-size: 12px">Не сейчас</button>
+      <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: #141414; color: #fff; font-size: 12px">Записать</button>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":320,"height":168}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

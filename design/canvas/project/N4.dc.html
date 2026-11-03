@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Две кнопки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<aside style="width: 232px; height: 300px; background: #fafafa; border-right: 1px solid #eaeaea; padding: 14px 8px 0 8px; box-sizing: border-box; font-family: Geist, system-ui, sans-serif; color: #171717;">
+  <div style="display: flex; gap: 8px; padding: 4px 8px 14px 8px;"><span style="width: 12px; height: 12px; border-radius: 6px; background: #d4d4d4;"></span><span style="width: 12px; height: 12px; border-radius: 6px; background: #d4d4d4;"></span><span style="width: 12px; height: 12px; border-radius: 6px; background: #d4d4d4;"></span></div>
+  <div style="display: flex; align-items: center; height: 32px; padding: 0 0 0 8px;">
+    <svg viewBox="0 -114 396.81 142.61" width="61" height="22" fill="#171717" role="img" aria-label="Tyto"><g transform="translate(-57.35 -158.47) scale(0.21)"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path></g><g transform="translate(132.08 0)"><path d="M4.40 -109.00L25.94 -100.00Q44.29 -97.00 62.63 -100.00L84.17 -109.00V-83.98H4.40Z"></path><path d="M36.27 -85.98H52.3V0H36.27Z"></path><path d="M94.54 0.7 65.3 -68.61H82.89L102.8 -17.53H97.62L118.63 -68.61H136.36L104.61 0.7ZM74.24 28.61 95.51 -15.31 104.61 0.7 91.92 28.61Z"></path><path d="M158.76 0V-97.19H174.78V0ZM142.36 -54.11V-68.61H191.17V-54.11Z"></path><path fill-rule="evenodd" d="M192.67 -34.31A36.03 36.03 0 1 1 264.73 -34.31A36.03 36.03 0 1 1 192.67 -34.31ZM207.41 -34.31A21.29 21.29 0 1 0 249.99 -34.31A21.29 21.29 0 1 0 207.41 -34.31Z"></path><path d="M220.19 -34.31A8.52 8.52 0 1 1 237.22 -34.31A8.52 8.52 0 1 1 220.19 -34.31Z"></path></g></svg>
+    <span style="flex: 1;"></span>
+    <button type="button" aria-label="Поиск" style="width: 28px; height: 28px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 10px;">
+    <button type="button" style="height: 32px; border: 0; border-radius: 6px; background: #171717; color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer;"><span style="width: 7px; height: 7px; border-radius: 4px; background: #ff5b4f;"></span>Записать</button>
+    <button type="button" style="height: 32px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fff; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer;">Файл</button>
+  </div>
+  <div style="font-size: 12px; font-weight: 500; color: #666; padding: 16px 8px 4px 8px;">Сегодня</div>
+  <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; color: inherit; text-decoration: none; font-size: 13.5px;"><span style="flex: 1;">Запись 10∶35</span><span style="font-size: 12px; color: #666;">0:12</span><span style="width: 6px; height: 6px; border-radius: 3px; background: #a8a8a8;"></span></a>
+  <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; color: inherit; text-decoration: none; font-size: 13.5px;"><span style="flex: 1;">Планерка отдела продаж</span><span style="font-size: 12px; color: #666;">48:00</span></a>
+</aside>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":232,"height":300}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

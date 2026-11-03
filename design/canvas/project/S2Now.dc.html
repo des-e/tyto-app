@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Запись до расшифровки сейчас</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #eaeaea; display: flex; align-items: flex-end; padding: 0 16px 0 28px; gap: 22px;">
+      <span style="font-size: 14px; font-weight: 500; padding-bottom: 12px; border-bottom: 2px solid #171717;">Текст</span>
+      <span style="font-size: 14px; color: #8f8f8f; padding-bottom: 14px;">Сводка</span>
+      <span style="font-size: 14px; color: #8f8f8f; padding-bottom: 14px;">Темы</span>
+      <span style="flex: 1;"></span>
+      <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 10px;">
+        <button type="button" style="height: 30px; padding: 0 10px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fafafa; font-size: 13px; display: flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"></path><path d="m7 10 5 5 5-5"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path></svg>Экспорт</button>
+        <button type="button" aria-label="Поиск по тексту" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+        <button type="button" aria-label="Вид" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></button>
+        <button type="button" aria-label="Новая расшифровка" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+      </div>
+    </div>
+    <main style="flex: 1; min-height: 0; padding: 32px 56px 0 56px; display: flex; flex-direction: column; align-items: center;">
+      <h1 style="align-self: stretch; text-align: center; margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em;">Запись 10∶35</h1>
+      <section style="margin-top: 36px; width: 420px; border: 1px solid #eaeaea; border-radius: 16px; padding: 32px; display: flex; flex-direction: column; align-items: center; text-align: center;">
+        <span style="width: 44px; height: 44px; border-radius: 22px; background: #f2f2f2; color: #666; display: grid; place-items: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M2 10v3"></path><path d="M6 6v11"></path><path d="M10 3v18"></path><path d="M14 8v7"></path><path d="M18 5v13"></path><path d="M22 10v3"></path></svg></span>
+        <h2 style="margin: 16px 0 0 0; font-size: 16px; font-weight: 600;">Запись готова</h2>
+        <p style="margin: 6px 0 0 0; font-size: 14px; line-height: 1.5; color: #666;">Аудио сохранено. Когда будете готовы к расшифровке, выберите язык и параметры.</p>
+        <div style="display: flex; align-items: center; gap: 14px; margin-top: 18px; font-size: 13px;">
+          <span style="height: 32px; padding: 0 14px; border: 1px solid #e1e1e1; border-radius: 16px; display: flex; align-items: center;">Определить автоматически</span>
+          <span style="color: #666;">Еще настройки</span>
+        </div>
+        <button type="button" style="margin-top: 14px; height: 40px; padding: 0 22px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 14px; font-weight: 500;">Расшифровать</button>
+      </section>
+    </main>
+    <dc-import name="Player" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

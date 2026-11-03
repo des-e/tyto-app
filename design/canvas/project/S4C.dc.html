@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Ход расшифровки, несколько файлов</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" running="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <main style="flex: 1; min-width: 0; padding: 64px 48px 0 48px; display: flex; flex-direction: column; gap: 24px; overflow: hidden;">
+    <header style="display: flex; flex-direction: column; gap: 10px;">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Расшифровка 5 файлов</h1>
+      <div style="display: flex; align-items: baseline; gap: 10px; font-size: 13.5px;">
+        <span><span style="font-family: 'Geist Mono', monospace;">2</span> из <span style="font-family: 'Geist Mono', monospace;">5</span> готово</span>
+        <span style="color: #666;">осталось около 12 мин</span>
+        <span style="flex: 1;"></span>
+        <button type="button" style="border: 0; background: transparent; padding: 0; font-size: 13px; color: #666; text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px; cursor: pointer;">Остановить все</button>
+      </div>
+      <div role="progressbar" aria-valuenow="52" aria-valuemin="0" aria-valuemax="100" style="height: 4px; border-radius: 2px; background: #ebebeb; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 4px; width: 52%; border-radius: 2px; background: #171717;"></span></div>
+    </header>
+    <ul style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #eaeaea;">
+      <sc-for list="{{files}}" as="f" hint-placeholder-count="5">
+        <li style="display: grid; grid-template-columns: minmax(0, 1fr) 72px 150px; align-items: center; gap: 16px; min-height: 48px; padding: 0 4px; border-bottom: 1px solid #eaeaea; background: {{f.bg}};">
+          <span style="font-size: 14px; font-weight: {{f.weight}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{f.name}}</span>
+          <span style="text-align: right; font-family: 'Geist Mono', monospace; font-size: 12px; color: #666;">{{f.length}}</span>
+          <span style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 13px; color: {{f.statusColor}};">
+            <sc-if value="{{f.running}}" hint-placeholder-val="{{false}}"><span style="width: 60px; height: 3px; border-radius: 2px; background: #ebebeb; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 3px; width: 64%; border-radius: 2px; background: #171717;"></span></span></sc-if>
+            {{f.status}}
+          </span>
+        </li>
+      </sc-for>
+    </ul>
+    <p style="margin: 0; font-size: 12.5px; color: #666;">Готовые файлы уже можно открыть, остальные продолжат расшифровываться.</p>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const files = [
+      ['Созвон с подрядчиком', '42:10', 'Готово', 'done'],
+      ['Интервью с кандидатом', '1:04:33', 'Готово', 'done'],
+      ['Планерка отдела продаж', '48:00', '64%', 'running'],
+      ['Встреча с клиентом, 30 октября', '27:45', 'В очереди', 'queued'],
+      ['Голосовая заметка 14', '3:12', 'В очереди', 'queued'],
+    ].map((f) => ({ name: f[0], length: f[1], status: f[2], running: f[3] === 'running',
+      bg: f[3] === 'running' ? '#fafafa' : 'transparent', weight: f[3] === 'running' ? '500' : '400',
+      statusColor: f[3] === 'queued' ? '#8f8f8f' : '#171717' }));
+    return { files: files };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плашка записи с уровнем звука</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="position: relative; width: 560px; height: 200px; background: #e4e4e7; font-family: Geist, system-ui, sans-serif; color: #171717; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; overflow: hidden;">
+  <section aria-label="Управление записью" style="height: 52px; box-sizing: border-box; border: 1px solid #e1e1e1; border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 12px; padding: 0 8px 0 14px;">
+    <span style="width: 9px; height: 9px; border-radius: 5px; background: #ff5b4f; flex-shrink: 0;"></span><span style="font-family: 'Geist Mono', monospace; font-size: 14px; color: #171717;">12:34</span>
+    <span style="width: 1px; height: 24px; background: #eaeaea;"></span>
+    <span style="display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #666;">
+      <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 52px;">Вы</span><span style="width: 64px; height: 4px; border-radius: 2px; background: #ebebeb; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 4px; width: 60%; border-radius: 2px; background: #171717;"></span></span></span>
+      <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 52px;">Собеседники</span><span style="width: 64px; height: 4px; border-radius: 2px; background: #ebebeb; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 4px; width: 25%; border-radius: 2px; background: #171717;"></span></span></span>
+    </span>
+    <button type="button" aria-label="Пауза" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: #666; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></button>
+    <button type="button" aria-label="Остановить запись" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: #f2f2f2; display: grid; place-items: center;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #ff5b4f;"></span></button>
+  </section>
+  <p style="margin: 0; font-size: 12px; color: #666;">Видно, что пишутся оба звука, а не только микрофон</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":560,"height":200}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

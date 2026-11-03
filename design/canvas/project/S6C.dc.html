@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Первый запуск, вариант C</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="position: relative; width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" empty="{{yes}}" hint-size="232px,640px"></dc-import>
+  <div aria-label="Загрузка моделей" style="position: absolute; left: 8px; width: 216px; bottom: 48px; box-sizing: border-box; padding: 10px 10px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; display: flex; flex-direction: column; gap: 6px;">
+    <div style="display: flex; justify-content: space-between; font-size: 12px;"><span style="font-weight: 500;">Скачиваем модели</span><span style="font-family: 'Geist Mono', monospace; color: #666;">17%</span></div>
+    <div style="height: 3px; border-radius: 2px; background: #ebebeb; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 3px; width: 17%; border-radius: 2px; background: #171717;"></span></div>
+    <div style="font-size: 11.5px; color: #666;">осталось около 5 мин</div>
+  </div>
+  <main style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 56px; box-sizing: border-box;">
+    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+      <svg viewBox="262 200 500 680" width="34" height="46" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+      <h1 style="margin: 16px 0 0 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Добро пожаловать в Tyto</h1>
+      <p style="margin: 6px 0 0 0; font-size: 14px; color: #666;">Записывать можно уже сейчас. Расшифровка заработает, когда скачаются модели.</p>
+    </div>
+    <section aria-labelledby="s6c-q" style="margin-top: 24px; display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid #eaeaea; border-radius: 12px; background: #fafafa;">
+      <div style="flex: 1;"><h2 id="s6c-q" style="margin: 0; font-size: 14px; font-weight: 500;">Предлагать запись, когда начинается звонок?</h2><p style="margin: 2px 0 0 0; font-size: 12.5px; color: #666;">Телемост, Битрикс24, Zoom, Meet, Teams и звонки в браузере</p></div>
+      <button type="button" style="height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 13px; font-weight: 500;">Да, предлагать</button>
+      <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; font-size: 13px; color: #666;">Не сейчас</button>
+    </section>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px;">
+      <section style="border: 1px solid #eaeaea; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+        <div><h2 style="margin: 0; font-size: 16px; font-weight: 600;">Записать звонок</h2><p style="margin: 4px 0 0 0; font-size: 13px; color: #666;">Микрофон и звук собеседников</p></div>
+        <button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 14px; font-weight: 500;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #ff5b4f;"></span>Начать запись</button>
+      </section>
+      <section style="border: 1px dashed #c9c9c9; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; background: #fafafa;">
+        <div><h2 style="margin: 0; font-size: 16px; font-weight: 600; color: #8f8f8f;">Расшифровать файл</h2><p style="margin: 4px 0 0 0; font-size: 13px; color: #8f8f8f;">Станет доступно через 5 минут</p></div>
+        <button type="button" disabled style="height: 40px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; font-size: 14px; color: #b0b0b0;">Выбрать файл</button>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return { yes: true }; } }
+</script>
+</body>
+</html>

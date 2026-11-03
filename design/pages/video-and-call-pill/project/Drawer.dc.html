@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плеер выезжает вверх</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4d4d4d}a:hover{color:#171717}
+</style>
+</helmet>
+<div style="width: 960px; height: 600px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #ffffff; overflow: hidden">
+  <aside style="width: 220px; flex-shrink: 0; background: #fafafa; border-right: 1px solid #ebebeb; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+    <div style="font-weight: 600; font-size: 19px; padding: 4px 6px">Tyto</div>
+    <div style="height: 32px; border: 1px solid #ebebeb; border-radius: 6px; background: #fff; font-size: 13px; color: #666; display: flex; align-items: center; padding: 0 10px">Поиск</div>
+    <div style="font-size: 12px; color: #666; padding: 8px 6px 0">Раньше</div>
+    <div style="background: #f2f2f2; border-radius: 6px; padding: 8px 10px">
+      <div style="font-size: 13px; font-weight: 500">Планерка отдела продаж</div>
+      <div style="font-size: 12px; color: #666">25 окт. · 11 мин</div>
+    </div>
+  </aside>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <div style="display: flex; align-items: center; gap: 20px; padding: 0 28px; height: 48px; border-bottom: 1px solid #ebebeb; font-size: 14px">
+      <span style="font-weight: 500; border-bottom: 2px solid #171717; padding: 13px 0">Текст</span>
+      <span style="color: #666">Сводка</span>
+      <span style="color: #666">Темы</span>
+    </div>
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 56px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; gap: 16px"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #666; width: 44px">00:00</span><div><div style="font-size: 13px; font-weight: 500">Говорящий 1</div><div style="font-size: 15px; line-height: 1.55">Начнем с поставок: по Казани сроки сдвигаются на неделю.</div></div></div>
+      <div style="display: flex; gap: 16px; background: #f2f2f2; border-radius: 6px; padding: 6px 8px; margin: 0 -8px"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #666; width: 44px">00:42</span><div><div style="font-size: 13px; font-weight: 500">Говорящий 2</div><div style="font-size: 15px; line-height: 1.55">Покажу на экране, что поменялось в карточке сделки.</div></div></div>
+    </div>
+    <div style="border-top: 1px solid #ebebeb; background: #fafafa; display: flex; flex-direction: column">
+      <div style="display: flex; justify-content: center; padding: 6px 0 0">
+        <button type="button" aria-label="Свернуть видео" style="width: 44px; height: 20px; border: 0; background: transparent; padding: 0; display: flex; align-items: center; justify-content: center">
+          <span style="width: 36px; height: 4px; border-radius: 2px; background: #c9c9c9"></span>
+        </button>
+      </div>
+      <div style="display: flex; justify-content: center; padding: 4px 16px 8px">
+        <div style="position: relative; width: 432px; height: 243px; border-radius: 8px; background: #1d2126; overflow: hidden">
+          <div style="position: absolute; left: 12px; top: 12px; width: 100px; height: 219px; background: #3a4047; border-radius: 3px"></div>
+          <div style="position: absolute; left: 122px; top: 12px; width: 298px; height: 100px; background: #4b525a; border-radius: 3px"></div>
+          <div style="position: absolute; left: 122px; top: 122px; width: 298px; height: 109px; background: #3a4047; border-radius: 3px"></div>
+        </div>
+      </div>
+      <div style="height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 28px; background: #fff; border-top: 1px solid #ebebeb">
+        <button type="button" aria-label="Пауза" style="width: 32px; height: 32px; border: 0; border-radius: 6px; background: #171717; color: #fff; font-size: 11px">❚❚</button>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #666"><b style="color: #171717; font-weight: 500">00:42</b> / 11:17</span>
+        <div style="flex: 1; height: 6px; border-radius: 3px; background: #ebebeb; overflow: hidden"><div style="width: 9%; height: 6px; background: #171717"></div></div>
+        <span style="font-size: 12px; background: #f2f2f2; border-radius: 6px; padding: 6px 8px">1.5×</span>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

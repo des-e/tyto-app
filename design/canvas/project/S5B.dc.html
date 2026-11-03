@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Настройки, вариант B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="width: 1000px; height: 640px; background: rgba(0,0,0,0.42); display: flex; align-items: center; justify-content: center; font-family: Geist, system-ui, sans-serif; color: #171717;">
+  <div role="dialog" aria-label="Настройки" style="width: 952px; height: 592px; border-radius: 14px; overflow: hidden; display: flex; background: #fff; box-shadow: 0 16px 48px rgba(0,0,0,0.18);">
+    <dc-import name="SettingsNav" active="Запись" hint-size="232px,592px"></dc-import>
+    <main style="flex: 1; min-width: 0; padding: 24px 32px 0 32px; overflow: hidden; position: relative; background: #fafafa;">
+      <button type="button" aria-label="Закрыть" style="position: absolute; right: 16px; top: 16px; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+      <h1 style="margin: 0 0 20px 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Запись</h1>
+
+      <h2 style="margin: 0 0 8px 4px; font-size: 12px; font-weight: 500; color: #666;">Звонки</h2>
+      <section style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
+        <div style="display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid #eaeaea;">
+          <div style="flex: 1;"><div style="font-size: 14px; font-weight: 500;">Предлагать запись, когда начинается звонок</div><div style="font-size: 12.5px; color: #666; margin-top: 2px;">Плашка появится в углу экрана</div></div>
+          <span style="width: 36px; height: 20px; flex-shrink: 0; border-radius: 10px; background: #171717; display: flex; justify-content: flex-end; padding: 2px; box-sizing: border-box;"><span style="width: 16px; height: 16px; border-radius: 8px; background: #fff;"></span></span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <caption style="text-align: left; padding: 10px 16px 4px 16px; font-size: 12px; font-weight: 500; color: #666;">Где Tyto узнает звонок</caption>
+          <tbody>
+            <sc-for list="{{services}}" as="s" hint-placeholder-count="6">
+              <tr style="border-top: 1px solid {{s.rule}};">
+                <td style="padding: 7px 16px; width: 26px;"><span style="width: 20px; height: 20px; border-radius: 5px; background: #f2f2f2; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; color: #444;">{{s.mark}}</span></td>
+                <td style="padding: 7px 0;">{{s.name}}</td>
+                <td style="padding: 7px 16px; text-align: right; color: #666;">{{s.how}}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </section>
+
+      <h2 style="margin: 20px 0 8px 4px; font-size: 12px; font-weight: 500; color: #666;">После записи</h2>
+      <section style="border: 1px solid #eaeaea; border-radius: 12px; background: #fff;">
+        <div style="display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid #eaeaea;">
+          <div style="flex: 1;"><div style="font-size: 14px; font-weight: 500;">Расшифровывать сразу</div><div style="font-size: 12.5px; color: #666; margin-top: 2px;">Иначе запись ждет в списке «Ждут расшифровки»</div></div>
+          <span style="width: 36px; height: 20px; flex-shrink: 0; border-radius: 10px; background: #e1e1e1; padding: 2px; box-sizing: border-box;"><span style="display: block; width: 16px; height: 16px; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; padding: 14px 16px;">
+          <div style="flex: 1;"><div style="font-size: 14px; font-weight: 500;">Качество видео</div><div style="font-size: 12.5px; color: #666; margin-top: 2px;">До 1080p, 15 кадров в секунду, около 1 ГБ в час</div></div>
+          <div role="radiogroup" aria-label="Качество видео" style="display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: #f2f2f2;">
+            <button type="button" role="radio" aria-checked="true" style="height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: #fff; box-shadow: 0 0 0 1px #e1e1e1; font-size: 13px; font-weight: 500;">Хорошее</button>
+            <button type="button" role="radio" aria-checked="false" style="height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: #666;">Высокое</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const services = [
+      ['Т', 'Яндекс Телемост', 'сразу, по вкладке браузера'],
+      ['Б', 'Битрикс24', 'сразу, в приложении'],
+      ['G', 'Google Meet', 'сразу, по вкладке браузера'],
+      ['Z', 'Zoom', 'сразу'],
+      ['T', 'Microsoft Teams', 'сразу'],
+      ['…', 'Другой сервис в браузере', 'через 20 секунд'],
+    ].map((s, i) => ({ mark: s[0], name: s[1], how: s[2], rule: i === 0 ? 'transparent' : '#f0f0f0' }));
+    return { services: services };
+  }
+}
+</script>
+</body>
+</html>

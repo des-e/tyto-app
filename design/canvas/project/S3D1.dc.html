@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Саммари и темы включены</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative;">
+    <div style="height: 48px; flex-shrink: 0; display: flex; align-items: center; padding: 0 16px 0 32px; gap: 4px;">
+      <button type="button" aria-pressed="{{summaryOn}}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: {{summaryBg}}; font-size: 13px; font-weight: {{summaryWeight}}; color: {{summaryColor}};">Саммари</button>
+      <button type="button" aria-pressed="{{topicsOn}}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: {{topicsBg}}; font-size: 13px; font-weight: {{topicsWeight}}; color: {{topicsColor}};">Темы</button>
+      <button type="button" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: #666;">ИИ-разбор</button>
+      <span style="flex: 1;"></span>
+      <button type="button" aria-label="Поиск по тексту" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+      <button type="button" style="margin-left: 6px; height: 30px; padding: 0 12px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500;">Экспорт</button>
+    </div>
+    <div style="flex: 1; min-height: 0; display: flex;">
+      <main style="flex: 1; min-width: 0; padding: 12px 24px 0 32px; overflow: hidden;">
+        <header style="margin: 0 0 18px 76px;">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Планерка отдела продаж</h1>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: #666;">
+            <span>29 октября · <span style="font-family: 'Geist Mono', monospace;">48:00</span></span>
+            <button type="button" aria-expanded="{{peopleOpen}}" style="height: 24px; padding: 0 8px 0 4px; border: 1px solid #e1e1e1; border-radius: 12px; background: #fff; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #171717; cursor: pointer;">
+              <span style="display: flex;"><span style="width: 16px; height: 16px; border-radius: 8px; background: #dbe6fb; border: 1.5px solid #fff;"></span><span style="width: 16px; height: 16px; border-radius: 8px; background: #fbe2cf; border: 1.5px solid #fff; margin-left: -6px;"></span><span style="width: 16px; height: 16px; border-radius: 8px; background: #d4efdf; border: 1.5px solid #fff; margin-left: -6px;"></span></span>
+              7 участников
+            </button>
+          </div>
+        </header>
+        <sc-if value="{{summaryOn}}" hint-placeholder-val="{{true}}">
+          <section aria-label="Саммари" style="margin: 0 0 20px 76px; padding: 12px 14px; border-radius: 10px; background: #fafafa; border: 1px solid #eaeaea; max-width: 560px;">
+            <p style="margin: 0; font-size: 14px; line-height: 1.55;">Обсудили сдвиг поставки по второму складу на неделю из-за перевозчика. Клиенту предложат частичную отгрузку в среду, Денис напишет ему сегодня. Еще согласовали бюджет на ноябрь и начали искать кладовщика.</p>
+          </section>
+        </sc-if>
+        <div style="margin: 0 0 6px 76px; font-size: 12px; font-weight: 500; color: #666;">{{topicHeading}}</div>
+        <sc-for list="{{lines}}" as="line" hint-placeholder-count="5">
+          <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; padding-top: {{line.gap}};">
+            <span style="text-align: right; font-family: 'Geist Mono', monospace; font-size: 11.5px; color: {{line.timeColor}}; padding-top: {{line.timePad}};">{{line.time}}</span>
+            <div>
+              <sc-if value="{{line.first}}" hint-placeholder-val="{{true}}"><div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; margin-bottom: 2px;"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{line.dot}};"></span>{{line.who}}</div></sc-if>
+              <p style="margin: 0 0 0 -8px; padding: 2px 8px; border-radius: 6px; background: {{line.bg}}; font-size: 14.5px; line-height: 1.6; max-width: 560px;">{{line.text}}</p>
+            </div>
+          </div>
+        </sc-for>
+      </main>
+      <sc-if value="{{topicsOn}}" hint-placeholder-val="{{true}}">
+        <aside aria-labelledby="topics-h" style="width: 216px; flex-shrink: 0; border-left: 1px solid #eaeaea; padding: 12px 12px 0 12px; overflow: hidden;">
+          <h2 id="topics-h" style="margin: 0 0 8px 8px; font-size: 12px; font-weight: 500; color: #666;">Темы</h2>
+          <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px;">
+            <sc-for list="{{topics}}" as="t" hint-placeholder-count="6">
+              <li><a href="#" style="display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 6px; padding: 6px 8px; border-radius: 6px; background: {{t.bg}}; color: inherit; text-decoration: none; font-size: 13px; line-height: 1.4; font-weight: {{t.weight}};"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #8f8f8f; padding-top: 1px;">{{t.time}}</span><span>{{t.title}}</span></a></li>
+            </sc-for>
+          </ol>
+        </aside>
+      </sc-if>
+    </div>
+    <dc-import name="Player" time="0:14" total="48:00" progress="1%" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"summary":{"editor":"boolean","default":true},"topics":{"editor":"boolean","default":true},"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const summaryOn = this.props.summary !== false;
+    const topicsOn = this.props.topics !== false;
+    const dot = { 'Денис': '#5b8def', 'Ольга Смирнова': '#e8915a', 'Андрей': '#4fa877' };
+    const raw = [
+      ['00:00', 'Денис', 'Давайте начнем с поставок. По второму складу сроки сдвигаются на неделю.'],
+      ['00:09', 'Ольга Смирнова', 'Это из-за перевозчика? Они обещали машину на четверг.'],
+      ['00:14', 'Ольга Смирнова', 'Если не успеют, клиенту надо сказать сегодня, а не в пятницу.', true],
+      ['00:21', 'Денис', 'Да, перевозчик. Я напишу клиенту после созвона и предложу частичную отгрузку.'],
+      ['00:33', 'Андрей', 'Частичную можем собрать к среде, остатки есть на первом складе.'],
+    ];
+    const lines = raw.map((r, i) => {
+      const first = i === 0 || raw[i - 1][1] !== r[1];
+      return { time: r[0], who: r[1], text: r[2], first: first, dot: dot[r[1]],
+        gap: first && i > 0 ? '16px' : '2px', timePad: first ? '1px' : '6px',
+        timeColor: r[3] ? '#171717' : '#8f8f8f', bg: r[3] ? '#f2f2f2' : 'transparent' };
+    });
+    const topics = [
+      ['00:00', 'Поставки по второму складу', true],
+      ['07:40', 'Частичная отгрузка клиенту'],
+      ['15:20', 'Бюджет на ноябрь'],
+      ['24:05', 'Новый перевозчик'],
+      ['33:10', 'Найм кладовщика'],
+      ['41:30', 'Итоги и задачи'],
+    ].map((t) => ({ time: t[0], title: t[1], bg: t[2] ? '#f2f2f2' : 'transparent', weight: t[2] ? '500' : '400' }));
+    const on = (v) => ({ bg: v ? '#ebebeb' : 'transparent', weight: v ? '500' : '400', color: v ? '#171717' : '#666' });
+    const s = on(summaryOn), t = on(topicsOn);
+    return { summaryOn, topicsOn, lines, topics, peopleOpen: false,
+      topicHeading: topicsOn ? 'Поставки по второму складу' : '',
+      summaryBg: s.bg, summaryWeight: s.weight, summaryColor: s.color,
+      topicsBg: t.bg, topicsWeight: t.weight, topicsColor: t.color };
+  }
+}
+</script>
+</body>
+</html>

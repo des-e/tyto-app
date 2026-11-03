@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Tyto: до и после</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column of rows; each row pairs «до» and «после» side by side, stacking on a phone. */
+:root {
+  --bg: #ffffff; --fg: #171717; --muted: #666666; --line: #eaeaea; --mark: #ff5b4f;
+  --font: 'Geist', -apple-system, 'Segoe UI', Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0a0a0a; --fg: #ededed; --muted: #a1a1a1; --line: #262626; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #0a0a0a; --fg: #ededed; --muted: #a1a1a1; --line: #262626; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 1200px; margin: 0 auto; padding-block: 40px 64px; display: flex; flex-direction: column; gap: 48px; }
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font-size: 18px; font-weight: 600; margin: 0; }
+p { margin: 0; color: var(--muted); max-width: 65ch; }
+header { display: flex; flex-direction: column; gap: 8px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+figcaption { font-size: 13px; font-weight: 500; }
+figcaption span { color: var(--muted); font-weight: 400; }
+img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+ul { margin: 0; padding-left: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+li strong { color: var(--fg); font-weight: 500; }
+@media (max-width: 640px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<main>
+  <header>
+    <h1>Главное окно Tyto: до и после правок</h1>
+    <p>Первый запуск, браузерный режим (поэтому текст английский). Слева до замечаний Taste и UI/UX Pro Max, справа после.</p>
+  </header>
+
+  <section>
+    <h2>Широкое окно, 1440 px</h2>
+    <div class="pair">
+      <figure>
+        <img src="before-desktop.jpg" alt="До: шаги с номерами в кружках, пустая полоса в карточке «Расшифровать файл»">
+        <figcaption>До <span>· номера шагов, пустая полоса в карточке файла</span></figcaption>
+      </figure>
+      <figure>
+        <img src="after-desktop.jpg" alt="После: шаги без номеров, в карточке файла перечислены форматы аудио и видео">
+        <figcaption>После <span>· шаги без номеров, форматы в карточке файла</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Узкое окно, 768 px</h2>
+    <p>Близко к минимальному окну Tyto (800 px), когда левая колонка открыта.</p>
+    <div class="pair">
+      <figure>
+        <img src="before-narrow.jpg" alt="До: две карточки рядом, кнопка «From link» вылезает за край карточки">
+        <figcaption>До <span>· «По ссылке» вылезает за карточку</span></figcaption>
+      </figure>
+      <figure>
+        <img src="after-narrow.jpg" alt="После: карточки стоят друг под другом, все помещается">
+        <figcaption>После <span>· карточки друг под другом</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Что еще поменялось, но здесь не видно</h2>
+    <ul>
+      <li><strong>Левая колонка.</strong> Справа от названия снова длительность записи, у нерасшифрованных серая точка. В браузерном режиме записей нет, поэтому колонка пустая.</li>
+      <li><strong>Полная строка записи</strong> («10:02 · 48 мин · Не расшифровано») входит в название кнопки, ее прочитает экранный диктор.</li>
+      <li><strong>Проверка Taste:</strong> было 1 ошибка и 3 предупреждения, стало 0 ошибок и 2 допустимых предупреждения.</li>
+    </ul>
+  </section>
+</main>
+
+</body></html>

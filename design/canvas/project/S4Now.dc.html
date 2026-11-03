@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Ход расшифровки сейчас</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" running="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #eaeaea; display: flex; align-items: flex-end; padding: 0 16px 0 28px; gap: 22px;">
+      <span style="font-size: 14px; font-weight: 500; padding-bottom: 12px; border-bottom: 2px solid #171717;">Текст</span>
+      <span style="font-size: 14px; color: #8f8f8f; padding-bottom: 14px;">Сводка</span>
+      <span style="font-size: 14px; color: #8f8f8f; padding-bottom: 14px;">Темы</span>
+      <span style="flex: 1;"></span>
+      <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 10px;">
+        <button type="button" style="height: 30px; padding: 0 10px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fafafa; font-size: 13px; color: #8f8f8f;">Экспорт</button>
+      </div>
+    </div>
+    <main style="flex: 1; min-height: 0; padding: 32px 40px 0 40px; overflow: hidden;">
+      <h1 style="margin: 0 0 24px 76px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em;">Планерка отдела продаж</h1>
+      <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px;">
+        <span style="text-align: right; font-size: 12px; color: #666;">00:00</span>
+        <div><div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Говорящий 1</div><p style="margin: 0; font-size: 15px; line-height: 1.6;">Давайте начнем с поставок. По второму складу сроки сдвигаются на неделю.</p></div>
+      </div>
+      <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; padding-top: 20px;">
+        <span style="text-align: right; font-size: 12px; color: #666;">00:09</span>
+        <div><div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Говорящий 2</div><p style="margin: 0; font-size: 15px; line-height: 1.6;">Это из-за перевозчика? Они обещали машину на четверг.</p></div>
+      </div>
+    </main>
+    <dc-import name="Player" time="0:00" total="48:00" progress="0%" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

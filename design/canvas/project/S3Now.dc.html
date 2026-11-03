@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Расшифровка сейчас</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <div style="height: 56px; flex-shrink: 0; border-bottom: 1px solid #eaeaea; display: flex; align-items: flex-end; padding: 0 16px 0 28px; gap: 22px;">
+      <span style="font-size: 14px; font-weight: 500; padding-bottom: 12px; border-bottom: 2px solid #171717;">Текст</span>
+      <span style="font-size: 14px; color: #8f8f8f; padding-bottom: 14px;">Сводка</span>
+      <span style="font-size: 14px; color: #8f8f8f; padding-bottom: 14px;">Темы</span>
+      <span style="flex: 1;"></span>
+      <div style="display: flex; align-items: center; gap: 8px; padding-bottom: 10px;">
+        <button type="button" style="height: 30px; padding: 0 10px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fafafa; font-size: 13px;">Экспорт</button>
+        <button type="button" aria-label="Поиск по тексту" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+        <button type="button" aria-label="Вид" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></button>
+        <button type="button" aria-label="Новая расшифровка" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+      </div>
+    </div>
+    <main style="flex: 1; min-height: 0; padding: 32px 40px 0 40px; overflow: hidden;">
+      <h1 style="margin: 0 0 24px 76px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em;">Планерка отдела продаж</h1>
+      <sc-for list="{{lines}}" as="line" hint-placeholder-count="6">
+        <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 12px; padding-top: {{line.gap}};">
+          <span style="text-align: right; font-size: 12px; color: #666; padding-top: {{line.timePad}}; font-variant-numeric: tabular-nums; font-weight: {{line.timeWeight}};">{{line.time}}</span>
+          <div style="position: relative;">
+            <sc-if value="{{line.first}}" hint-placeholder-val="{{true}}"><div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">{{line.who}}</div></sc-if>
+            <p style="margin: 0; font-size: 15px; line-height: 1.6; max-width: 600px; border-left: 2px solid {{line.rule}}; margin-left: -12px; padding-left: 10px;">{{line.text}}</p>
+          </div>
+        </div>
+      </sc-for>
+    </main>
+    <dc-import name="Player" time="0:14" total="48:00" progress="1%" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      ['00:00', 'Денис', 'Давайте начнем с поставок. По второму складу сроки сдвигаются на неделю.'],
+      ['00:09', 'Ольга Смирнова', 'Это из-за перевозчика? Они обещали машину на четверг.'],
+      ['00:14', 'Ольга Смирнова', 'Если не успеют, клиенту надо сказать сегодня, а не в пятницу.', true],
+      ['00:21', 'Денис', 'Да, перевозчик. Я напишу клиенту после созвона и предложу частичную отгрузку.'],
+      ['00:33', 'Андрей', 'Частичную можем собрать к среде, остатки есть на первом складе.'],
+      ['00:41', 'Денис', 'Отлично. Тогда фиксируем: среда, частичная отгрузка, остальное по факту.'],
+    ];
+    const lines = raw.map((r, i) => {
+      const first = i === 0 || raw[i - 1][1] !== r[1];
+      return { time: r[0], who: r[1], text: r[2], first: first,
+        gap: first && i > 0 ? '20px' : '4px', timePad: first ? '0' : '4px',
+        timeWeight: r[3] ? '500' : '400', rule: r[3] ? '#171717' : 'transparent' };
+    });
+    return { lines: lines };
+  }
+}
+</script>
+</body>
+</html>

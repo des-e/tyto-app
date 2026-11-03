@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>C3: сова в карточке записи</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" hint-size="232px,640px"></dc-import>
+  <main style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 56px; box-sizing: border-box;">
+    <div style="display: grid; grid-template-columns: 3fr 2fr; gap: 16px;">
+      <section style="border: 1px solid #eaeaea; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+        <svg viewBox="262 200 500 680" width="28" height="38" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+        <div>
+          <h2 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em;">Записать звонок</h2>
+          <p style="margin: 6px 0 0 0; font-size: 13.5px; line-height: 1.5; color: #666;">Микрофон и звук собеседников. После звонка Tyto покажет текст по говорящим, сводку и темы.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #eaeaea; border-bottom: 1px solid #eaeaea;">
+          <span style="flex: 1;"><span style="display: block; font-size: 13.5px; font-weight: 500;">Записывать экран</span><span style="display: block; font-size: 12px; color: #666; margin-top: 1px;">Окно звонка или весь экран</span></span>
+          <button type="button" role="switch" aria-checked="false" aria-label="Записывать экран" style="width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 10px; background: #e1e1e1; display: flex; justify-content: flex-start;"><span style="width: 16px; height: 16px; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span></button>
+        </div>
+        <button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 42px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 14px; font-weight: 500;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #ff5b4f;"></span>Начать запись</button>
+      </section>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <section style="flex: 1; border: 1px dashed #c9c9c9; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; background: #fafafa;">
+          <h2 style="margin: 0; font-size: 15px; font-weight: 600;">Расшифровать файл</h2>
+          <p style="margin: 0; font-size: 13px; line-height: 1.45; color: #666;">Перетащите сюда аудио, видео или папку</p>
+          <div style="flex: 1;"></div>
+          <button type="button" style="height: 38px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; font-size: 14px; font-weight: 500;">Выбрать файл</button>
+        </section>
+        <section style="border: 1px solid #eaeaea; border-radius: 14px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px;">
+          <label for="c3-link" style="font-size: 15px; font-weight: 600;">По ссылке</label>
+          <input id="c3-link" placeholder="YouTube, Яндекс Диск..." style="height: 34px; border: 1px solid #eaeaea; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 13px; outline: 0;">
+        </section>
+      </div>
+    </div>
+    <div style="margin-top: 24px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 8px 4px;">
+        <h3 style="margin: 0; font-size: 13px; font-weight: 500; color: #666;">Ждут расшифровки</h3>
+        <span style="font-size: 12px; color: #666;">Язык: Русский</span>
+      </div>
+      <div style="border-top: 1px solid #eaeaea;">
+        <div style="display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 4px; border-bottom: 1px solid #eaeaea;">
+          <span style="flex: 1; font-size: 14px; font-weight: 500;">Запись 10:35</span>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #666;">0:12</span>
+          <button type="button" style="height: 30px; padding: 0 12px; border: 1px solid #eaeaea; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500;">Расшифровать</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

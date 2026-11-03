@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Вариант C: запись и последние</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <aside style="width: 232px; flex-shrink: 0; background: #fafafa; border-right: 1px solid #eaeaea; display: flex; flex-direction: column; padding: 14px 8px 0 8px; box-sizing: border-box;">
+    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 8px 14px 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #d4d4d4;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #d4d4d4;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 6px; background: #d4d4d4;"></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 0 0 0 8px; height: 32px;">
+      <svg viewBox="0 -114 396.81 142.61" width="61" height="22" fill="#171717" role="img" aria-label="Tyto"><g transform="translate(-57.35 -158.47) scale(0.21)"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path></g><g transform="translate(132.08 0)"><path d="M4.40 -109.00L25.94 -100.00Q44.29 -97.00 62.63 -100.00L84.17 -109.00V-83.98H4.40Z"></path><path d="M36.27 -85.98H52.3V0H36.27Z"></path><path d="M94.54 0.7 65.3 -68.61H82.89L102.8 -17.53H97.62L118.63 -68.61H136.36L104.61 0.7ZM74.24 28.61 95.51 -15.31 104.61 0.7 91.92 28.61Z"></path><path d="M158.76 0V-97.19H174.78V0ZM142.36 -54.11V-68.61H191.17V-54.11Z"></path><path fill-rule="evenodd" d="M192.67 -34.31A36.03 36.03 0 1 1 264.73 -34.31A36.03 36.03 0 1 1 192.67 -34.31ZM207.41 -34.31A21.29 21.29 0 1 0 249.99 -34.31A21.29 21.29 0 1 0 207.41 -34.31Z"></path><path d="M220.19 -34.31A8.52 8.52 0 1 1 237.22 -34.31A8.52 8.52 0 1 1 220.19 -34.31Z"></path></g></svg>
+      <span style="flex: 1;"></span>
+      <button type="button" aria-label="Поиск" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; color: #666;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+      <button type="button" aria-label="Новая запись" style="width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 6px; color: #666;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+    </div>
+    <div style="font-size: 12px; font-weight: 500; color: #666; padding: 16px 8px 4px 8px;">Сегодня</div>
+    <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; text-decoration: none; color: inherit; background: #ebebeb;">
+      <span style="flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Запись 10:35</span>
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: #a8a8a8;" title="Не расшифровано"></span>
+    </a>
+    <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; text-decoration: none; color: inherit;">
+      <span style="flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Запись 09:21</span>
+      <span style="width: 6px; height: 6px; border-radius: 3px; background: #a8a8a8;" title="Не расшифровано"></span>
+    </a>
+    <div style="font-size: 12px; font-weight: 500; color: #666; padding: 14px 8px 4px 8px;">Раньше</div>
+    <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; text-decoration: none; color: inherit;">
+      <span style="flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Созвон с подрядчиком</span>
+      <span style="font-size: 12px; color: #666;">31 окт.</span>
+    </a>
+    <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; text-decoration: none; color: inherit;">
+      <span style="flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Планерка отдела продаж</span>
+      <span style="font-size: 12px; color: #666;">29 окт.</span>
+    </a>
+    <a href="#" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; text-decoration: none; color: inherit;">
+      <span style="flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Интервью с кандидатом</span>
+      <span style="font-size: 12px; color: #666;">27 окт.</span>
+    </a>
+    <div style="margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding: 10px 8px; font-size: 13px; color: #666;">
+      <a href="#" style="display: flex; align-items: center; gap: 8px; color: #171717; text-decoration: none;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        Настройки
+      </a>
+      <span style="font-family: 'Geist Mono', monospace; font-size: 12px;">0.2.1</span>
+    </div>
+  </aside>
+  <main style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 56px; box-sizing: border-box;">
+    <svg viewBox="262 200 500 680" width="30" height="41" fill="#171717" aria-hidden="true" style="display: block; margin: 0 auto 22px auto;"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+      <section style="border: 1px solid #eaeaea; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <h2 style="margin: 0; font-size: 16px; font-weight: 600;">Записать звонок</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; line-height: 1.45; color: #666;">Микрофон и звук собеседников</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #eaeaea; border-bottom: 1px solid #eaeaea;">
+          <span style="flex: 1;"><span style="display: block; font-size: 13.5px; font-weight: 500;">Записывать экран</span><span style="display: block; font-size: 12px; color: #666; margin-top: 1px;">Окно звонка или весь экран</span></span>
+          <button type="button" role="switch" aria-checked="false" aria-label="Записывать экран" style="width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 10px; background: #e1e1e1; display: flex; justify-content: flex-start; cursor: pointer;">
+            <span style="width: 16px; height: 16px; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span>
+          </button>
+        </div>
+        <button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
+          <span style="width: 8px; height: 8px; border-radius: 4px; background: #ff5b4f;"></span>
+          Начать запись
+        </button>
+      </section>
+      <section style="border: 1px dashed #c9c9c9; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; background: #fafafa;">
+        <div>
+          <h2 style="margin: 0; font-size: 16px; font-weight: 600;">Расшифровать файл</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; line-height: 1.45; color: #666;">Перетащите сюда аудио, видео или папку</p>
+        </div>
+        <div style="flex: 1;"></div>
+        <button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></svg>
+          Выбрать файл
+        </button>
+        <p style="margin: 0; font-size: 12px; color: #666;">или <button type="button" style="border: 0; background: transparent; padding: 0; color: #171717; text-decoration: underline; text-underline-offset: 3px; font-size: 12px; cursor: pointer;">вставить ссылку</button></p>
+      </section>
+    </div>
+    <div style="margin-top: 28px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 8px 4px;">
+        <h3 style="margin: 0; font-size: 13px; font-weight: 500; color: #666;">Ждут расшифровки</h3>
+        <span style="font-size: 12px; color: #666;">Язык: Русский</span>
+      </div>
+      <div style="border-top: 1px solid #eaeaea;">
+        <div style="display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 4px; border-bottom: 1px solid #eaeaea;">
+          <span style="flex: 1; font-size: 14px; font-weight: 500;">Запись 10:35</span>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #666;">0:12</span>
+          <button type="button" style="height: 30px; padding: 0 12px; border: 1px solid #eaeaea; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500; cursor: pointer;">Расшифровать</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 4px; border-bottom: 1px solid #eaeaea;">
+          <span style="flex: 1; font-size: 14px; font-weight: 500;">Запись 09:21</span>
+          <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #666;">0:06</span>
+          <button type="button" style="height: 30px; padding: 0 12px; border: 1px solid #eaeaea; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500; cursor: pointer;">Расшифровать</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

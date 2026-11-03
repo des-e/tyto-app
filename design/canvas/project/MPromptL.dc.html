@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плашка звонка, светлая тема</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="position: relative; width: 640px; height: 200px; background: #e4e4e7; font-family: Geist, system-ui, sans-serif; color: #171717; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; overflow: hidden;">
+  <section aria-label="Идет созвон" style="width: 520px; height: 88px; box-sizing: border-box; border-radius: 16px; background: #ffffff; color: #171717; border: 1px solid #e1e1e1; box-shadow: 0 12px 32px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 14px; padding: 0 14px 0 18px;">
+    <svg viewBox="262 200 500 680" width="22" height="30" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path></svg>
+    <span style="flex: 1; min-width: 0;"><span style="display: block; font-size: 15px; font-weight: 500;">Созвон в Яндекс Телемост</span><span style="display: block; font-size: 13px; color: #666; margin-top: 2px;">Микрофон и звук собеседников</span></span>
+    <button type="button" style="height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: #171717; color: #fff; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><span style="width: 9px; height: 9px; border-radius: 5px; background: #ff5b4f; flex-shrink: 0;"></span>Записать</button>
+    <button type="button" style="height: 36px; padding: 0 12px; border: 1px solid #e1e1e1; border-radius: 9px; background: #fff; color: #171717; font-size: 14px;">С видео</button>
+    <button type="button" aria-label="Закрыть" style="width: 28px; height: 28px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":200}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

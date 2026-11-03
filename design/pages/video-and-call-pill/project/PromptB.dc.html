@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плашка созвона: строка</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4d4d4d}a:hover{color:#171717}
+</style>
+</helmet>
+<div style="width: 520px; height: 120px; box-sizing: border-box; padding: 16px; background: #dfe3e8; font-family: Geist, system-ui, sans-serif; color: #171717">
+  <section style="height: 88px; box-sizing: border-box; background: #171717; color: #ededed; border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.22); padding: 0 12px 0 16px; display: flex; align-items: center; gap: 12px">
+    <span style="width: 8px; height: 8px; border-radius: 50%; background: #ff5b4f; flex-shrink: 0" aria-hidden="true"></span>
+    <div style="flex: 1; min-width: 0">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; line-height: 20px; color: #fff">Созвон в Яндекс Телемост</h1>
+      <p style="margin: 2px 0 0; font-size: 13px; color: #a1a1a1; line-height: 18px">Микрофон и звук собеседников</p>
+    </div>
+    <button type="button" style="height: 36px; padding: 0 14px; border: 0; border-radius: 6px; background: #fff; color: #171717; font: 500 14px Geist, system-ui, sans-serif">Записать</button>
+    <button type="button" aria-label="Записать с видео" style="height: 36px; padding: 0 12px; border: 1px solid #3d3d3d; border-radius: 6px; background: transparent; color: #ededed; font: 500 14px Geist, system-ui, sans-serif">С видео</button>
+    <button type="button" aria-label="Не сейчас" style="width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #a1a1a1; font-size: 15px">✕</button>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":520,"height":120}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

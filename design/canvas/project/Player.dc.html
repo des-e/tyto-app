@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плеер</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 768px; height: 56px; box-sizing: border-box; border-top: 1px solid #eaeaea; background: #fff; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 28px; font-family: Geist, system-ui, sans-serif; color: #171717;">
+  <button type="button" aria-label="Открыть видео в отдельном окне" style="width: 64px; height: 36px; border: 0; padding: 0; border-radius: 4px; background: #1f1f1f; display: grid; place-items: center; cursor: pointer;">
+    <span style="width: 40px; height: 22px; border-radius: 2px; background: #3a3a3a; display: block;"></span>
+  </button>
+  <button type="button" aria-label="Воспроизвести" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: #171717; color: #fff; display: grid; place-items: center; cursor: pointer;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"></path></svg>
+  </button>
+  <span style="font-family: 'Geist Mono', monospace; font-size: 12.5px; white-space: nowrap;">{{time}} <span style="color: #666;">/ {{total}}</span></span>
+  <span style="flex: 1; height: 4px; border-radius: 2px; background: #e1e1e1; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 4px; border-radius: 2px; background: #171717; width: {{progress}};"></span><span style="position: absolute; left: {{progress}}; top: -4px; width: 2px; height: 12px; background: #171717; border-radius: 1px;"></span></span>
+  <button type="button" aria-label="Скорость" style="border: 0; background: transparent; font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #666; cursor: pointer;">1×</button>
+  <button type="button" aria-label="Показать в папке" style="width: 28px; height: 28px; border: 0; background: transparent; color: #666; display: grid; place-items: center; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></svg></button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"time":{"editor":"text","default":"0:00"},"total":{"editor":"text","default":"0:12"},"progress":{"editor":"text","default":"0%"},"$preview":{"width":768,"height":56}}'>
+class Component extends DCLogic {
+  renderVals() { return { time: this.props.time ?? '0:00', total: this.props.total ?? '0:12', progress: this.props.progress ?? '0%' }; }
+}
+</script>
+</body>
+</html>

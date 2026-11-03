@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плашка записи, светлая тема</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="position: relative; width: 560px; height: 200px; background: #e4e4e7; font-family: Geist, system-ui, sans-serif; color: #171717; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; overflow: hidden;">
+  <section aria-label="Управление записью" style="height: 44px; box-sizing: border-box; border-radius: 22px; background: #ffffff; color: #171717; border: 1px solid #e1e1e1; box-shadow: 0 8px 24px rgba(0,0,0,0.10); display: flex; align-items: center; gap: 10px; padding: 0 6px 0 14px;">
+    <svg viewBox="262 200 500 680" width="15" height="20" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path></svg><span style="width: 9px; height: 9px; border-radius: 5px; background: #ff5b4f; flex-shrink: 0;"></span><span style="font-family: 'Geist Mono', monospace; font-size: 14px; color: #171717;">12:34</span>
+    <span style="width: 6px;"></span>
+    <button type="button" aria-label="Пауза" style="width: 32px; height: 32px; border: 0; border-radius: 16px; background: transparent; color: #666; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></button>
+    <button type="button" aria-label="Остановить запись" style="width: 32px; height: 32px; border: 0; border-radius: 16px; background: #f2f2f2; display: grid; place-items: center;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #ff5b4f;"></span></button>
+  </section>
+  <p style="margin: 0; font-size: 12px; color: #666;">Подписи «Пауза» и «Остановить запись» появляются при наведении</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":560,"height":200}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

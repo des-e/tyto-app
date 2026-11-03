@@ -1,0 +1,131 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Темы и саммари у других</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading column; one block per service with three labelled facts, then conclusions for Tyto. */
+:root {
+  --bg: #ffffff; --fg: #171717; --muted: #666666; --line: #eaeaea; --soft: #fafafa; --mark: #ebebeb;
+  --font: 'Geist', -apple-system, 'Segoe UI', Arial, sans-serif; --mono: 'Geist Mono', ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0a0a0a; --fg: #ededed; --muted: #a1a1a1; --line: #262626; --soft: #111111; --mark: #222222; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #0a0a0a; --fg: #ededed; --muted: #a1a1a1; --line: #262626; --soft: #111111; --mark: #222222; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 760px; margin: 0 auto; padding-block: 40px 72px; display: flex; flex-direction: column; gap: 40px; }
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font-size: 18px; font-weight: 600; margin: 0; }
+p { margin: 0; }
+.lead { color: var(--muted); margin-top: 8px; max-width: 62ch; }
+.services { display: flex; flex-direction: column; gap: 14px; }
+.service { border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.service header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.service header span { font-size: 13px; color: var(--muted); }
+dl { margin: 0; display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 8px 16px; font-size: 14.5px; }
+dt { color: var(--muted); font-size: 13px; padding-top: 1px; }
+dd { margin: 0; min-width: 0; }
+.name { font-family: var(--mono); font-size: 13px; background: var(--mark); padding: 1px 6px; border-radius: 4px; }
+.take { display: flex; flex-direction: column; gap: 14px; }
+.take ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.take li strong { font-weight: 600; }
+.names { background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.names ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.note { font-size: 13px; color: var(--muted); }
+.sources { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.sources a { color: var(--fg); text-underline-offset: 3px; text-decoration-color: var(--line); word-break: break-word; }
+@media (max-width: 560px) { dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } dt { padding-top: 8px; } }
+</style>
+
+<main>
+  <header>
+    <h1>Темы и саммари у других</h1>
+    <p class="lead">Как пять сервисов показывают короткий пересказ встречи, оглавление по времени и разбор записи с ИИ. Собрано по справкам сервисов и обзорам, сами интерфейсы я не открывал.</p>
+  </header>
+
+  <section class="services" aria-label="Сервисы">
+    <article class="service">
+      <header><h2>Otter</h2><span>otter.ai</span></header>
+      <dl>
+        <dt>Саммари</dt><dd>Появляется через несколько минут после встречи, вверху заметок. Список ключевых пунктов, его можно править. Перегенерация стирает правки.</dd>
+        <dt>Темы</dt><dd>Отдельная панель <span class="name">Outline</span>: главные темы со временем, клик ведет к месту в расшифровке.</dd>
+        <dt>Разбор с ИИ</dt><dd><span class="name">Otter AI Chat</span>: вопросы по встрече и по всем встречам сразу, «что я пропустил», письмо по итогам.</dd>
+      </dl>
+    </article>
+
+    <article class="service">
+      <header><h2>tl;dv</h2><span>tldv.io</span></header>
+      <dl>
+        <dt>Саммари</dt><dd>Главные моменты, задачи, решения и следующие шаги. Структура зависит от шаблона, его можно сменить после встречи.</dd>
+        <dt>Темы</dt><dd><span class="name">Smart Topics</span>: заметки разложены по обсужденным темам, у каждой время и ссылка на момент записи.</dd>
+        <dt>Разбор с ИИ</dt><dd>Отчеты по нескольким встречам за неделю и поиск, который отвечает отчетом со ссылками на время.</dd>
+      </dl>
+    </article>
+
+    <article class="service">
+      <header><h2>Fireflies</h2><span>fireflies.ai</span></header>
+      <dl>
+        <dt>Саммари</dt><dd><span class="name">Overview</span>: суть встречи в нескольких абзацах. Рядом ключевые слова и задачи, привязанные к говорящим.</dd>
+        <dt>Темы</dt><dd><span class="name">Time-stamped Notes</span>: заметки сгруппированы в главы со временем, каждая глава ведет в расшифровку.</dd>
+        <dt>Разбор с ИИ</dt><dd>Настраиваемые сводки по шаблонам, учет тем по ключевым словам между встречами, аналитика: кто сколько говорил, тон, монологи.</dd>
+      </dl>
+    </article>
+
+    <article class="service">
+      <header><h2>Granola</h2><span>granola.ai</span></header>
+      <dl>
+        <dt>Саммари</dt><dd>Вы пишете черновые заметки во время звонка, после звонка ИИ дополняет их по расшифровке. Вид задает шаблон: 1:1, собеседование, продажи.</dd>
+        <dt>Темы</dt><dd>Оглавления по времени нет. Вместо него у каждой строки значок лупы: показывает, откуда она взята в расшифровке.</dd>
+        <dt>Разбор с ИИ</dt><dd><span class="name">Granola Chat</span>, вызывается Ctrl+J: вопросы по цитатам и правка заметок словами, например «распиши следующие шаги подробнее».</dd>
+      </dl>
+    </article>
+
+    <article class="service">
+      <header><h2>Яндекс Телемост</h2><span>в «Телемосте для бизнеса»</span></header>
+      <dl>
+        <dt>Саммари</dt><dd><span class="name">Конспект</span>: ключевые тезисы, выводы и задачи по расшифровке созвона. Есть только в платной бизнес-версии.</dd>
+        <dt>Темы</dt><dd>В найденных источниках про время и оглавление ничего нет. Похоже, конспект без привязки к моментам записи.</dd>
+        <dt>Разбор с ИИ</dt><dd>Отдельного разбора не нашел. Сторонние приложения для Битрикс24 делают конспект по шаблонам: резюме, задачи и решения, ключевые моменты.</dd>
+      </dl>
+    </article>
+  </section>
+
+  <section class="take" aria-labelledby="take">
+    <h2 id="take">Что это значит для Tyto</h2>
+    <ol>
+      <li><strong>Ваша схема совпадает с тем, что делают все.</strong> Короткий пересказ в начале и оглавление по времени, которое ведет в текст, есть у Otter, Fireflies и tl;dv. Саммари в 1-2 абзаца ближе всего к Overview у Fireflies.</li>
+      <li><strong>Каждая тема ведет в нужное место записи.</strong> Без этого оглавление бесполезно. В Tyto клик по теме перематывает и текст, и плеер.</li>
+      <li><strong>Разбор отделен от саммари.</strong> Саммари короткое и одно. Разбор — это либо вопросы к записи (чат у Otter и Granola), либо отчет по шаблону (tl;dv, Fireflies). Детальный анализ Tyto ближе ко второму.</li>
+      <li><strong>Шаблоны разбора под тип встречи.</strong> Планерка, собеседование, продажа, разговор с подрядчиком. Это хорошая основа для детального анализа.</li>
+      <li><strong>Откуда взята строка.</strong> Лупа у Granola — простой способ доверять ИИ: у каждого пункта разбора можно показать время, на котором это прозвучало.</li>
+      <li><strong>Чем Tyto отличается.</strong> Все пять работают в облаке. Tyto расшифровывает на компьютере, а саммари, темы и разбор делает только ИИ, который человек подключил сам. Это надо сказать на экране, как мы и нарисовали.</li>
+    </ol>
+  </section>
+
+  <section class="names" aria-labelledby="names">
+    <h2 id="names">Как назвать детальный анализ</h2>
+    <ul>
+      <li><strong>«Разбор»</strong> — короткое, понятное, звучит как работа над встречей. Мой выбор.</li>
+      <li><strong>«Анализ встречи»</strong> — точнее, но длиннее и суше.</li>
+      <li><strong>«Отчет»</strong> — хорошо, если разбор получается документом, который отправляют дальше.</li>
+      <li><strong>«Спросить запись»</strong> — если это будет чат с вопросами, а не готовый документ.</li>
+    </ul>
+    <p class="note">Тогда кнопки над текстом: «Саммари», «Темы», «Разбор». Первые две включают и выключают блоки на экране, третья открывает отдельный вид.</p>
+  </section>
+
+  <section class="sources" aria-labelledby="src">
+    <h2 id="src" style="font-size: 14px; font-weight: 600; color: var(--fg);">Источники</h2>
+    <a href="https://techcrunch.com/2022/03/29/otter-ai-meeting-summary-feature">TechCrunch: Otter.ai meeting summary feature (2022)</a>
+    <a href="https://techcrunch.com/2023/06/21/otter-is-introducing-a-meeting-oriented-ai-chatbot">TechCrunch: Otter AI Chat (2023)</a>
+    <a href="https://www.dreamhost.com/blog/meeting-summaries-otter-ai/">DreamHost: What Is Otter.ai</a>
+    <a href="https://tldv.io/features/ai-meeting-minutes/">tl;dv: AI-Powered Meeting Notes</a>
+    <a href="https://zapier.com/blog/tldv-features/">Zapier: tl;dv features</a>
+    <a href="https://guide.fireflies.ai/articles/9547055509-learn-about-the-fireflies-ai-meeting-summaries">Fireflies Guide: AI Meeting Summaries</a>
+    <a href="https://fireflies.ai/blog/fireflies-launches-ai-super-summaries/">Fireflies: Super Summaries</a>
+    <a href="https://docs.granola.ai/help-center/taking-notes/ai-enhanced-notes">Granola Docs: AI enhanced notes</a>
+    <a href="https://www.comnews.ru/content/242089/2025-10-30/2025-w44/1010/yandeks-prevratit-telemost-universalnyy-instrument-dlya-obscheniya">ComNews: Яндекс превратит Телемост в универсальный инструмент</a>
+    <a href="https://lenta.ru/news/2024/10/21/neyroseti/">Lenta.ru: нейросети в сервисах Яндекса (2024)</a>
+    <a href="https://www.bitrix24.ru/apps/app/optimPro.telemost/">Битрикс24 Маркет: интеграция с Телемостом</a>
+  </section>
+</main>
+
+</body></html>

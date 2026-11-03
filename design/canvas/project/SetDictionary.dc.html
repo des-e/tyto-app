@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Словарь</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="width: 1000px; height: 640px; background: rgba(0,0,0,0.42); display: flex; align-items: center; justify-content: center; font-family: Geist, system-ui, sans-serif; color: #171717;">
+  <div role="dialog" aria-labelledby="dict-h" style="width: 520px; border-radius: 14px; background: #fff; box-shadow: 0 16px 48px rgba(0,0,0,0.2); padding: 22px 22px 18px 22px; display: flex; flex-direction: column; gap: 14px;">
+    <header style="display: flex; align-items: flex-start; gap: 12px;">
+      <div style="flex: 1;"><h1 id="dict-h" style="margin: 0; font-size: 18px; font-weight: 600;">Словарь</h1><p style="margin: 4px 0 0 0; font-size: 13px; line-height: 1.5; color: #666;">Слова, которые Tyto должен писать именно так: имена, компании, термины. Работает во всех новых расшифровках.</p></div>
+      <button type="button" aria-label="Закрыть" style="width: 30px; height: 30px; border: 0; background: transparent; color: #666; display: grid; place-items: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+    </header>
+    <div style="display: flex; gap: 8px;">
+      <label style="flex: 1;"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden;">Новое слово</span><input placeholder="Новое слово или имя" style="width: 100%; box-sizing: border-box; height: 36px; border: 1px solid #e1e1e1; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; outline: 0;"></label>
+      <button type="button" style="height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 13.5px; font-weight: 500;">Добавить</button>
+    </div>
+    <ul style="margin: 0; padding: 0; list-style: none; border: 1px solid #eaeaea; border-radius: 10px; max-height: 290px; overflow: hidden;">
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid transparent;"><span style="flex: 1; font-size: 14px;">Битрикс24</span><button type="button" aria-label="Убрать «Битрикс24»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">Телемост</span><button type="button" aria-label="Убрать «Телемост»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">ЮKassa</span><button type="button" aria-label="Убрать «ЮKassa»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">Денис Елисеев</span><button type="button" aria-label="Убрать «Денис Елисеев»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">Ольга Смирнова</span><button type="button" aria-label="Убрать «Ольга Смирнова»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">ExtremeCode</span><button type="button" aria-label="Убрать «ExtremeCode»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">CRM</span><button type="button" aria-label="Убрать «CRM»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+        <li style="display: flex; align-items: center; height: 36px; padding: 0 6px 0 12px; border-top: 1px solid #f0f0f0;"><span style="flex: 1; font-size: 14px;">Tyto</span><button type="button" aria-label="Убрать «Tyto»" style="width: 26px; height: 26px; border: 0; background: transparent; color: #a8a8a8; display: grid; place-items: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></li>
+    </ul>
+    <div style="display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: #666;">
+      <span style="flex: 1;">12 слов · поместится еще около 40</span>
+      <span style="text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px;">Вставить списком</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

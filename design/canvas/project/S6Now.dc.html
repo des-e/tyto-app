@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Первый запуск сейчас</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="width: 1000px; height: 640px; background: #fff; font-family: Geist, system-ui, sans-serif; color: #171717; display: flex; justify-content: center; overflow: hidden;">
+  <div style="width: 460px; padding-top: 70px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; flex-direction: column;">
+      <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.02em;">Готовим Tyto к работе</h1>
+      <svg viewBox="262 200 500 680" width="36" height="49" fill="#171717" aria-hidden="true" style="align-self: flex-end; margin-right: 40px;"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+    </div>
+    <p style="margin: 0; font-size: 15px; line-height: 1.55; color: #666;">Скачиваем модели распознавания речи. Это нужно один раз: дальше Tyto работает без интернета.</p>
+    <div style="border: 1px solid #d4d4d4; border-radius: 12px;">
+      <div style="display: grid; grid-template-columns: 24px 1fr auto; gap: 12px; padding: 16px; border-bottom: 1px solid #d4d4d4;">
+        <span style="width: 22px; height: 22px; border-radius: 11px; border: 1.5px solid #171717; display: grid; place-items: center; font-size: 12px;">1</span>
+        <div><div style="font-size: 14.5px; font-weight: 500;">Распознавание речи</div><div style="font-size: 13px; color: #666;">Превращает звук в текст</div>
+          <div style="margin-top: 14px; height: 3px; border-radius: 2px; background: #e1e1e1; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 3px; width: 7%; background: #171717; border-radius: 2px;"></span></div>
+          <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 12.5px; color: #666;"><span>7%</span><span>Осталось около 5 мин</span></div></div>
+        <span style="font-size: 13px; color: #666;">0,1 из 1,6 ГБ</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 24px 1fr auto; gap: 12px; padding: 16px;">
+        <span style="width: 22px; height: 22px; border-radius: 11px; border: 1.5px solid #c9c9c9; color: #8f8f8f; display: grid; place-items: center; font-size: 12px;">2</span>
+        <div><div style="font-size: 14.5px; font-weight: 500;">Разделение по говорящим</div><div style="font-size: 13px; color: #666;">Определяет, кто из участников говорит</div></div>
+        <span style="font-size: 13px; color: #666;">Следующим</span>
+      </div>
+    </div>
+    <p style="margin: 0; font-size: 13px; color: #666;">Записи расшифровываются на этом компьютере и никуда не отправляются.</p>
+    <div style="display: flex; gap: 16px; align-items: center;">
+      <button type="button" style="height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: #0a0a0a; color: #fff; font-size: 14px;">Отменить загрузку</button>
+      <span style="font-size: 14px;">Указать файл модели вручную</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

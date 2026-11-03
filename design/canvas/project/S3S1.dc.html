@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сводка: ИИ не подключен</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <div style="height: 48px; flex-shrink: 0; display: flex; align-items: center; padding: 0 16px 0 32px; gap: 4px;">
+      <div role="tablist" aria-label="Вид записи" style="display: flex; gap: 2px;">
+        <button type="button" role="tab" aria-selected="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; font-size: 13px; color: #666;">Текст</button>
+        <button type="button" role="tab" aria-selected="true" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: #ebebeb; font-size: 13px; font-weight: 500;">Сводка</button>
+      </div>
+      <span style="flex: 1;"></span>
+      <button type="button" style="margin-left: 6px; height: 30px; padding: 0 12px; border: 1px solid #e1e1e1; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 500;">Экспорт</button>
+    </div>
+    <main style="flex: 1; min-height: 0; padding: 16px 32px 0 32px; overflow: hidden;">
+      <header style="margin: 0 0 24px 0;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Планерка отдела продаж</h1>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #666;">29 октября · <span style="font-family: 'Geist Mono', monospace;">48:00</span> · русский · 3 участника</p>
+      </header>
+      <section aria-labelledby="sum-off" style="max-width: 560px; display: flex; flex-direction: column; gap: 16px;">
+        <div>
+          <h2 id="sum-off" style="margin: 0; font-size: 16px; font-weight: 600;">Сводку делает ИИ-ассистент</h2>
+          <p style="margin: 6px 0 0 0; font-size: 14px; line-height: 1.55; color: #666;">Он прочитает расшифровку и выпишет главное, задачи с ответственными и принятые решения. Подключите его один раз, и сводка будет у всех записей.</p>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+          <div style="border: 1px solid #eaeaea; border-radius: 10px; padding: 14px;">
+            <div style="font-size: 13.5px; font-weight: 500;">На этом компьютере</div>
+            <p style="margin: 4px 0 0 0; font-size: 12.5px; line-height: 1.5; color: #666;">Через Ollama. Текст никуда не уходит, но нужен мощный компьютер.</p>
+          </div>
+          <div style="border: 1px solid #eaeaea; border-radius: 10px; padding: 14px;">
+            <div style="font-size: 13.5px; font-weight: 500;">Через сервис</div>
+            <p style="margin: 4px 0 0 0; font-size: 12.5px; line-height: 1.5; color: #666;">OpenAI, Claude или прокси. Текст расшифровки отправляется в выбранный сервис.</p>
+          </div>
+        </div>
+        <button type="button" style="align-self: flex-start; height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 13.5px; font-weight: 500; cursor: pointer;">Подключить ИИ-ассистента</button>
+      </section>
+    </main>
+    <dc-import name="Player" time="0:14" total="48:00" progress="1%" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

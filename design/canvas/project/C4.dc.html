@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>C4: первый запуск</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" empty="{{yes}}" hint-size="232px,640px"></dc-import>
+  <main style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 56px; box-sizing: border-box;">
+    <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+      <svg viewBox="262 200 500 680" width="40" height="54" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+      <h1 style="margin: 18px 0 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Добро пожаловать в Tyto</h1>
+      <p style="margin: 6px 0 0 0; font-size: 14px; color: #666;">Все работает на этом компьютере, записи никуда не отправляются</p>
+    </div>
+    <ol style="list-style: none; margin: 28px 0 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 11px; border: 1px solid #d4d4d4; display: grid; place-items: center; font-family: 'Geist Mono', monospace; font-size: 12px;">1</span>
+        <span style="font-size: 13.5px; line-height: 1.45;"><b style="font-weight: 500;">Запишите звонок</b><br><span style="color: #666;">или откройте готовый файл</span></span>
+      </li>
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 11px; border: 1px solid #d4d4d4; display: grid; place-items: center; font-family: 'Geist Mono', monospace; font-size: 12px;">2</span>
+        <span style="font-size: 13.5px; line-height: 1.45;"><b style="font-weight: 500;">Tyto расшифрует</b><br><span style="color: #666;">час звонка за несколько минут</span></span>
+      </li>
+      <li style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 11px; border: 1px solid #d4d4d4; display: grid; place-items: center; font-family: 'Geist Mono', monospace; font-size: 12px;">3</span>
+        <span style="font-size: 13.5px; line-height: 1.45;"><b style="font-weight: 500;">Читайте и ищите</b><br><span style="color: #666;">текст по говорящим, сводка, темы</span></span>
+      </li>
+    </ol>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px;">
+      <section style="border: 1px solid #eaeaea; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div>
+          <h2 style="margin: 0; font-size: 16px; font-weight: 600;">Записать звонок</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #666;">Микрофон и звук собеседников</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #eaeaea; border-bottom: 1px solid #eaeaea;">
+          <span style="flex: 1; font-size: 13.5px; font-weight: 500;">Записывать экран</span>
+          <button type="button" role="switch" aria-checked="false" aria-label="Записывать экран" style="width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 10px; background: #e1e1e1; display: flex; justify-content: flex-start;"><span style="width: 16px; height: 16px; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);"></span></button>
+        </div>
+        <button type="button" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 40px; border: 0; border-radius: 8px; background: #171717; color: #fff; font-size: 14px; font-weight: 500;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #ff5b4f;"></span>Начать запись</button>
+      </section>
+      <section style="border: 1px dashed #c9c9c9; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; background: #fafafa;">
+        <div>
+          <h2 style="margin: 0; font-size: 16px; font-weight: 600;">Расшифровать файл</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #666;">Перетащите сюда аудио, видео или папку</p>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <button type="button" style="flex: 1; height: 40px; border: 1px solid #eaeaea; border-radius: 8px; background: #fff; font-size: 14px; font-weight: 500;">Выбрать файл</button>
+          <button type="button" style="height: 40px; padding: 0 12px; border: 0; background: transparent; font-size: 13px; color: #666;">По ссылке</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return { yes: true }; }
+}
+</script>
+</body>
+</html>

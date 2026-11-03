@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Первый запуск, вариант A</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>body{margin:0} button{font:inherit;color:inherit}</style>
+</helmet>
+<div style="width: 1000px; height: 640px; background: #fff; font-family: Geist, system-ui, sans-serif; color: #171717; display: flex; justify-content: center; overflow: hidden;">
+  <div style="width: 520px; padding-top: 56px; display: flex; flex-direction: column; gap: 22px;">
+    <header style="display: flex; align-items: center; gap: 14px;">
+      <svg viewBox="262 200 500 680" width="28" height="38" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+      <div>
+        <h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Готовим Tyto к работе</h1>
+        <p style="margin: 4px 0 0 0; font-size: 13.5px; color: #666;">Скачиваем модели один раз, дальше Tyto работает без интернета</p>
+      </div>
+    </header>
+    <section aria-label="Загрузка моделей" style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: baseline; gap: 10px; font-size: 13.5px;">
+        <span style="font-weight: 500;">Модели распознавания</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #666;">0,3 из 1,8 ГБ</span>
+        <span style="flex: 1;"></span>
+        <span style="font-size: 13px; color: #666;">осталось около 5 мин</span>
+      </div>
+      <div role="progressbar" aria-valuenow="17" aria-valuemin="0" aria-valuemax="100" style="height: 4px; border-radius: 2px; background: #ebebeb; position: relative;"><span style="position: absolute; left: 0; top: 0; height: 4px; width: 17%; border-radius: 2px; background: #171717;"></span></div>
+      <div style="display: flex; gap: 16px; font-size: 12.5px; color: #666;">
+        <span>Текст, затем разделение по говорящим</span>
+        <span style="flex: 1;"></span>
+        <span style="text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px;">Указать файлы вручную</span>
+        <span style="text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px;">Отменить</span>
+      </div>
+    </section>
+    <section aria-labelledby="s6a-q" style="border: 1px solid #eaeaea; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 18px;">
+      <h2 id="s6a-q" style="margin: 0; font-size: 12px; font-weight: 500; color: #666;">Пока скачивается</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div><div style="font-size: 14.5px; font-weight: 500;">Предлагать запись, когда начинается звонок?</div><div style="font-size: 13px; line-height: 1.5; color: #666; margin-top: 3px;">Tyto заметит звонок в Телемосте, Битрикс24, Zoom и других сервисах и предложит записать его.</div></div>
+        <div role="radiogroup" aria-label="Предлагать запись" style="display: flex; gap: 8px;">
+          <button type="button" role="radio" aria-checked="true" style="height: 34px; padding: 0 14px; border: 1px solid #171717; border-radius: 8px; background: #fff; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><span style="width: 14px; height: 14px; border-radius: 7px; border: 4px solid #171717; box-sizing: border-box;"></span>Да, предлагать</button>
+          <button type="button" role="radio" aria-checked="false" style="height: 34px; padding: 0 14px; border: 1px solid #e1e1e1; border-radius: 8px; background: #fff; font-size: 13.5px; color: #444; display: flex; align-items: center; gap: 8px;"><span style="width: 14px; height: 14px; border-radius: 7px; border: 1.5px solid #c9c9c9; box-sizing: border-box;"></span>Нет, запишу сам</button>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div style="flex: 1;"><div style="font-size: 14.5px; font-weight: 500;">На каком языке обычно встречи?</div><div style="font-size: 13px; color: #666; margin-top: 3px;">Можно поменять у каждой записи</div></div>
+        <span style="height: 34px; min-width: 150px; border: 1px solid #e1e1e1; border-radius: 8px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; font-size: 13.5px;">Русский <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span>
+      </div>
+    </section>
+    <p style="margin: 0; font-size: 12.5px; color: #666;">Записи расшифровываются на этом компьютере и никуда не отправляются. Ответы можно поменять в настройках.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

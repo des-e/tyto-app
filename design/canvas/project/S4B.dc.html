@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Ход расшифровки, вариант B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit}
+</style>
+</helmet>
+<div style="width: 1000px; height: 640px; display: flex; font-family: Geist, system-ui, sans-serif; color: #171717; background: #fff; overflow: hidden;">
+  <dc-import name="Sidebar" active="Планерка отдела продаж" running="Планерка отдела продаж" hint-size="232px,640px"></dc-import>
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <main style="flex: 1; min-height: 0; padding: 64px 56px 0 56px; display: flex; flex-direction: column; overflow: hidden;">
+      <header>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">Планерка отдела продаж</h1>
+        <p style="margin: 6px 0 0 0; font-size: 13px; color: #666;">29 октября · <span style="font-family: 'Geist Mono', monospace;">48:00</span> · русский</p>
+      </header>
+      <section aria-label="Ход расшифровки" style="margin-top: 48px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;">
+        <svg viewBox="262 200 500 680" width="34" height="46" fill="#171717" aria-hidden="true"><path fill-rule="evenodd" d="M276 214L396 296Q512 336 628 296L748 214L748 620C748 750 640 830 512 830C384 830 276 750 276 620ZM322 448A92 92 0 1 0 506 448A92 92 0 1 0 322 448ZM518 448A92 92 0 1 0 702 448A92 92 0 1 0 518 448ZM480 556L512 612L544 556Z"></path><path d="M362 448A52 52 0 1 1 466 448A52 52 0 1 1 362 448ZM558 448A52 52 0 1 1 662 448A52 52 0 1 1 558 448Z"></path><rect x="412" y="812" width="56" height="52" rx="18"></rect><rect x="556" y="812" width="56" height="52" rx="18"></rect></svg>
+        <div style="font-family: 'Geist Mono', monospace; font-size: 34px; font-weight: 500; letter-spacing: -0.02em;">64%</div>
+        <div style="font-size: 14px; color: #666;">Расшифровываем · осталось около 3 мин</div>
+        <div role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" style="width: 320px; height: 4px; border-radius: 2px; background: #ebebeb; position: relative; margin-top: 6px;"><span style="position: absolute; left: 0; top: 0; height: 4px; width: 64%; border-radius: 2px; background: #171717;"></span></div>
+        <button type="button" style="margin-top: 6px; border: 0; background: transparent; padding: 0; font-size: 13px; color: #666; text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px; cursor: pointer;">Остановить</button>
+      </section>
+      <section aria-label="Последнее, что готово" style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #eaeaea; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <h2 style="margin: 0; font-size: 12px; font-weight: 500; color: #666;">Последнее, что готово</h2>
+          <button type="button" style="border: 0; background: transparent; padding: 0; font-size: 12.5px; color: #171717; text-decoration: underline; text-decoration-color: #d4d4d4; text-underline-offset: 3px; cursor: pointer;">Читать с начала</button>
+        </div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #444;"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #8f8f8f;">30:52</span>  Я поспрашиваю у ребят на первом складе, может кто-то посоветует.</p>
+        <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #444;"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #8f8f8f;">31:05</span>  Хорошо. Переходим к итогам, у нас осталось минут пятнадцать.</p>
+      </section>
+    </main>
+    <dc-import name="Player" time="0:00" total="48:00" progress="0%" hint-size="768px,56px"></dc-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":640}}'>
+class Component extends DCLogic { renderVals() { return {}; } }
+</script>
+</body>
+</html>

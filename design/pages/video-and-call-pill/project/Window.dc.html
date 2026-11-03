@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Отдельное окно поверх всех</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4d4d4d}a:hover{color:#171717}
+</style>
+</helmet>
+<div style="width: 960px; height: 600px; position: relative; font-family: Geist, system-ui, sans-serif; color: #171717; background: #dfe3e8; overflow: hidden">
+  <div style="position: absolute; left: 24px; top: 24px; width: 640px; height: 480px; display: flex; background: #fff; border-radius: 10px; border: 1px solid #d4d4d4; box-shadow: 0 10px 30px rgba(0,0,0,0.12); overflow: hidden">
+    <aside style="width: 170px; flex-shrink: 0; background: #fafafa; border-right: 1px solid #ebebeb; padding: 14px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+      <div style="font-weight: 600; font-size: 17px; padding: 2px 6px">Tyto</div>
+      <div style="background: #f2f2f2; border-radius: 6px; padding: 7px 9px">
+        <div style="font-size: 12px; font-weight: 500">Планерка отдела продаж</div>
+        <div style="font-size: 11.5px; color: #666">25 окт. · 11 мин</div>
+      </div>
+    </aside>
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="flex: 1; min-height: 0; overflow: hidden; padding: 20px 28px; display: flex; flex-direction: column; gap: 12px">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em">Планерка отдела продаж</h1>
+        <div style="display: flex; gap: 12px"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #666; width: 40px">00:00</span><div style="font-size: 14px; line-height: 1.55">Начнем с поставок: по Казани сроки сдвигаются на неделю.</div></div>
+        <div style="display: flex; gap: 12px; background: #f2f2f2; border-radius: 6px; padding: 6px 8px; margin: 0 -8px"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #666; width: 40px">00:42</span><div style="font-size: 14px; line-height: 1.55">Покажу на экране, что поменялось в карточке сделки.</div></div>
+        <div style="display: flex; gap: 12px"><span style="font-family: 'Geist Mono', monospace; font-size: 11.5px; color: #666; width: 40px">01:15</span><div style="font-size: 14px; line-height: 1.55">Хорошо, тогда поле «Склад» делаем обязательным.</div></div>
+      </div>
+      <div style="height: 52px; border-top: 1px solid #ebebeb; display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <button type="button" aria-label="Видео открыто в отдельном окне" style="width: 56px; height: 32px; border: 1px dashed #a3a3a3; border-radius: 6px; background: #f2f2f2; color: #666; font-size: 10px; padding: 0">окно</button>
+        <button type="button" aria-label="Пауза" style="width: 30px; height: 30px; border: 0; border-radius: 6px; background: #171717; color: #fff; font-size: 10px">❚❚</button>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #666"><b style="color: #171717; font-weight: 500">00:42</b> / 11:17</span>
+        <div style="flex: 1; height: 6px; border-radius: 3px; background: #ebebeb; overflow: hidden"><div style="width: 9%; height: 6px; background: #171717"></div></div>
+      </div>
+    </main>
+  </div>
+  <div style="position: absolute; right: 24px; top: 110px; width: 384px; border-radius: 10px; background: #171717; box-shadow: 0 16px 40px rgba(0,0,0,0.28); overflow: hidden">
+    <div style="height: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; color: #a1a1a1; font-size: 11.5px">
+      <span>Tyto · Планерка отдела продаж</span>
+      <span style="display: flex; gap: 10px; color: #ededed"><span aria-hidden="true">⤢</span><span aria-hidden="true">✕</span></span>
+    </div>
+    <div style="position: relative; height: 216px; background: #1d2126">
+      <div style="position: absolute; left: 10px; top: 10px; width: 86px; height: 196px; background: #3a4047; border-radius: 3px"></div>
+      <div style="position: absolute; left: 104px; top: 10px; width: 270px; height: 90px; background: #4b525a; border-radius: 3px"></div>
+      <div style="position: absolute; left: 104px; top: 108px; width: 270px; height: 98px; background: #3a4047; border-radius: 3px"></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
