@@ -7,10 +7,18 @@ import type { AudioDevice } from '~/lib/audio'
 import { CONFIG_KEYS } from '~/lib/config-keys'
 import { usePersisted } from '~/lib/config-store'
 import { getDefaultRecordingShortcut } from '~/lib/config'
-import type { MeetingRecordingOptions } from '~/lib/meeting-prompt'
+import type { MeetingRecordingOptions, MeetingSource } from '~/lib/meeting-prompt'
 import { ensureSystemAudioPermission } from '~/lib/permissions'
 import { recordingsFolder } from '~/lib/tyto/media-path'
-import { onRecordingFailed, onRecordingFinished, startRecording as startSegmentedRecording, stopRecording as stopSegmentedRecording } from '~/lib/tyto/screen-recording'
+import { ensureScreenRecordingPermission } from '~/lib/tyto/screen-permission'
+import {
+	type CaptureTarget,
+	listCaptureTargets,
+	onRecordingFailed,
+	onRecordingFinished,
+	startRecording as startSegmentedRecording,
+	stopRecording as stopSegmentedRecording,
+} from '~/lib/tyto/screen-recording'
 import { m } from '~/paraglide/messages.js'
 import { useHotkeyProvider } from './hotkey'
 import { usePreferenceProvider } from './preference'
@@ -28,6 +36,26 @@ interface RecordingShortcutContextValue {
 }
 
 const RecordingShortcutContext = createContext<RecordingShortcutContextValue | null>(null)
+
+/**
+ * What «С видео» in the meeting prompt records: the call's own window, else the main screen. On a
+ * Mac the Screen Recording permission comes first; refused, nothing is recorded (null).
+ */
+async function meetingCaptureTarget(source: MeetingSource | undefined): Promise<CaptureTarget | null> {
+	if (!(await ensureScreenRecordingPermission())) return null
+	if (source) {
+		try {
+			const window = await invoke<CaptureTarget | null>('meeting_window_target', { source })
+			if (window) return window
+		} catch (error) {
+			console.warn('meeting window lookup failed:', error)
+		}
+	}
+	const { monitors } = await listCaptureTargets()
+	const monitor = monitors.find((item) => item.primary) ?? monitors[0]
+	if (!monitor) throw new Error(m.tytoCaptureNoWindows())
+	return { kind: 'monitor', id: monitor.id }
+}
 
 export function useRecordingShortcut() {
 	const context = useContext(RecordingShortcutContext)
@@ -64,6 +92,11 @@ export function RecordingShortcutProvider({ children }: { children: ReactNode })
 		projectsPathRef.current = preference.projectsPath
 	}, [preference.projectsPath])
 
+	const screenQualityRef = useRef(preference.screenQuality ?? 'good')
+	useEffect(() => {
+		screenQualityRef.current = preference.screenQuality ?? 'good'
+	}, [preference.screenQuality])
+
 	const startRecording = useCallback(async (options: MeetingRecordingOptions = { microphone: true, systemAudio: false }) => {
 		if (normalRecordingActiveRef.current || startingRef.current || stoppingRef.current) return false
 		if (dictationRecordingRef.current) {
@@ -82,11 +115,16 @@ export function RecordingShortcutProvider({ children }: { children: ReactNode })
 				(device): device is AudioDevice => device != null,
 			)
 			if (selectedDevices.length === 0) throw new Error(m.noDefaultMicrophone())
+			const video = options.mode === 'video'
+			// «С видео» from the meeting prompt: the call's window, or the main screen when it is not found.
+			const target = video ? await meetingCaptureTarget(options.source) : null
+			if (video && !target) return false
 			await startSegmentedRecording({
-				mode: 'audio',
+				mode: video ? 'video' : 'audio',
+				target,
 				devices: selectedDevices,
 				recordingsDir: await recordingsFolder(projectsPathRef.current),
-				quality: 'good',
+				quality: screenQualityRef.current,
 				name: null,
 			})
 			recordingRef.current = true

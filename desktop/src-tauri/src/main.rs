@@ -153,6 +153,7 @@ async fn main() -> Result<()> {
             screen::commands::recording_discard,
             screen::commands::screen_capture_support,
             screen::commands::list_capture_targets,
+            screen::commands::meeting_window_target,
             screen::pill::recording_pill_ready,
             cmd::app::get_models_folder,
             cmd::app::get_logs_folder,

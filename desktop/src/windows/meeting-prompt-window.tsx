@@ -1,9 +1,7 @@
 import { emit, listen } from '@tauri-apps/api/event'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
-import { Check, Mic, Video, Volume2 } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useState } from 'react'
-import { GoogleMeetIcon, MicrosoftTeamsIcon, ZoomIcon } from '~/components/meeting-service-icons'
-import { Button } from '~/components/ui/button'
 import { CONFIG_KEYS } from '~/lib/config-keys'
 import { readConfig } from '~/lib/config-store'
 import {
@@ -15,7 +13,7 @@ import {
 	type MeetingSource,
 } from '~/lib/meeting-prompt'
 import { supportedLanguages } from '~/lib/i18n'
-import { cn } from '~/lib/style'
+import { getCaptureSupport } from '~/lib/tyto/screen-recording'
 import { m } from '~/paraglide/messages.js'
 import { getLocale, getTextDirection, setLocale } from '~/paraglide/runtime.js'
 import { OwlMark } from '~/lib/tyto/owl-mark'
@@ -28,50 +26,8 @@ const serviceNames: Record<MeetingSource, string> = {
 	bitrix24: 'Битрикс24',
 }
 
-function ServiceIcon({ source }: { source: MeetingSource }) {
-	const className = 'h-7 w-7'
-	if (source === 'meet') return <GoogleMeetIcon className={className} />
-	if (source === 'zoom') return <ZoomIcon className={className} />
-	if (source === 'teams') return <MicrosoftTeamsIcon className={className} />
-	// Other services' logos are not drawn: a neutral camera stands in.
-	return <Video className={`${className} text-muted-foreground`} aria-hidden="true" />
-}
-
-function SourceChoice({
-	checked,
-	icon: Icon,
-	label,
-	disabled,
-	onClick,
-}: {
-	checked: boolean
-	icon: typeof Mic
-	label: string
-	disabled: boolean
-	onClick: () => void
-}) {
-	return (
-		<button
-			type="button"
-			aria-pressed={checked}
-			disabled={disabled}
-			onClick={onClick}
-			className={cn(
-				'flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-medium transition-colors disabled:opacity-50',
-				checked ? 'border-border bg-muted/35 text-foreground' : 'border-border/75 bg-transparent text-muted-foreground',
-			)}>
-			<span
-				className={cn(
-					'flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border',
-					checked ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/55',
-				)}>
-				{checked && <Check className="h-2.5 w-2.5 stroke-[3]" />}
-			</span>
-			<Icon className="h-3 w-3" />
-			<span>{label}</span>
-		</button>
-	)
-}
+/** Both sides of the call: the person's microphone and what the others say. */
+const BOTH_SOURCES: MeetingRecordingOptions = { microphone: true, systemAudio: true }
 
 export default function MeetingPromptWindow() {
 	const configuredLocale = readConfig(CONFIG_KEYS.displayLanguage, 'en-US')
@@ -81,7 +37,7 @@ export default function MeetingPromptWindow() {
 
 	const [state, setState] = useState<MeetingPromptState | null>(null)
 	const [busy, setBusy] = useState(false)
-	const [sources, setSources] = useState<MeetingRecordingOptions>({ microphone: true, systemAudio: true })
+	const [videoSupported, setVideoSupported] = useState(false)
 	const theme = readConfig<'light' | 'dark'>(CONFIG_KEYS.theme, window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 	const direction = getTextDirection(configuredLocale)
 
@@ -101,6 +57,13 @@ export default function MeetingPromptWindow() {
 			document.body.style.removeProperty('background')
 		}
 	}, [direction, theme])
+
+	useEffect(() => {
+		// «С видео» only where video capture works (macOS 13+, a working encoder).
+		getCaptureSupport()
+			.then((support) => setVideoSupported(support.video))
+			.catch(() => setVideoSupported(false))
+	}, [])
 
 	useEffect(() => {
 		let cancelled = false
@@ -154,22 +117,15 @@ export default function MeetingPromptWindow() {
 		}
 	}
 
-	async function startRecording() {
-		if (busy) return
+	async function startRecording(mode: 'audio' | 'video') {
+		if (busy || !state) return
 		setBusy(true)
 		try {
-			await emit('meeting-prompt-start-recording', sources)
+			await emit('meeting-prompt-start-recording', { ...BOTH_SOURCES, mode, source: state.source })
 		} catch (error) {
 			console.error('Failed to start recording from meeting prompt:', error)
 			setBusy(false)
 		}
-	}
-
-	function toggleSource(source: keyof MeetingRecordingOptions) {
-		setSources((current) => {
-			if (current[source] && Object.values(current).filter(Boolean).length === 1) return current
-			return { ...current, [source]: !current[source] }
-		})
 	}
 
 	useEffect(() => {
@@ -183,38 +139,31 @@ export default function MeetingPromptWindow() {
 	if (!state) return null
 
 	return (
+		// A dark row like a system notification, the same in both themes: it sits over other apps.
 		<div className="flex h-screen w-screen items-center justify-center bg-transparent p-2">
-			<section className="flex h-full w-full flex-col gap-2 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-card-foreground shadow-xl">
-				<div className="flex min-w-0 items-center gap-2.5">
-					<div className="relative flex h-9 w-12 shrink-0 items-center">
-						<ServiceIcon source={state.source} />
-						<span className="absolute end-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-card bg-card">
-							<OwlMark className="h-3 w-auto text-foreground" />
-						</span>
-					</div>
-					<div className="min-w-0">
-						<h1 className="truncate text-sm font-semibold leading-5">{m.meetingPromptTitle({ source: serviceNames[state.source] })}</h1>
-						<p className="truncate text-xs text-muted-foreground">{m.meetingPromptDescription()}</p>
-					</div>
+			<section className="tyto-meeting-row">
+				<OwlMark className="tyto-meeting-row-owl" />
+				<div className="min-w-0 flex-1">
+					<h1 className="tyto-meeting-row-title">{m.tytoMeetingRowTitle({ source: serviceNames[state.source] })}</h1>
+					<p className="tyto-meeting-row-sub">{m.tytoMeetingRowSources()}</p>
 				</div>
-				<div className="flex gap-1.5" aria-label={m.recordingControls()}>
-					<SourceChoice checked={sources.microphone} icon={Mic} label={m.microphone()} disabled={busy} onClick={() => toggleSource('microphone')} />
-					<SourceChoice
-						checked={sources.systemAudio}
-						icon={Volume2}
-						label={m.systemAudioPermission()}
-						disabled={busy}
-						onClick={() => toggleSource('systemAudio')}
-					/>
-				</div>
-				<div className="mt-auto flex justify-end gap-1.5 border-t border-border/55 pt-2">
-					<Button type="button" variant="ghost" size="sm" className="h-7 rounded-md px-2 text-xs" disabled={busy} onClick={() => void dismiss()}>
-						{m.meetingPromptDismiss()}
-					</Button>
-					<Button type="button" size="sm" className="h-8 rounded-md px-3 text-xs" disabled={busy} onClick={() => void startRecording()}>
-						{m.meetingPromptStart()}
-					</Button>
-				</div>
+				<button type="button" className="tyto-meeting-row-primary" disabled={busy} onClick={() => void startRecording('audio')}>
+					{m.tytoMeetingRowRecord()}
+				</button>
+				{videoSupported && (
+					<button type="button" className="tyto-meeting-row-secondary" disabled={busy} onClick={() => void startRecording('video')}>
+						{m.tytoMeetingRowVideo()}
+					</button>
+				)}
+				<button
+					type="button"
+					className="tyto-meeting-row-close"
+					disabled={busy}
+					onClick={() => void dismiss()}
+					aria-label={m.meetingPromptDismiss()}
+					title={m.meetingPromptDismiss()}>
+					<X className="h-4 w-4" />
+				</button>
 			</section>
 		</div>
 	)

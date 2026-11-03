@@ -1311,6 +1311,110 @@ svg.lucide {
 	background: var(--background);
 }
 
+/* Meeting prompt (windows/meeting-prompt-window.tsx): a dark row like a system notification, the
+   same in both themes since it floats over other apps. 72 px tall, 15/13 px text, 36 px buttons. */
+.tyto-meeting-row {
+	display: flex;
+	align-items: center;
+	gap: var(--tyto-sp-12);
+	width: 100%;
+	height: 100%;
+	padding: 0 var(--tyto-sp-12) 0 var(--tyto-sp-16);
+	color: #ededed;
+	background: #171717;
+	border: 1px solid #2e2e2e;
+	border-radius: var(--tyto-r-lg);
+	box-shadow: 0 10px 28px rgb(0 0 0 / 0.28);
+}
+
+.tyto-meeting-row-owl {
+	flex-shrink: 0;
+	width: auto;
+	height: 26px;
+	color: #fff;
+}
+
+.tyto-meeting-row-title {
+	overflow: hidden;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 20px;
+	color: #fff;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.tyto-meeting-row-sub {
+	overflow: hidden;
+	margin-top: 2px;
+	font-size: 13px;
+	line-height: 18px;
+	color: #a1a1a1;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.tyto-meeting-row-primary,
+.tyto-meeting-row-secondary {
+	flex-shrink: 0;
+	height: 36px;
+	padding: 0 14px;
+	font-size: 14px;
+	font-weight: 500;
+	border-radius: var(--tyto-r-md);
+	cursor: pointer;
+	transition: background-color 120ms ease-out;
+}
+
+.tyto-meeting-row-primary {
+	color: #171717;
+	background: #fff;
+	border: 0;
+}
+
+.tyto-meeting-row-primary:hover {
+	background: #e6e6e6;
+}
+
+.tyto-meeting-row-secondary {
+	color: #ededed;
+	background: transparent;
+	border: 1px solid #3d3d3d;
+}
+
+.tyto-meeting-row-secondary:hover {
+	background: #262626;
+}
+
+.tyto-meeting-row-close {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	color: #a1a1a1;
+	cursor: pointer;
+	background: transparent;
+	border: 0;
+	border-radius: var(--tyto-r-md);
+}
+
+.tyto-meeting-row-close:hover {
+	color: #fff;
+	background: #262626;
+}
+
+.tyto-meeting-row button:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+
+.tyto-meeting-row button:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
 /* Video (lib/tyto/video-pane.tsx). From 900 px a 264 px column right of the text, topics under
    it; narrower or hidden, a 76x44 thumbnail at the start of the bottom player. */
 .tyto-video-side {

@@ -27,3 +27,28 @@ describe('плашка «Идет созвон»: новые сервисы', ()
 		expect(await screen.findByText(new RegExp(name))).toBeTruthy()
 	})
 })
+
+describe('плашка «Идет созвон»: кнопки', () => {
+	it('«Записать» и «С видео» передают режим и сервис; без видео кнопки «С видео» нет', async () => {
+		const { emit } = await import('@tauri-apps/api/event')
+		const { invoke } = await import('@tauri-apps/api/core')
+		const { fireEvent } = await import('@testing-library/react')
+		prompt.source = 'telemost'
+		vi.mocked(invoke).mockImplementation((async (cmd: string) => {
+			if (cmd === 'get_meeting_prompt_state') return { source: prompt.source }
+			if (cmd === 'screen_capture_support') return { video: true, pillExcluded: true }
+			return null
+		}) as never)
+		// the prompt takes its language from the settings, empty here: English
+		render(<MeetingPromptWindow />)
+		fireEvent.click(await screen.findByRole('button', { name: 'With video' }))
+		expect(emit).toHaveBeenCalledWith('meeting-prompt-start-recording', { microphone: true, systemAudio: true, mode: 'video', source: 'telemost' })
+		cleanup()
+
+		vi.mocked(invoke).mockImplementation((async (cmd: string) => (cmd === 'get_meeting_prompt_state' ? { source: 'bitrix24' } : null)) as never)
+		render(<MeetingPromptWindow />)
+		fireEvent.click(await screen.findByRole('button', { name: 'Record' }))
+		expect(emit).toHaveBeenLastCalledWith('meeting-prompt-start-recording', { microphone: true, systemAudio: true, mode: 'audio', source: 'bitrix24' })
+		expect(screen.queryByRole('button', { name: 'With video' })).toBeNull()
+	})
+})

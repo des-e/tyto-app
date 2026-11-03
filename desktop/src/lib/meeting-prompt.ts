@@ -9,6 +9,10 @@ export interface MeetingPromptState {
 export interface MeetingRecordingOptions {
 	microphone: boolean
 	systemAudio: boolean
+	/** «С видео» in the meeting prompt records the call's window too. */
+	mode?: 'audio' | 'video'
+	/** The call the prompt reported: its window is the one recorded with video. */
+	source?: MeetingSource
 }
 
 export const getMeetingDetectionEnabled = () => invoke<boolean>('get_meeting_detection_enabled')

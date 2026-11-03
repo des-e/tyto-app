@@ -29,7 +29,7 @@ const UNSETTLED_INTERVAL: Duration = Duration::from_millis(150);
 const TITLE_SCAN_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// A supported meeting source.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     Zoom,
@@ -109,6 +109,44 @@ pub struct WindowInfo {
 /// Window titles are personal data: callers must not log them unless the user opted in.
 pub fn visible_windows() -> Vec<WindowInfo> {
     window_title::visible_windows()
+}
+
+/// Windows smaller than this on a side are tooltips and helpers, not a call.
+const MIN_MEETING_WINDOW_SIDE: u32 = 120;
+
+/// Whether `window` shows the call of `source`: a window of the app itself, or a browser window
+/// whose tab title names the service.
+fn shows_meeting(window: &WindowInfo, source: Source) -> bool {
+    let info = ProcessInfo {
+        pid: Some(window.pid),
+        name: window.process_name.clone(),
+        executable: None,
+        bundle_id: None,
+    };
+    let kind = process::source(&info);
+    match source {
+        Source::Zoom => kind == Some(ProcessKind::Zoom),
+        Source::Teams => kind == Some(ProcessKind::Teams),
+        Source::Bitrix24 => kind == Some(ProcessKind::Bitrix24),
+        Source::Meet | Source::Telemost => {
+            kind == Some(ProcessKind::Browser) && window_title::tab_source(&window.title) == Some(source)
+        }
+    }
+}
+
+/// The largest window that shows the call of `source`, for recording it with video.
+pub fn pick_meeting_window(windows: &[WindowInfo], source: Source) -> Option<WindowInfo> {
+    windows
+        .iter()
+        .filter(|w| w.width >= MIN_MEETING_WINDOW_SIDE && w.height >= MIN_MEETING_WINDOW_SIDE)
+        .filter(|w| shows_meeting(w, source))
+        .max_by_key(|w| u64::from(w.width) * u64::from(w.height))
+        .cloned()
+}
+
+/// `pick_meeting_window` over the windows on screen now.
+pub fn meeting_window(source: Source) -> Option<WindowInfo> {
+    pick_meeting_window(&visible_windows(), source)
 }
 
 /// A raw snapshot used to learn how new meeting apps look to the OS.
@@ -601,6 +639,57 @@ mod tests {
         assert_eq!(held, None);
         update_tab_hold(&attributed(Source::Meet), &mut held);
         assert_eq!(held, Some(Source::Meet));
+    }
+
+    fn window(id: u64, title: &str, process_name: &str, width: u32, height: u32) -> WindowInfo {
+        WindowInfo {
+            id,
+            pid: id as u32,
+            title: title.into(),
+            process_name: process_name.into(),
+            width,
+            height,
+        }
+    }
+
+    /// Windows from the 2026-11-02 probe: the call window is picked, others are ignored.
+    #[test]
+    fn meeting_window_is_the_largest_matching_one() {
+        let windows = vec![
+            window(1, "Tyto", "tyto.exe", 963, 739),
+            window(2, "1: Мессенджер — Яндекс\u{a0}Браузер", "browser.exe", 1936, 1048),
+            window(
+                3,
+                "1: Идёт звонок · Яндекс Телемост — Яндекс\u{a0}Браузер",
+                "browser.exe",
+                1280,
+                720,
+            ),
+            window(4, "ExtremeCode Studio", "Bitrix24.exe", 1024, 768),
+            window(5, "", "Bitrix24.exe", 16, 16),
+            window(6, "Дубли полей лида - Google Chrome", "chrome.exe", 974, 1039),
+        ];
+        assert_eq!(pick_meeting_window(&windows, Source::Telemost).map(|w| w.id), Some(3));
+        assert_eq!(pick_meeting_window(&windows, Source::Bitrix24).map(|w| w.id), Some(4));
+        assert_eq!(pick_meeting_window(&windows, Source::Meet), None);
+        assert_eq!(pick_meeting_window(&windows, Source::Zoom), None);
+        // two Telemost windows: the bigger one
+        let mut two = windows.clone();
+        two.push(window(7, "Встреча · Яндекс Телемост - Google Chrome", "chrome.exe", 300, 200));
+        two.push(window(
+            8,
+            "Планерка · Яндекс Телемост - Google Chrome",
+            "chrome.exe",
+            1600,
+            900,
+        ));
+        assert_eq!(pick_meeting_window(&two, Source::Telemost).map(|w| w.id), Some(8));
+    }
+
+    #[test]
+    fn sources_come_back_from_the_frontend() {
+        assert_eq!(serde_json::from_str::<Source>("\"telemost\"").unwrap(), Source::Telemost);
+        assert_eq!(serde_json::from_str::<Source>("\"bitrix24\"").unwrap(), Source::Bitrix24);
     }
 
     #[test]

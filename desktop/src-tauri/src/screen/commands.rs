@@ -226,6 +226,19 @@ pub async fn list_capture_targets() -> Result<CaptureTargets, String> {
         .map_err(|e| e.to_string())
 }
 
+/// The window of the call the meeting prompt reports, to record it with video; `None` when it
+/// is not on screen (the caller records the main monitor instead).
+#[tauri::command]
+pub async fn meeting_window_target(source: meeting_detect::Source) -> Result<Option<super::recorder::CaptureTarget>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        meeting_detect::meeting_window(source)
+            .filter(|w| w.pid != std::process::id())
+            .map(|w| super::recorder::CaptureTarget::Window { id: w.id.to_string() })
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

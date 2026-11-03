@@ -86,6 +86,7 @@ vi.mock('~/lib/config-store', async () => {
 })
 vi.mock('~/lib/keep-awake', () => ({ KEEP_AWAKE: { record: 'record' }, startKeepAwake: vi.fn(), stopKeepAwake: vi.fn() }))
 vi.mock('~/lib/permissions', () => ({ ensureSystemAudioPermission: vi.fn(async () => true) }))
+vi.mock('~/lib/tyto/screen-permission', () => ({ ensureScreenRecordingPermission: vi.fn(async () => true) }))
 vi.mock('~/lib/dictation-indicator', () => ({ showDictationIndicator: vi.fn(), hideDictationIndicator: vi.fn() }))
 vi.mock('~/lib/analytics', () => ({ trackTranscribeStarted: vi.fn(), trackTranscribeFailed: vi.fn(), trackTranscribeSucceeded: vi.fn() }))
 vi.mock('~/lib/model', async (importOriginal) => ({
@@ -317,5 +318,35 @@ describe('запись аудио через новый модуль', () => {
 		await waitFor(() => expect(commands()).toContain('start_record'))
 		expect(backend.calls.find((call) => call.cmd === 'start_record')?.args).toEqual({ devices: [mic], recordingName: null })
 		expect(commands()).not.toContain('recording_start')
+	})
+})
+
+describe('плашка созвона: «С видео»', () => {
+	it('пишет окно созвона, которое нашел детектор', async () => {
+		backend.handlers.meeting_window_target = () => ({ kind: 'window', id: '197162' })
+		await renderApp()
+		await act(async () => bus.emit('meeting-prompt-start-recording', { microphone: true, systemAudio: true, mode: 'video', source: 'telemost' }))
+		await waitFor(() => expect(commands()).toContain('recording_start'))
+		expect(backend.calls.find((call) => call.cmd === 'meeting_window_target')?.args).toEqual({ source: 'telemost' })
+		expect(backend.calls.find((call) => call.cmd === 'recording_start')?.args).toMatchObject({
+			options: { mode: 'video', target: { kind: 'window', id: '197162' }, devices: [mic, speakers] },
+		})
+	})
+
+	it('окно созвона не найдено: пишется основной экран', async () => {
+		backend.handlers.meeting_window_target = () => null
+		backend.handlers.list_capture_targets = () => ({
+			monitors: [
+				{ id: '0', name: '1', width: 1280, height: 1024, primary: false },
+				{ id: '1', name: '2', width: 1920, height: 1080, primary: true },
+			],
+			windows: [],
+		})
+		await renderApp()
+		await act(async () => bus.emit('meeting-prompt-start-recording', { microphone: true, systemAudio: true, mode: 'video', source: 'bitrix24' }))
+		await waitFor(() => expect(commands()).toContain('recording_start'))
+		expect(backend.calls.find((call) => call.cmd === 'recording_start')?.args).toMatchObject({
+			options: { mode: 'video', target: { kind: 'monitor', id: '1' } },
+		})
 	})
 })

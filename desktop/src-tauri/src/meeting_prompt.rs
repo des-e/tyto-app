@@ -30,8 +30,10 @@ tauri_nspanel::tauri_panel! {
 const WINDOW_LABEL: &str = "meeting-prompt";
 const ENABLED_KEY: &str = "recording.meetingDetectionEnabled";
 const EVENT_NAME: &str = "meeting-prompt-state";
-const WIDTH: f64 = 304.0;
-const HEIGHT: f64 = 152.0;
+// A dark row like a system notification (Денис, 2026-11-02): 72 px of content in an 8 px clear
+// margin for the shadow.
+const WIDTH: f64 = 520.0;
+const HEIGHT: f64 = 88.0;
 const MARGIN: f64 = 20.0;
 #[cfg(target_os = "macos")]
 const TOP_MARGIN: f64 = 48.0;
