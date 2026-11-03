@@ -18,6 +18,17 @@ const BROWSER_BUNDLE_IDS: &[&str] = &[
     "com.brave.browser.dev",
     "com.brave.browser.nightly",
     "company.thebrowser.browser",
+    // Other Chromium and Gecko browsers, from the list in fastrepl/anarlog (MIT) `crates/detect`.
+    "org.chromium.chromium",
+    "com.vivaldi.vivaldi",
+    "com.operasoftware.opera",
+    "com.operasoftware.operagx",
+    "com.operasoftware.operanext",
+    "com.operasoftware.operadeveloper",
+    "company.thebrowser.dia",
+    "ai.perplexity.comet",
+    "app.zen-browser.zen",
+    "org.mozilla.nightly",
     // Yandex Browser on mac: `/Applications/Yandex.app`, window owner «Yandex» (2026-11-03 probe).
     "ru.yandex.desktop.yandex-browser",
 ];
@@ -57,6 +68,8 @@ const BROWSER_PROCESS_NAMES: &[&str] = &[
     "brave-browser-stable",
     "arc",
     "arc.exe",
+    "vivaldi.exe",
+    "opera.exe",
     // Yandex Browser on Windows. Only the `.exe` form: a bare `browser` is too generic elsewhere.
     "browser.exe",
 ];
