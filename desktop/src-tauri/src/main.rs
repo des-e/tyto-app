@@ -50,6 +50,7 @@ async fn main() -> Result<()> {
         .manage(tray::TrayState::default())
         .manage(keepawake::KeepAwake::new())
         .manage(screen::recorder::RecorderRuntime::default())
+        .manage(screen::video_window::VideoWindowState::default())
         .manage(tokio::sync::Mutex::<Option<handoff::HandoffState>>::new(None))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
@@ -154,6 +155,9 @@ async fn main() -> Result<()> {
             screen::commands::screen_capture_support,
             screen::commands::list_capture_targets,
             screen::commands::meeting_window_target,
+            screen::video_window::video_window_open,
+            screen::video_window::video_window_source,
+            screen::video_window::video_window_close,
             screen::pill::recording_pill_ready,
             cmd::app::get_models_folder,
             cmd::app::get_logs_folder,

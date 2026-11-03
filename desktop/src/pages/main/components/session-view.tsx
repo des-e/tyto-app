@@ -1,7 +1,5 @@
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { useActiveVideo, useVideoPlace } from '~/lib/tyto/player-media'
-import { VideoSideColumn } from '~/lib/tyto/video-pane'
 import { useSession } from '../session'
 import { useTranscriptViewOptions, type TranscriptTab } from '../hooks/use-transcript-view'
 import BatchBanner from './batch-banner'
@@ -16,8 +14,6 @@ export default function SessionView() {
 	const options = useTranscriptViewOptions()
 	const multiple = queue.jobs.length > 1
 	const selected = queue.selectedJob
-	const video = useActiveVideo()
-	const { place } = useVideoPlace()
 
 	useEffect(() => {
 		setQuery('')
@@ -45,16 +41,8 @@ export default function SessionView() {
 
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				<BatchBanner />
-				{/* Video on the left, text on the right; narrower windows put the video above the text. */}
-				{/* Text first, the video in a narrow column on the right (wide window); otherwise it is a
-				    thumbnail in the bottom player. The text column stays the same element either way. */}
-				<div className="flex min-h-0 flex-1">
-					<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-						<TranscriptToolbar job={selected} query={query} setQuery={setQuery} options={options} tab={tab} setTab={setTab} />
-						<div className="min-h-0 flex-1">{selected && <TranscriptView job={selected} query={query} options={options} tab={tab} />}</div>
-					</div>
-					{video && place === 'side' && <VideoSideColumn video={video} />}
-				</div>
+				<TranscriptToolbar job={selected} query={query} setQuery={setQuery} options={options} tab={tab} setTab={setTab} />
+				<div className="min-h-0 flex-1">{selected && <TranscriptView job={selected} query={query} options={options} tab={tab} />}</div>
 			</div>
 		</motion.div>
 	)

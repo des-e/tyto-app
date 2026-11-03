@@ -802,6 +802,8 @@
 	"tytoFullscreen": "На весь экран",
 	"tytoExitFullscreen": "Обычный размер",
 	"tytoShowVideo": "Показать видео",
+	"tytoVideoWindowOpen": "Открыть видео в отдельном окне",
+	"tytoVideoWindowClose": "Закрыть окно с видео",
 	"tytoMeetingRowTitle": "Созвон в {source}",
 	"tytoMeetingRowSources": "Микрофон и звук собеседников",
 	"tytoMeetingRowRecord": "Записать",

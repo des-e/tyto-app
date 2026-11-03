@@ -15,6 +15,7 @@ pub mod targets;
 pub mod video_mac;
 #[cfg(windows)]
 pub mod video_win;
+pub mod video_window;
 pub mod video_writer;
 
 /// The platform capture behind one interface for the recorder.

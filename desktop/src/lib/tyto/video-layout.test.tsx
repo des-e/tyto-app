@@ -3,37 +3,34 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const tauri = vi.hoisted(() => ({
+	listeners: new Map<string, Set<(event: { payload: unknown }) => void>>(),
+	emitted: [] as { target: string; event: string; payload: unknown }[],
+}))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null), convertFileSrc: (path: string) => `asset://${path}` }))
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}), emit: vi.fn() }))
+vi.mock('@tauri-apps/api/event', () => ({
+	listen: vi.fn(async (event: string, cb: (event: { payload: unknown }) => void) => {
+		const set = tauri.listeners.get(event) ?? new Set()
+		set.add(cb)
+		tauri.listeners.set(event, set)
+		return () => set.delete(cb)
+	}),
+	emit: vi.fn(),
+	emitTo: vi.fn(async (target: string, event: string, payload: unknown) => {
+		tauri.emitted.push({ target, event, payload })
+	}),
+}))
 vi.mock('@tauri-apps/api/path', () => ({}))
 vi.mock('@tauri-apps/plugin-dialog', () => ({}))
 vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(async () => true) }))
-const win = vi.hoisted(() => ({ setFullscreen: vi.fn(async () => {}) }))
-vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => win }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('~/lib/playback-rate', () => ({ usePlaybackRate: () => ({ playbackRate: 1, cyclePlaybackRate: vi.fn() }) }))
 
-// The text column is not under test: stand-ins mark where it lands.
-vi.mock('~/pages/main/components/transcript-view', () => ({ default: () => <div data-testid="transcript">Текст</div> }))
-vi.mock('~/pages/main/components/transcript-toolbar', () => ({ default: () => <div data-testid="toolbar" /> }))
-vi.mock('~/pages/main/components/batch-banner', () => ({ default: () => null }))
-vi.mock('~/pages/main/components/file-queue', () => ({ default: () => null }))
-vi.mock('~/pages/main/hooks/use-transcript-view', () => ({ useTranscriptViewOptions: () => ({}) }))
-
-const session = vi.hoisted(() => ({
-	value: {
-		queue: { jobs: [] as unknown[], selectedJob: null as unknown, selectedId: 'j' as string | null },
-		summaries: { showSummary: null, clearShowSummary: () => {} },
-	},
-}))
-vi.mock('~/pages/main/session', () => ({ useSession: () => session.value }))
-
+import { invoke } from '@tauri-apps/api/core'
 import { TooltipProvider } from '~/components/ui/tooltip'
-import { deleteConfig, readConfig, writeConfig } from '~/lib/config-store'
-import { resetVideoView, VIDEO_PANE_OPEN_KEY, VIDEO_SIDE_QUERY } from '~/lib/tyto/player-media'
+import { resetVideoWindow, syncVideoWindow, VIDEO_SYNC_EVENT } from '~/lib/tyto/video-window'
 import type { Segment } from '~/lib/transcript'
 import PlayerBar, { PLAYER_SEEK_EVENT, PLAYER_TIME_EVENT, type PlayerTimeDetail } from '~/pages/main/components/player-bar'
-import SessionView from '~/pages/main/components/session-view'
 import { setLocale } from '~/paraglide/runtime.js'
 
 const segments: Segment[] = [
@@ -48,17 +45,6 @@ function makeJob(path: string) {
 // jsdom has no media pipeline: time, size and play/pause are plain fields here.
 type FakeMedia = HTMLMediaElement & { _t?: number; _w?: number }
 let created: HTMLMediaElement[] = []
-
-/** The window width the video layout sees (jsdom has no matchMedia of its own). */
-function windowIs(wide: boolean) {
-	window.matchMedia = ((query: string) => ({
-		matches: query === VIDEO_SIDE_QUERY ? wide : false,
-		media: query,
-		addEventListener: () => {},
-		removeEventListener: () => {},
-	})) as unknown as typeof window.matchMedia
-	resetVideoView()
-}
 
 beforeAll(() => {
 	setLocale('ru-RU', { reload: false })
@@ -85,10 +71,11 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-	deleteConfig(VIDEO_PANE_OPEN_KEY)
-	windowIs(true)
+	resetVideoWindow()
+	tauri.listeners.clear()
+	tauri.emitted = []
+	vi.mocked(invoke).mockClear()
 	created = []
-	win.setFullscreen.mockClear()
 	const make = document.createElement.bind(document)
 	vi.spyOn(document, 'createElement').mockImplementation(((tag: string, options?: ElementCreationOptions) => {
 		const el = make(tag, options)
@@ -109,12 +96,9 @@ afterEach(() => {
 })
 
 function open(path: string) {
-	const job = makeJob(path)
-	session.value.queue = { jobs: [job], selectedJob: job, selectedId: 'j' }
 	return render(
 		<TooltipProvider>
-			<SessionView />
-			<PlayerBar job={job as never} />
+			<PlayerBar job={makeJob(path) as never} />
 		</TooltipProvider>,
 	)
 }
@@ -132,36 +116,21 @@ function loaded(el: FakeMedia, width: number) {
 	})
 }
 
-const inSide = (v: Element) => !!document.querySelector('.tyto-video-side [data-slot="video"]')?.contains(v)
 const inThumb = (v: Element) => !!document.querySelector('[data-slot="video-thumb"]')?.contains(v)
-const inLayer = (v: Element) => !!document.querySelector('[data-slot="video-fullscreen"]')?.contains(v)
+const calls = (cmd: string) => vi.mocked(invoke).mock.calls.filter((c) => c[0] === cmd)
+const syncs = () => tauri.emitted.filter((e) => e.event === VIDEO_SYNC_EVENT)
+const lastSync = () => syncs()[syncs().length - 1]
 
-describe('по умолчанию видео скрыто', () => {
-	it('широкое окно, выбора еще не было: колонки нет, видео миниатюрой в плеере', () => {
-		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
-		const video = media()
-		loaded(video, 1920)
-		expect(document.querySelector('.tyto-video-side')).toBeNull()
-		expect(inThumb(video)).toBe(true)
-	})
-})
-
-describe('широкое окно: видео в колонке справа от текста (вариант E)', () => {
-	beforeEach(() => {
-		writeConfig(VIDEO_PANE_OPEN_KEY, true)
-		resetVideoView()
-	})
-
-	it('проект с .mp4: текст слева, видео справа, под ним место для тем; внизу одна шкала', () => {
+describe('видео в проекте: миниатюра в плеере', () => {
+	it('проект с .mp4: видео миниатюрой слева от кнопки воспроизведения, одна шкала', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
 		expect(video).toBeInstanceOf(HTMLVideoElement)
 		loaded(video, 1920)
-		expect(inSide(video)).toBe(true)
-		const transcript = screen.getByTestId('transcript')
-		expect(transcript.compareDocumentPosition(video) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-		expect(document.querySelector('.tyto-video-side [data-slot="topics"]')).not.toBeNull()
-		expect(document.querySelector('.tyto-video-thumb')).toBeNull()
+		expect(inThumb(video)).toBe(true)
+		const thumb = document.querySelector('.tyto-video-thumb')!
+		const play = screen.getByRole('button', { name: 'Воспроизвести' })
+		expect(thumb.compareDocumentPosition(play) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 		expect(document.querySelectorAll('.tyto-timeline')).toHaveLength(1)
 	})
 
@@ -169,7 +138,6 @@ describe('широкое окно: видео в колонке справа о�
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
 		const video = media()
 		loaded(video, 1920)
-		// what a click on the second replica sends (transcript-view.tsx)
 		act(() => {
 			window.dispatchEvent(new CustomEvent(PLAYER_SEEK_EVENT, { detail: { seconds: segments[1].start / 100 } }))
 		})
@@ -191,102 +159,100 @@ describe('широкое окно: видео в колонке справа о�
 		expect(seen).toContain(30)
 	})
 
-	it('«На весь экран» разворачивает окно, Esc возвращает видео в колонку', () => {
+	it('MP4 без видеодорожки (videoWidth 0) и аудио: миниатюры нет', () => {
 		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
-		const video = media()
-		loaded(video, 1920)
-		fireEvent.click(screen.getByRole('button', { name: 'На весь экран' }))
-		expect(win.setFullscreen).toHaveBeenLastCalledWith(true)
-		expect(inLayer(video)).toBe(true)
-		expect(screen.getByRole('button', { name: 'Обычный размер' })).toBeTruthy()
-
-		fireEvent.keyDown(window, { key: 'Escape' })
-		expect(win.setFullscreen).toHaveBeenLastCalledWith(false)
-		expect(document.querySelector('[data-slot="video-fullscreen"]')).toBeNull()
-		expect(inSide(video)).toBe(true)
-	})
-
-	it('«Скрыть видео»: колонки нет, видео миниатюрой в плеере; клик по миниатюре возвращает колонку; выбор запоминается', () => {
-		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
-		const video = media()
-		loaded(video, 1920)
-		fireEvent.click(screen.getByRole('button', { name: 'Скрыть видео' }))
-		expect(document.querySelector('.tyto-video-side')).toBeNull()
-		expect(inThumb(video)).toBe(true)
-		expect(readConfig(VIDEO_PANE_OPEN_KEY, true)).toBe(false)
-
-		fireEvent.click(screen.getByRole('button', { name: 'Показать видео' }))
-		expect(inSide(video)).toBe(true)
-		expect(readConfig(VIDEO_PANE_OPEN_KEY, false)).toBe(true)
-	})
-
-	it('MP4 без видеодорожки (videoWidth 0): экран как при аудио', () => {
-		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
-		const video = media()
-		loaded(video, 0)
-		expect(video.isConnected).toBe(false)
-		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		loaded(media(), 0)
 		expect(document.querySelector('.tyto-video-thumb')).toBeNull()
-		expect(screen.getByTestId('transcript')).toBeTruthy()
-	})
-
-	it('перетащенная запись Zoom (.mp4 вне Записи/) открывается так же', () => {
-		open('D:/zoom/plan.mp4')
-		const video = media()
-		loaded(video, 1280)
-		expect(inSide(video)).toBe(true)
-	})
-
-	it('аудиопроект: ни колонки, ни миниатюры, плеер как раньше', () => {
+		cleanup()
+		created = []
 		open('C:/Users/Д/Documents/Tyto/plan/plan.m4a')
-		const audio = media()
-		expect(audio).toBeInstanceOf(HTMLAudioElement)
-		expect(audio.isConnected).toBe(false)
-		expect(document.querySelector('.tyto-video-side')).toBeNull()
+		expect(media()).toBeInstanceOf(HTMLAudioElement)
 		expect(document.querySelector('.tyto-video-thumb')).toBeNull()
-	})
-
-	it('другой проект: видео уходит с экрана и останавливается', () => {
-		const { unmount } = open('D:/zoom/plan.mp4')
-		const video = media()
-		loaded(video, 1280)
-		unmount()
-		expect(video.isConnected).toBe(false)
-		expect(video.pause).toHaveBeenCalled()
 	})
 })
 
-describe('узкое окно: миниатюра в плеере (вариант A)', () => {
-	beforeEach(() => windowIs(false))
+describe('видео в отдельном окне (вариант H)', () => {
+	it('клик по миниатюре открывает окно с этим файлом, повторный клик закрывает', async () => {
+		open('D:/zoom/plan.mp4')
+		loaded(media(), 1280)
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Открыть видео в отдельном окне' }))
+		})
+		expect(calls('video_window_open')[0][1]).toEqual({ path: 'D:/zoom/plan.mp4', title: 'Планерка' })
+		const thumb = screen.getByRole('button', { name: 'Закрыть окно с видео' })
+		expect(thumb.getAttribute('aria-pressed')).toBe('true')
+		// the window gets the position right away
+		expect(lastSync()?.target).toBe('video-window')
 
-	it('видео миниатюрой слева в плеере, колонки нет, текст на всю ширину', () => {
-		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
-		const video = media()
-		loaded(video, 1920)
-		expect(inThumb(video)).toBe(true)
-		expect(document.querySelector('.tyto-video-side')).toBeNull()
-		const thumb = document.querySelector('.tyto-video-thumb')!
-		const play = screen.getByRole('button', { name: 'Воспроизвести' })
-		expect(thumb.compareDocumentPosition(play) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		await act(async () => {
+			fireEvent.click(thumb)
+		})
+		expect(calls('video_window_close')).toHaveLength(1)
+		expect(screen.getByRole('button', { name: 'Открыть видео в отдельном окне' })).toBeTruthy()
 	})
 
-	it('клик по миниатюре открывает полный экран, Esc возвращает в миниатюру', () => {
-		open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
-		const video = media()
-		loaded(video, 1920)
-		fireEvent.click(screen.getByRole('button', { name: 'На весь экран' }))
-		expect(win.setFullscreen).toHaveBeenLastCalledWith(true)
-		expect(inLayer(video)).toBe(true)
-		fireEvent.keyDown(window, { key: 'Escape' })
-		expect(inThumb(video)).toBe(true)
+	it('окно закрыли крестиком: миниатюра снова «открыть»', async () => {
+		open('D:/zoom/plan.mp4')
+		loaded(media(), 1280)
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Открыть видео в отдельном окне' }))
+		})
+		act(() => {
+			for (const cb of tauri.listeners.get('video-window-closed') ?? []) cb({ payload: null })
+		})
+		expect(screen.getByRole('button', { name: 'Открыть видео в отдельном окне' })).toBeTruthy()
 	})
 
-	it('другой проект во время полного экрана: окно возвращается в обычный размер', () => {
-		const { unmount } = open('C:/Users/Д/Documents/Tyto/Записи/Встреча.mp4')
+	it('перемотка в главном окне сразу уходит в окно видео', async () => {
+		open('D:/zoom/plan.mp4')
 		const video = media()
-		loaded(video, 1920)
-		fireEvent.click(screen.getByRole('button', { name: 'На весь экран' }))
+		loaded(video, 1280)
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Открыть видео в отдельном окне' }))
+		})
+		act(() => {
+			window.dispatchEvent(new CustomEvent(PLAYER_SEEK_EVENT, { detail: { seconds: 600 } }))
+		})
+		expect(lastSync()?.payload).toMatchObject({ seconds: 600 })
+	})
+
+	it('клик по картинке в окне видео ставит главный плеер на паузу или пускает', async () => {
+		open('D:/zoom/plan.mp4')
+		const video = media()
+		loaded(video, 1280)
+		act(() => {
+			for (const cb of tauri.listeners.get('video-window-toggle') ?? []) cb({ payload: null })
+		})
+		expect(video.play).toHaveBeenCalled()
+	})
+
+	it('другой проект: окно видео закрывается', async () => {
+		const { unmount } = open('D:/zoom/plan.mp4')
+		loaded(media(), 1280)
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Открыть видео в отдельном окне' }))
+		})
 		unmount()
-		expect(win.setFullscreen).toHaveBeenLastCalledWith(false)
+		expect(calls('video_window_close')).toHaveLength(1)
+	})
+})
+
+describe('синхронизация окна видео', () => {
+	it('шлет только изменения: игра/пауза, скачок, раз в секунду при игре', async () => {
+		const { openVideoWindow } = await import('~/lib/tyto/video-window')
+		await openVideoWindow('D:/a.mp4', 'A')
+		const before = syncs().length
+		const now = vi.spyOn(performance, 'now')
+		now.mockReturnValue(1000)
+		syncVideoWindow({ seconds: 0, playing: true, rate: 1 }) // play: sent
+		now.mockReturnValue(1250)
+		syncVideoWindow({ seconds: 0.25, playing: true, rate: 1 }) // on track: not sent
+		now.mockReturnValue(2050)
+		syncVideoWindow({ seconds: 1.05, playing: true, rate: 1 }) // a second later: sent
+		now.mockReturnValue(2100)
+		syncVideoWindow({ seconds: 30, playing: true, rate: 1 }) // jump: sent
+		now.mockReturnValue(2150)
+		syncVideoWindow({ seconds: 30.05, playing: true, rate: 1.5 }) // speed: sent
+		expect(syncs().length - before).toBe(4)
 	})
 })

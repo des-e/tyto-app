@@ -12,7 +12,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip
 import { usePlaybackRate } from '~/lib/playback-rate'
 import { MissingMedia } from '~/lib/tyto/media-missing'
 import { createPlayerMedia, releasePlayerMedia } from '~/lib/tyto/player-media'
-import { VideoFullscreenLayer, VideoThumb } from '~/lib/tyto/video-pane'
+import { VideoThumb } from '~/lib/tyto/video-pane'
+import { syncVideoWindow, VIDEO_TOGGLE_EVENT } from '~/lib/tyto/video-window'
+import { listen } from '@tauri-apps/api/event'
 import { PlayerClock, ReplicaTimeline } from '~/lib/tyto/replica-timeline'
 import type { NamedPath } from '~/lib/types'
 import type { Job } from '../hooks/use-transcribe-queue'
@@ -84,6 +86,8 @@ export default function PlayerBar({ job }: { job: Job }) {
 	// The transcript highlights the line being spoken; it reads the position from these events.
 	const broadcast = useCallback((seconds: number, isPlaying: boolean) => {
 		window.dispatchEvent(new CustomEvent<PlayerTimeDetail>(PLAYER_TIME_EVENT, { detail: { seconds, playing: isPlaying } }))
+		// The video window, when open, follows the same position (it throttles itself).
+		syncVideoWindow({ seconds, playing: isPlaying, rate: audioRef.current?.playbackRate ?? 1 })
 	}, [])
 
 	// One media element per source: switching files stops playback and swaps the stream.
@@ -197,6 +201,14 @@ export default function PlayerBar({ job }: { job: Job }) {
 		}
 	}, [broadcast, toggle])
 
+	// A click on the picture in the video window plays or pauses here, where the sound is.
+	useEffect(() => {
+		const unlisten = listen(VIDEO_TOGGLE_EVENT, toggle)
+		return () => {
+			void unlisten.then((dispose) => dispose()).catch(() => {})
+		}
+	}, [toggle])
+
 	async function revealInFolder() {
 		try {
 			await invoke('open_path', { path: dirname(sourcePath) })
@@ -244,8 +256,7 @@ export default function PlayerBar({ job }: { job: Job }) {
 			) : (
 				<div dir="ltr" className="flex min-w-0 flex-1 items-center gap-3">
 					{/* A video without its column (narrow window or hidden) sits here as a thumbnail. */}
-					<VideoThumb />
-					<VideoFullscreenLayer />
+					<VideoThumb path={sourcePath} title={job.name} />
 					<Button iconOnly size="md" onClick={toggle} aria-label={playing ? m.pause() : m.play()} className="h-8 w-8 shrink-0">
 						{playing ? <Pause className="fill-current" /> : <Play className="fill-current" />}
 					</Button>

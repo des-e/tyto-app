@@ -1415,37 +1415,8 @@ svg.lucide {
 	outline-offset: 2px;
 }
 
-/* Video (lib/tyto/video-pane.tsx). From 900 px a 264 px column right of the text, topics under
-   it; narrower or hidden, a 76x44 thumbnail at the start of the bottom player. */
-.tyto-video-side {
-	display: flex;
-	flex-direction: column;
-	flex-shrink: 0;
-	gap: var(--tyto-sp-8);
-	width: 264px;
-	min-height: 0;
-	padding: var(--tyto-sp-16);
-	overflow-x: hidden;
-	overflow-y: auto;
-	border-inline-start: 1px solid var(--border);
-}
-
-.tyto-video-side-actions {
-	display: flex;
-	justify-content: space-between;
-	color: var(--muted-foreground);
-}
-
-.tyto-video-box {
-	position: relative;
-	display: flex;
-	flex-shrink: 0;
-	aspect-ratio: 16 / 9;
-	overflow: hidden;
-	border-radius: var(--tyto-r-lg);
-	background: #000;
-}
-
+/* Video (lib/tyto/video-pane.tsx): a 76x44 thumbnail at the start of the bottom player; a click
+   opens the video in its own window. While that window is open the thumbnail is outlined. */
 .tyto-video-thumb {
 	display: flex;
 	flex-shrink: 0;
@@ -1457,6 +1428,11 @@ svg.lucide {
 	border: 0;
 	border-radius: var(--tyto-r-sm);
 	background: #000;
+}
+
+.tyto-video-thumb[aria-pressed='true'] {
+	outline: 2px solid var(--foreground);
+	outline-offset: 2px;
 }
 
 .tyto-video-thumb:focus-visible {
@@ -1476,39 +1452,6 @@ svg.lucide {
 	height: 100%;
 	object-fit: contain;
 	background: #000;
-}
-
-.tyto-video-layer {
-	position: fixed;
-	inset: 0;
-	z-index: 100;
-	display: flex;
-	background: #000;
-}
-
-.tyto-video-actions {
-	position: absolute;
-	inset-block-start: var(--tyto-sp-8);
-	inset-inline-end: var(--tyto-sp-8);
-	display: flex;
-	gap: var(--tyto-sp-4, 4px);
-	opacity: 0;
-	transition: opacity 150ms ease-out;
-}
-
-.group:hover > .tyto-video-actions,
-.tyto-video-actions:focus-within {
-	opacity: 1;
-}
-
-.tyto-video-action {
-	color: #fff;
-	background: rgb(0 0 0 / 0.45);
-}
-
-.tyto-video-action:hover {
-	color: #fff;
-	background: rgb(0 0 0 / 0.65);
 }
 
 .tyto-player-clock {
