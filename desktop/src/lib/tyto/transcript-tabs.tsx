@@ -5,22 +5,23 @@ import type { TranscriptTab } from '~/pages/main/hooks/use-transcript-view'
 interface TranscriptTabsProps {
 	tab: TranscriptTab
 	setTab: (tab: TranscriptTab) => void
-	/** a summary exists (or is on screen already) */
+	/** «Сводка» opens: a summary exists, or the AI can write one (opening the tab starts it). */
 	summaryReady: boolean
+	/** The summary came with topics, so «Темы» has something to show. */
+	topicsReady?: boolean
 }
 
 /**
  * «Текст / Сводка / Темы» as text tabs with a 2 px rule under the active one, at the start of the
- * document toolbar (theme.css `.tyto-tab`). Stays visible while search is open. «Темы» is a
- * placeholder for topics with timecodes: disabled tabs are drawn fainter than inactive ones, its hint is announced
- * through aria-describedby and shown as a tooltip.
+ * document toolbar (theme.css `.tyto-tab`). Stays visible while search is open. A tab with nothing
+ * behind it is disabled and drawn fainter; «Темы» then explains through aria-describedby and a tooltip.
  */
-export function TranscriptTabs({ tab, setTab, summaryReady }: TranscriptTabsProps) {
+export function TranscriptTabs({ tab, setTab, summaryReady, topicsReady = false }: TranscriptTabsProps) {
 	const hintId = useId()
-	const tabs: { value: TranscriptTab | 'topics'; label: string; disabled: boolean; hint?: string }[] = [
+	const tabs: { value: TranscriptTab; label: string; disabled: boolean; hint?: string }[] = [
 		{ value: 'transcript', label: m.segmentsTab(), disabled: false },
 		{ value: 'summary', label: m.summaryTab(), disabled: !summaryReady && tab !== 'summary' },
-		{ value: 'topics', label: m.topicsTab(), disabled: true, hint: m.topicsComingSoon() },
+		{ value: 'topics', label: m.topicsTab(), disabled: !topicsReady && tab !== 'topics', hint: topicsReady ? undefined : m.topicsComingSoon() },
 	]
 
 	return (
@@ -35,7 +36,7 @@ export function TranscriptTabs({ tab, setTab, summaryReady }: TranscriptTabsProp
 					aria-describedby={item.hint ? hintId : undefined}
 					title={item.hint}
 					onClick={() => {
-						if (item.value !== 'topics' && item.value !== tab) setTab(item.value)
+						if (item.value !== tab) setTab(item.value)
 					}}
 					className="tyto-tab">
 					{item.label}

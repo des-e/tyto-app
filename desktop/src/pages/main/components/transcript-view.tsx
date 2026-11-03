@@ -18,6 +18,7 @@ import { ProjectNameEditor } from './project-name-editor'
 import QuietRow from './quiet-row'
 import { SpeakerLabel } from './speaker-label'
 import SummaryView from './summary-view'
+import TopicsView from './topics-view'
 
 /** Segment timestamps are centiseconds (see `formatTimestamp` / `asJson` in lib/transcript). */
 const CENTISECONDS_PER_SECOND = 100
@@ -591,6 +592,7 @@ export default function TranscriptView({
 		job.hydrated === true && ['done', 'error', 'cancelled'].includes(job.status) && job.segments.length === 0 && Boolean(job.savedPath && job.path)
 
 	if (tab === 'summary') return <SummaryView job={job} options={options} />
+	if (tab === 'topics') return <TopicsView job={job} options={options} />
 
 	return (
 		<div className="relative h-full min-h-0">

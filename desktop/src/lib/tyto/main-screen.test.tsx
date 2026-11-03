@@ -212,7 +212,7 @@ describe('метка говорящего', () => {
 })
 
 describe('вкладки «Текст / Сводка / Темы»', () => {
-	it('три вкладки, «Темы» видна и неактивна', () => {
+	it('три вкладки; без тем «Темы» неактивна и объясняет почему', () => {
 		const setTab = vi.fn()
 		render(<TranscriptTabs tab="transcript" setTab={setTab} summaryReady />)
 		const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
@@ -220,13 +220,20 @@ describe('вкладки «Текст / Сводка / Темы»', () => {
 		expect(tabs[0].getAttribute('aria-selected')).toBe('true')
 		expect((tabs[2] as HTMLButtonElement).disabled).toBe(true)
 		const hint = document.getElementById(tabs[2].getAttribute('aria-describedby')!)
-		expect(hint?.textContent).toBe('Темы с таймкодами появятся позже')
+		expect(hint?.textContent).toBe('Темы появятся вместе со сводкой Tyto ИИ')
 		fireEvent.click(tabs[2])
 		fireEvent.click(tabs[1])
 		expect(setTab.mock.calls).toEqual([['summary']])
 	})
 
-	it('без сводки вкладка «Сводка» неактивна', () => {
+	it('с темами вкладка «Темы» открывается', () => {
+		const setTab = vi.fn()
+		render(<TranscriptTabs tab="transcript" setTab={setTab} summaryReady topicsReady />)
+		fireEvent.click(screen.getByRole('tab', { name: 'Темы' }))
+		expect(setTab.mock.calls).toEqual([['topics']])
+	})
+
+	it('без сводки и без ИИ вкладка «Сводка» неактивна', () => {
 		render(<TranscriptTabs tab="transcript" setTab={vi.fn()} summaryReady={false} />)
 		expect((screen.getByRole('tab', { name: 'Сводка' }) as HTMLButtonElement).disabled).toBe(true)
 	})

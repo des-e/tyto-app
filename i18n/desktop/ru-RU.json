@@ -739,7 +739,7 @@
 	"diarizeModelMissing": "Модель говорящих не найдена. Включите их снова в настройках.",
 	"playFromTime": "Воспроизвести с {time}",
 	"topicsTab": "Темы",
-	"topicsComingSoon": "Темы с таймкодами появятся позже",
+	"topicsComingSoon": "Темы появятся вместе со сводкой Tyto ИИ",
 	"transcriptTabs": "Вид документа",
 	"meetingLanguage": "Язык встречи",
 	"filesStayLocal": "Файлы не покидают компьютер",
@@ -864,5 +864,7 @@
 	"tytoSupportBoosty": "Подписка на Boosty",
 	"tytoSupportBoostyInfo": "Уровни с часами Tyto ИИ",
 	"tytoSupportTelegram": "Канал Tyto в Telegram",
-	"tytoSupportTelegramInfo": "Новости и обновления"
+	"tytoSupportTelegramInfo": "Новости и обновления",
+	"tytoAiNeedsSetup": "Подключите Tyto ИИ в настройках, чтобы получить сводку и темы",
+	"tytoAiOpenSettings": "Открыть настройки ИИ"
 }

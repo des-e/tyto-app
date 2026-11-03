@@ -1,9 +1,11 @@
 import { ArrowUp, Sparkles, X } from 'lucide-react'
 import Markdown from 'react-markdown'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
 import { Button } from '~/components/ui/button'
 import { Spinner } from '~/components/ui/spinner'
+import { splitSummary } from '~/lib/ai'
+import { openSettingsSection } from '~/lib/app'
 import { cn } from '~/lib/style'
 import { usePreferenceProvider } from '~/providers/preference'
 import { useSession } from '../session'
@@ -45,6 +47,17 @@ export default function SummaryView({ job, options }: { job: Job; options: Trans
 	// Tyto AI has no free-form questions; it offers the AI review instead.
 	const canAsk = summaries.enabled && job.segments.length > 0 && !summaries.tyto
 	const canReview = summaries.enabled && summaries.tyto && job.segments.length > 0
+	// Topics have their own tab; here only the summary text.
+	const summaryText = useMemo(() => (job.summary ? splitSummary(job.summary).text : ''), [job.summary])
+
+	// Opening the tab is the request: no summary yet and the AI is set up, so start it once.
+	const { summarize } = summaries
+	const started = useRef<string | null>(null)
+	useEffect(() => {
+		if (job.summary || summarizing || error || !summaries.enabled || !job.segments.length || started.current === job.id) return
+		started.current = job.id
+		void summarize(job)
+	}, [job, summarizing, error, summaries.enabled, summarize])
 
 	// Follow the answer as it grows, the way a chat does: the bottom of the page, padding included,
 	// so the newest line sits above the floating box.
@@ -88,7 +101,7 @@ export default function SummaryView({ job, options }: { job: Job; options: Trans
 					) : job.summary ? (
 						// The models answer in markdown; render it rather than showing the syntax.
 						<div className={cn('prose prose-neutral max-w-none dark:prose-invert', textSizeClass[options.textSize])}>
-							<Markdown>{job.summary}</Markdown>
+							<Markdown>{summaryText}</Markdown>
 						</div>
 					) : summarizing ? (
 						<p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -96,7 +109,19 @@ export default function SummaryView({ job, options }: { job: Job; options: Trans
 							{m.summarizeLoading()}
 						</p>
 					) : error ? (
-						<p className="text-sm text-destructive">{error}</p>
+						<div className="space-y-3">
+							<p className="text-sm text-destructive">{error}</p>
+							<Button variant="outline" size="sm" onClick={() => void summaries.summarize(job)}>
+								{m.retrySummary()}
+							</Button>
+						</div>
+					) : !summaries.enabled ? (
+						<div className="space-y-3">
+							<p className="text-sm text-muted-foreground">{m.tytoAiNeedsSetup()}</p>
+							<Button variant="outline" size="sm" onClick={() => openSettingsSection('ai')}>
+								{m.tytoAiOpenSettings()}
+							</Button>
+						</div>
 					) : null}
 
 					{job.summary && summarizing && !draft && (

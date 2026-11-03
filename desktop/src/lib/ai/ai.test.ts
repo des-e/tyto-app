@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { m } from '~/paraglide/messages.js'
 import { DEFAULT_AI, migrateLegacy, modernizePrompt, normalizeAi, presetPrompt } from './config'
 import { chunkLines, createClient, fillPrompt, inputBudgetBytes, testConnection } from './client'
-import { recordingSeconds, summaryMarkdown, tytoTranscript } from './tyto'
+import { recordingSeconds, splitSummary, stampSeconds, summaryMarkdown, tytoTranscript } from './tyto'
 
 const fetchMock = vi.fn()
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: (...args: unknown[]) => fetchMock(...args) }))
@@ -141,5 +141,29 @@ describe('Tyto AI', () => {
 	it('saves topics under the summary', () => {
 		expect(summaryMarkdown(' Итог ', [{ start: '00:01:00', title: 'Релиз' }], 'Темы')).toBe('Итог\n\n### Темы\n\n- **00:01:00** Релиз')
 		expect(summaryMarkdown('Итог', [], 'Темы')).toBe('Итог')
+	})
+
+	it('splits the saved summary back into text and topics', () => {
+		const saved = summaryMarkdown(
+			'Итог встречи',
+			[
+				{ start: '00:01:00', title: 'Релиз' },
+				{ start: '01:02:03', title: 'Сроки' },
+			],
+			'Темы',
+		)
+		expect(splitSummary(saved)).toEqual({
+			text: 'Итог встречи',
+			topics: [
+				{ start: '00:01:00', seconds: 60, title: 'Релиз' },
+				{ start: '01:02:03', seconds: 3723, title: 'Сроки' },
+			],
+		})
+		expect(stampSeconds('12:30')).toBe(750)
+	})
+
+	it('leaves other summaries whole', () => {
+		const md = '## Итоги\n\n- пункт\n\n### Задачи\n\n- [ ] позвонить'
+		expect(splitSummary(md)).toEqual({ text: md, topics: [] })
 	})
 })

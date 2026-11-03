@@ -739,7 +739,7 @@
 	"diarizeModelMissing": "Speaker separation model not found — turn speakers on again in settings",
 	"playFromTime": "Play from {time}",
 	"topicsTab": "Topics",
-	"topicsComingSoon": "Topics with timecodes are coming later",
+	"topicsComingSoon": "Topics appear with a Tyto AI summary",
 	"transcriptTabs": "Document view",
 	"meetingLanguage": "Meeting language",
 	"filesStayLocal": "Files never leave your computer",
@@ -864,5 +864,7 @@
 	"tytoSupportBoosty": "Subscribe on Boosty",
 	"tytoSupportBoostyInfo": "Levels with Tyto AI hours",
 	"tytoSupportTelegram": "Tyto channel on Telegram",
-	"tytoSupportTelegramInfo": "News and updates"
+	"tytoSupportTelegramInfo": "News and updates",
+	"tytoAiNeedsSetup": "Connect Tyto AI in settings to get a summary and topics",
+	"tytoAiOpenSettings": "Open AI settings"
 }

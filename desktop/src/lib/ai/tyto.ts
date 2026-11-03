@@ -109,3 +109,35 @@ export function formatHours(seconds: number) {
 	if (h && min) return m.tytoAiHoursMinutes({ h: String(h), min: String(min) })
 	return h ? m.tytoAiHours({ h: String(h) }) : m.tytoAiMinutes({ min: String(min) })
 }
+
+export interface SummaryTopic {
+	start: string
+	seconds: number
+	title: string
+}
+
+const TOPIC_LINE = /^- \*\*(\d{1,2}:\d{2}(?::\d{2})?)\*\* (.+)$/
+
+/** Seconds from «12:30» or «01:12:30». */
+export function stampSeconds(stamp: string) {
+	return stamp.split(':').reduce((total, part) => total * 60 + Number(part), 0)
+}
+
+/**
+ * The saved summary splits back into its text and its topics: the last «### heading» whose lines are
+ * all «- **00:12:30** title». A summary without such a list (other platforms) stays whole.
+ */
+export function splitSummary(markdown: string): { text: string; topics: SummaryTopic[] } {
+	const lines = markdown.split(/\r?\n/)
+	for (let index = lines.length - 1; index >= 0; index--) {
+		if (!lines[index].startsWith('### ')) continue
+		const rest = lines.slice(index + 1).filter((line) => line.trim())
+		const topics = rest.map((line) => line.trim().match(TOPIC_LINE))
+		if (!rest.length || topics.some((match) => !match)) return { text: markdown.trim(), topics: [] }
+		return {
+			text: lines.slice(0, index).join('\n').trim(),
+			topics: topics.map((match) => ({ start: match![1], seconds: stampSeconds(match![1]), title: match![2].trim() })),
+		}
+	}
+	return { text: markdown.trim(), topics: [] }
+}

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Download, NotebookPen, Pencil, PilcrowLeft, PilcrowRight, Plus, Search, Settings2, Sparkles, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { splitSummary } from '~/lib/ai'
 import { m } from '~/paraglide/messages.js'
 import { usePreferenceProvider } from '~/providers/preference'
 import { Button } from '~/components/ui/button'
@@ -197,7 +198,7 @@ export default function TranscriptToolbar({
 	tab: TranscriptTab
 	setTab: (tab: TranscriptTab) => void
 }) {
-	const { queue, startNew } = useSession()
+	const { queue, startNew, summaries } = useSession()
 	const preference = usePreferenceProvider()
 	const [exportOpen, setExportOpen] = useState(false)
 	const autoExport = preference.autoExport
@@ -255,11 +256,17 @@ export default function TranscriptToolbar({
 
 	const hasText = (job?.segments.length ?? 0) > 0
 	const hasExportContent = hasText || Boolean(job?.summary)
+	const topicsReady = useMemo(() => (job?.summary ? splitSummary(job.summary).topics.length > 0 : false), [job?.summary])
 
 	return (
 		<>
 			<div className="@container sticky top-0 z-10 flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background/85 px-4 backdrop-blur-md">
-				<TranscriptTabs tab={tab} setTab={setTab} summaryReady={Boolean(job?.summary)} />
+				<TranscriptTabs
+					tab={tab}
+					setTab={setTab}
+					summaryReady={Boolean(job?.summary) || (summaries.enabled && hasText && job?.status !== 'running')}
+					topicsReady={topicsReady}
+				/>
 				<AnimatePresence initial={false} mode="wait">
 					{searching ? (
 						<motion.div
