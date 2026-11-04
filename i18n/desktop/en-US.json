@@ -916,5 +916,7 @@
 	"progressFilesMany": "Transcribing {count} files",
 	"progressDoneOf": "{done} of {total} done",
 	"progressOpenHint": "Finished files can be opened now; the rest keep transcribing.",
-	"progressAllFiles": "All files"
+	"progressAllFiles": "All files",
+	"newShort": "New",
+	"notTranscribedYet": "Not transcribed yet"
 }

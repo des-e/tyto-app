@@ -6,7 +6,7 @@ import { useSession } from '../session'
 import { useTranscriptViewOptions, type TranscriptTab } from '../hooks/use-transcript-view'
 import BatchOverview from './batch-overview'
 import TranscriptToolbar from './transcript-toolbar'
-import TranscriptView from './transcript-view'
+import TranscriptView, { awaitsTranscription } from './transcript-view'
 
 export default function SessionView() {
 	const { queue, summaries, batchOverview, setBatchOverview } = useSession()
@@ -62,7 +62,10 @@ export default function SessionView() {
 							</button>
 						</div>
 					)}
-					<TranscriptToolbar job={selected} query={query} setQuery={setQuery} options={options} tab={tab} setTab={setTab} />
+					{/* No text yet, nothing to read, summarise or export (design round 2). */}
+					{!(selected && awaitsTranscription(selected)) && (
+						<TranscriptToolbar job={selected} query={query} setQuery={setQuery} options={options} tab={tab} setTab={setTab} />
+					)}
 					<div className="min-h-0 flex-1">{selected && <TranscriptView job={selected} query={query} options={options} tab={tab} />}</div>
 				</>
 			)}

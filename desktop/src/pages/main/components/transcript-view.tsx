@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { defaultRangeExtractor, useVirtualizer, type Range as VirtualRange } from '@tanstack/react-virtual'
-import { ArrowDownToLine, AudioLines } from 'lucide-react'
+import { ArrowDownToLine } from 'lucide-react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
 import { getLocale, getTextDirection } from '~/paraglide/runtime.js'
@@ -40,14 +40,28 @@ interface EditTarget {
 	caret: CaretIntent
 }
 
-/** «29 октября», with the year only when it is not this year's. */
-function recordingDate(iso: string | undefined): string {
+/** «29 октября» (or «3 ноября, 10:35» with `withTime`), with the year only when it is not this year's. */
+function recordingDate(iso: string | undefined, withTime = false): string {
 	if (!iso) return ''
 	const date = new Date(iso)
 	if (Number.isNaN(date.getTime()) || date.getTime() <= 0) return ''
 	const sameYear = date.getFullYear() === new Date().getFullYear()
-	return new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) }).format(date)
+	const day = new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) }).format(date)
+	if (!withTime) return day
+	return `${day}, ${new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(date)}`
 }
+
+/** A saved recording with no text yet: it opens on «Запись еще не расшифрована» and has no toolbar. */
+export function awaitsTranscription(job: Job) {
+	return job.hydrated === true && ['done', 'error', 'cancelled'].includes(job.status) && job.segments.length === 0 && Boolean(job.savedPath && job.path)
+}
+
+/** The text a recording will become, drawn as pale bars until it is transcribed (design round 2). */
+const SKETCH: { speaker: number; time: string; bars: string[] }[] = [
+	{ speaker: 0, time: '00:00', bars: ['92%', '64%'] },
+	{ speaker: 1, time: '00:04', bars: ['78%'] },
+	{ speaker: 0, time: '00:07', bars: ['86%', '40%'] },
+]
 
 /** «48:00» or «1:12:30» from centiseconds. */
 function recordingLength(centiseconds: number): string {
@@ -612,14 +626,18 @@ export default function TranscriptView({
 	)
 
 	const showJump = playing && jumpVisible && !following && activeIndex >= 0 && tab === 'transcript'
-	const canTranscribeSaved =
-		job.hydrated === true && ['done', 'error', 'cancelled'].includes(job.status) && job.segments.length === 0 && Boolean(job.savedPath && job.path)
+	const canTranscribeSaved = awaitsTranscription(job)
 
 	if (tab === 'review') return <ReviewView job={job} options={options} />
 
-	const date = recordingDate(job.createdAt)
+	// A recording waiting for its text shows when it was made to the minute, like the sidebar names it.
+	const date = recordingDate(job.createdAt, canTranscribeSaved)
 	// While the text is still coming, the last line's end is not the recording's length.
-	const length = running ? '' : recordingLength(job.segments[job.segments.length - 1]?.stop ?? 0)
+	const length = running
+		? ''
+		: canTranscribeSaved
+			? recordingLength((job.durationSeconds ?? 0) * CENTISECONDS_PER_SECOND)
+			: recordingLength(job.segments[job.segments.length - 1]?.stop ?? 0)
 	const hasMeta = Boolean(date || length || speakers.length)
 
 	return (
@@ -634,7 +652,7 @@ export default function TranscriptView({
 						onRename={(name) => queue.renameJob(job.id, name)}
 					/>
 
-					{hasMeta && !canTranscribeSaved && (
+					{hasMeta && (
 						<div className="tyto-doc-indent -mt-6 mb-5 flex flex-wrap items-center gap-2.5 text-[13px] text-muted-foreground">
 							{(date || length) && (
 								<span>
@@ -656,22 +674,31 @@ export default function TranscriptView({
 					{job.status === 'error' && <p className="mb-8 text-sm text-destructive">{job.error}</p>}
 
 					{canTranscribeSaved && !query ? (
-						<div className="flex min-h-[46vh] items-center justify-center py-10">
-							<div
-								dir={interfaceDirection}
-								className="flex w-full max-w-md flex-col items-center rounded-2xl border border-border/60 bg-card/55 px-8 py-10 text-center shadow-xs">
-								<div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-									<AudioLines className="h-5 w-5" />
-								</div>
-								<h2 className="text-base font-semibold text-foreground">{m.recordingReady()}</h2>
-								<p className="mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">{m.recordingReadyInfo()}</p>
-								<div className="mt-5">
-									<QuietRow />
-								</div>
-								<Button type="button" className="mt-3 min-w-32" disabled={!preference.modelPath} onClick={() => queue.transcribeJob(job.id)}>
-									<AudioLines className="h-4 w-4" />
+						<div dir={interfaceDirection} className="tyto-doc-indent flex flex-col gap-6">
+							<section aria-labelledby={`pending-${job.id}`} className="tyto-pending-row">
+								<h2 id={`pending-${job.id}`} className="min-w-[180px] flex-1 text-[14px] font-medium text-foreground">
+									{m.notTranscribedYet()}
+								</h2>
+								<QuietRow compact />
+								<Button type="button" disabled={!preference.modelPath} onClick={() => queue.transcribeJob(job.id)}>
 									{m.transcribe()}
 								</Button>
+							</section>
+							<div aria-hidden className="flex flex-col gap-[22px] opacity-55">
+								{SKETCH.map((line) => (
+									<div key={line.time} className="grid grid-cols-[120px_1fr] gap-4">
+										<span className="text-[12.5px] leading-[1.45] text-[var(--tyto-faint)]">
+											{m.speakerPrefix()} {line.speaker + 1}
+											<br />
+											<span className="font-mono">{line.time}</span>
+										</span>
+										<span className="flex flex-col gap-2 pt-[3px]">
+											{line.bars.map((width) => (
+												<span key={width} className="h-[9px] rounded-[4px] bg-[var(--tyto-nav-selected)]" style={{ width }} />
+											))}
+										</span>
+									</div>
+								))}
 							</div>
 						</div>
 					) : visible.length === 0 ? (

@@ -436,3 +436,25 @@ describe('несколько файлов', () => {
 		expect(h.queue.cancelAll).toHaveBeenCalled()
 	})
 })
+
+describe('запись до расшифровки', () => {
+	it('строка «Запись еще не расшифрована» с языком, настройками и «Расшифровать»; под ней набросок текста', () => {
+		const job = {
+			id: 'r1',
+			name: 'Запись 10∶35',
+			status: 'done',
+			hydrated: true,
+			segments: [],
+			savedPath: '/p/transcript.vibe.json',
+			path: '/p/audio.mp3',
+			createdAt: new Date(new Date().getFullYear(), 10, 3, 10, 35).toISOString(),
+			durationSeconds: 12,
+		}
+		const { container } = render(<TranscriptView job={job as never} query="" options={options} />)
+		expect(document.body.textContent).toContain('3 ноября, 10:35 · 0:12')
+		expect(screen.getByRole('region', { name: 'Запись еще не расшифрована' })).toBeTruthy()
+		fireEvent.click(screen.getByRole('button', { name: 'Расшифровать' }))
+		expect(h.queue.transcribeJob).toHaveBeenCalledWith('r1')
+		expect(container.querySelector('[aria-hidden="true"].opacity-55')?.textContent).toContain('Говорящий 1')
+	})
+})

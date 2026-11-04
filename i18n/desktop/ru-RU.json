@@ -916,5 +916,7 @@
 	"progressFilesMany": "Расшифровка {count} файлов",
 	"progressDoneOf": "{done} из {total} готово",
 	"progressOpenHint": "Готовые файлы уже можно открыть, остальные продолжат расшифровываться.",
-	"progressAllFiles": "Все файлы"
+	"progressAllFiles": "Все файлы",
+	"newShort": "Новая",
+	"notTranscribedYet": "Запись еще не расшифрована"
 }

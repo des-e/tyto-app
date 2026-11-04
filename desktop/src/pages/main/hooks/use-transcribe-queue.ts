@@ -69,6 +69,8 @@ export interface Job {
 	speakerNames?: SpeakerNames
 	/** When the recording was made (ISO 8601): from the saved project, else when the job was queued. */
 	createdAt?: string
+	/** Length of the media from the saved project, for a recording not transcribed yet. */
+	durationSeconds?: number
 	/** What auto-export did with this transcript, when it ran. */
 	exported?: AutoExportResult
 }
@@ -631,6 +633,7 @@ export function useTranscribeQueue(): TranscribeQueue {
 				thread: record.thread,
 				speakerNames: record.speakerNames,
 				createdAt: record.createdAt,
+				durationSeconds: record.durationSeconds,
 			}
 			pinnedRef.current = true
 			commit(runningRef.current ? [...jobsRef.current, job] : [job])

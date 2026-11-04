@@ -540,8 +540,9 @@ export default function RecentsSidebar() {
 				)}
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<button type="button" aria-label={m.newTranscription()} onClick={startNew} className="tyto-icon-button">
-							<Plus className="h-4 w-4" strokeWidth={1.75} />
+						<button type="button" aria-label={m.newTranscription()} onClick={startNew} className="tyto-new-button">
+							<Plus aria-hidden className="h-[15px] w-[15px]" strokeWidth={1.75} />
+							{m.newShort()}
 						</button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">{m.newTranscription()}</TooltipContent>

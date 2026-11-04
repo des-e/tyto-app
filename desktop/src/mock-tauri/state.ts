@@ -49,6 +49,24 @@ seedProject('podcast-episode', '20260818-174200', [
 	'Thanks for listening, see you next week.',
 ])
 
+// A recording saved without its text yet: the «Запись еще не расшифрована» screen (design canvas page 2).
+{
+	const folder = `${DOCUMENTS_FOLDER}/Tyto/Запись 10∶35-20261103-103500`
+	virtualFs.set(
+		`${folder}/transcript.vibe.json`,
+		JSON.stringify({
+			version: 1,
+			name: 'Запись 10∶35',
+			sourcePath: `${folder}/audio.mp3`,
+			createdAt: new Date(2026, 10, 3, 10, 35).toISOString(),
+			audioFile: 'audio.mp3',
+			durationSeconds: 12,
+			segments: [],
+		}),
+	)
+	virtualFs.set(`${folder}/audio.mp3`, null)
+}
+
 // A Russian meeting with speakers, a summary and topics: the transcript screen of the design canvas (page 3).
 {
 	const folder = `${DOCUMENTS_FOLDER}/Tyto/Планерка отдела продаж-20261029-100000`

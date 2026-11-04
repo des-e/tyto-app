@@ -22,7 +22,8 @@ function OptionRow({ label, note, checked, onChange }: { label: string; note?: s
 	)
 }
 
-export default function QuietRow() {
+/** Language and «Еще настройки» before a run. `compact` draws the settings as an icon (design round 2). */
+export default function QuietRow({ compact = false }: { compact?: boolean }) {
 	const { preference } = useSession()
 	// Both options need a model on disk; the gate downloads it before the switch takes effect.
 	const modelGates = useModelGates()
@@ -43,10 +44,16 @@ export default function QuietRow() {
 
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
-					<Button variant="ghost" size="sm" className="h-9 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground">
-						<SlidersHorizontal className="h-3.5 w-3.5" />
-						{m.moreOptions()}
-					</Button>
+					{compact ? (
+						<button type="button" aria-label={m.moreOptions()} title={m.moreOptions()} className="tyto-square-button">
+							<SlidersHorizontal aria-hidden className="h-[15px] w-[15px]" strokeWidth={1.75} />
+						</button>
+					) : (
+						<Button variant="ghost" size="sm" className="h-9 rounded-full px-3 text-[13px] font-medium text-muted-foreground hover:text-foreground">
+							<SlidersHorizontal className="h-3.5 w-3.5" />
+							{m.moreOptions()}
+						</Button>
+					)}
 				</PopoverTrigger>
 				<PopoverContent align="start" className="w-72 rounded-[var(--tyto-r-lg)] p-4">
 					<p className="mb-2 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">{m.modelOptions()}</p>
