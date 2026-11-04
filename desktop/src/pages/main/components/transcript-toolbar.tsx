@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Download, PilcrowLeft, PilcrowRight, Search, Settings2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { aiExportText, plainAiText } from '~/lib/tyto/ai-export'
 import { m } from '~/paraglide/messages.js'
 import { usePreferenceProvider } from '~/providers/preference'
 import { Button } from '~/components/ui/button'
@@ -161,11 +162,15 @@ export default function TranscriptToolbar({
 	const [exportDirection, setExportDirection] = useState(preference.textAreaDirection)
 	const [searching, setSearching] = useState(false)
 	const searchRef = useRef<HTMLInputElement>(null)
+	const aiMarkdown = useMemo(() => (job ? aiExportText({ summary: job.summary, thread: job.thread }) : ''), [job?.summary, job?.thread])
+	// Markdown keeps its marks; every other format gets the text without «##» and «**».
+	const aiText = exportOptions.format === 'md' ? aiMarkdown : plainAiText(aiMarkdown)
 	const exporter = useTranscriptExport({
 		enabled: exportOpen,
 		direction: exportDirection,
 		segments: job?.segments ?? [],
-		summary: job?.summary,
+		// The second card is «ИИ-разбор» now: summary, topics and review in one text.
+		summary: aiText || undefined,
 		file: job ? { name: job.name, path: job.path } : null,
 		format: exportOptions.format,
 		content: exportOptions.content,
@@ -191,7 +196,7 @@ export default function TranscriptToolbar({
 		// transcript cannot honour — a summary it does not have — is corrected.
 		// CSV is no longer offered in the dialog (Tyto), so a stored CSV choice falls back to plain text.
 		const fix: Partial<typeof exportOptions> = {}
-		if (!job?.summary && exportOptions.content !== 'transcript') fix.content = 'transcript'
+		if (!aiText && exportOptions.content !== 'transcript') fix.content = 'transcript'
 		if (exportOptions.format === 'csv') fix.format = 'normal'
 		if (Object.keys(fix).length > 0) updateExport(fix)
 		setExportOpen(true)
@@ -208,7 +213,7 @@ export default function TranscriptToolbar({
 
 	const hasText = (job?.segments.length ?? 0) > 0
 	// A transcript still being written exports only once it is finished.
-	const hasExportContent = (hasText || Boolean(job?.summary)) && job?.status !== 'running'
+	const hasExportContent = (hasText || Boolean(aiText)) && job?.status !== 'running'
 
 	return (
 		<>
@@ -303,7 +308,7 @@ export default function TranscriptToolbar({
 				onFormatChange={(format: TextFormat) => updateExport({ format })}
 				content={exportOptions.content}
 				onContentChange={(content) => updateExport({ content })}
-				hasSummary={Boolean(job?.summary)}
+				hasSummary={Boolean(aiText)}
 				showTimestamps={exportOptions.showTimestamps}
 				onShowTimestampsChange={(showTimestamps) => updateExport({ showTimestamps })}
 				showSpeakers={exportOptions.showSpeakers}

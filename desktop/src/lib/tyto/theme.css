@@ -1345,6 +1345,19 @@ svg.lucide {
 	}
 }
 
+/* Group titles in the settings menu («Расшифровка», «Запись и голос»): a hairline above, room around
+   and a smaller grey title, so they never read as one more item (Denis, 2026-11-04). No caps: the
+   house style keeps labels in normal case. */
+.tyto-settings-nav-group {
+	margin: 14px 8px 6px;
+	padding-top: 14px;
+	border-top: 1px solid var(--border);
+	font-size: 11.5px;
+	line-height: 1;
+	font-weight: 500;
+	color: var(--muted-foreground);
+}
+
 /* Progress of a run (run-progress.tsx, batch-overview.tsx): a 4 px bar, the done part in the text colour. */
 .tyto-run-bar {
 	position: relative;
@@ -1432,8 +1445,8 @@ svg.lucide {
 /* Topics column at the right: a click moves the player, the current topic sits on a grey plate. */
 .tyto-topic {
 	display: grid;
-	grid-template-columns: 44px minmax(0, 1fr);
-	gap: 6px;
+	grid-template-columns: 40px minmax(0, 1fr);
+	gap: 8px;
 	width: 100%;
 	padding: 6px 8px;
 	border: 0;
@@ -1445,6 +1458,11 @@ svg.lucide {
 	color: var(--foreground);
 	cursor: pointer;
 	transition: background-color 150ms var(--tyto-ease);
+}
+
+/* A recording over an hour: «1:02:03» needs a wider time column, the same for every topic. */
+[data-hours] .tyto-topic {
+	grid-template-columns: 54px minmax(0, 1fr);
 }
 
 .tyto-topic:hover {

@@ -6,6 +6,14 @@ import { PLAYER_SEEK_EVENT, PLAYER_TIME_EVENT, type PlayerTimeDetail } from './p
 import type { Job } from '../hooks/use-transcribe-queue'
 import { AiNeeded, SummaryWorking, useSummaryState } from './summary-view'
 
+/** «00:00:37» → «00:37»; «01:02:03» → «1:02:03». The model writes hours even for a 10-minute call. */
+export function topicTime(start: string): string {
+	const parts = start.split(':')
+	if (parts.length === 3 && Number(parts[0]) === 0) return `${parts[1]}:${parts[2]}`
+	if (parts.length === 3) return `${Number(parts[0])}:${parts[1]}:${parts[2]}`
+	return start
+}
+
 /**
  * «Темы» as a column at the right of the text (design round 3): the recording's table of contents.
  * A click moves the player to where the topic starts; the topic being played sits on a grey plate.
@@ -32,7 +40,7 @@ export default function TopicsColumn({ job }: { job: Job }) {
 	let body: React.ReactNode
 	if (topics.length > 0) {
 		body = (
-			<ol className="flex flex-col gap-0.5">
+			<ol className="flex flex-col gap-0.5" data-hours={topics.some((topic) => topic.seconds >= 3600) || undefined}>
 				{topics.map((topic, index) => (
 					<li key={`${topic.start}-${index}`}>
 						<button
@@ -40,7 +48,7 @@ export default function TopicsColumn({ job }: { job: Job }) {
 							aria-current={index === current ? 'true' : undefined}
 							onClick={() => window.dispatchEvent(new CustomEvent(PLAYER_SEEK_EVENT, { detail: { seconds: topic.seconds } }))}
 							className="tyto-topic">
-							<span className="tyto-topic-time">{topic.start}</span>
+							<span className="tyto-topic-time">{topicTime(topic.start)}</span>
 							<span>{topic.title}</span>
 						</button>
 					</li>

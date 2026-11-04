@@ -147,7 +147,7 @@ export default function SettingsPage({ setVisible, scrollTo }: SettingsPageProps
 						{groups.map((group) => (
 							<div key={group.sections[0].id} data-group>
 								{group.title && (
-									<div data-settings-group className="mt-4 mb-1 px-2 text-xs leading-none font-medium text-muted-foreground">
+									<div data-settings-group className="tyto-settings-nav-group">
 										{group.title}
 									</div>
 								)}
