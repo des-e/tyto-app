@@ -6,7 +6,7 @@
 ## Холсты
 - `project/` - «Tyto: главное окно», https://claude.ai/artifact/RmWhcXKriE8MLEUYXtz9Q6
   Страницы: 1 Главное окно, 2 Запись до расшифровки, 3 Расшифровка, 4 Ход расшифровки,
-  5 Настройки, 6 Первый запуск, 7 Маленькие окна, 8 Все разделы настроек.
+  5 Настройки, 6 Первый запуск, 7 Маленькие окна, 8 Все разделы настроек, 9 ИИ-ассистент (выбран B).
   Выбранные варианты записаны зелеными заметками в canvas.json (pickS2...pickPill), решения - в
   `_vault/Decisions/2026-11-03-tyto-design-round-main-window.md`.
 - `../pages/video-in-project/` - «Tyto: видео в проекте», https://claude.ai/artifact/CSYkYsRtF8T4GGhogpRBJF
