@@ -1065,5 +1065,7 @@
 	"callsAskYes": "Да, предлагать",
 	"callsAskNo": "Нет",
 	"tytoPillStopLong": "Остановить запись",
-	"videoSoundFromTyto": "звук идет из Tyto"
+	"videoSoundFromTyto": "звук идет из Tyto",
+	"exportReviewOnSave": "Разбор сделаем при сохранении",
+	"exportReviewing": "Делаем ИИ-разбор"
 }

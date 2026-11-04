@@ -1065,5 +1065,7 @@
 	"callsAskYes": "Yes, offer",
 	"callsAskNo": "No",
 	"tytoPillStopLong": "Stop recording",
-	"videoSoundFromTyto": "sound plays from Tyto"
+	"videoSoundFromTyto": "sound plays from Tyto",
+	"exportReviewOnSave": "The review is made when you save",
+	"exportReviewing": "Making the AI review"
 }

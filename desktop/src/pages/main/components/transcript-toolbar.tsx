@@ -151,7 +151,7 @@ export default function TranscriptToolbar({
 	tab: TranscriptTab
 	setTab: (tab: TranscriptTab) => void
 }) {
-	const { queue } = useSession()
+	const { queue, summaries } = useSession()
 	const preference = usePreferenceProvider()
 	const [exportOpen, setExportOpen] = useState(false)
 	const autoExport = preference.autoExport
@@ -196,7 +196,7 @@ export default function TranscriptToolbar({
 		// transcript cannot honour — a summary it does not have — is corrected.
 		// CSV is no longer offered in the dialog (Tyto), so a stored CSV choice falls back to plain text.
 		const fix: Partial<typeof exportOptions> = {}
-		if (!aiText && exportOptions.content !== 'transcript') fix.content = 'transcript'
+		if (!aiText && !canMakeReview && exportOptions.content !== 'transcript') fix.content = 'transcript'
 		if (exportOptions.format === 'csv') fix.format = 'normal'
 		if (Object.keys(fix).length > 0) updateExport(fix)
 		setExportOpen(true)
@@ -207,9 +207,30 @@ export default function TranscriptToolbar({
 		setQuery('')
 	}
 
+	// «ИИ-разбор» chosen before the review exists: saving makes it with Tyto AI first, then saves the
+	// file once the review has landed in the project (Denis, 2026-11-04). Without Tyto AI the card
+	// holds what the AI already wrote.
+	const hasReview = (job?.thread ?? []).some((entry) => entry.question === m.tytoAiReview())
+	const canMakeReview = Boolean(job) && summaries.tyto && summaries.enabled && (job?.segments.length ?? 0) > 0 && job?.status !== 'running'
+	const reviewOnSave = exportOptions.content === 'summary' && !hasReview && canMakeReview
+	const reviewing = job ? Boolean(summaries.reviewing[job.id]) : false
+	const [saveAfterReview, setSaveAfterReview] = useState(false)
+
 	async function saveExport() {
+		if (reviewOnSave && job) {
+			setSaveAfterReview(true)
+			if (!(await summaries.review(job))) setSaveAfterReview(false)
+			return
+		}
 		if (await exporter.save()) setExportOpen(false)
 	}
+
+	// The review is in the job now, so this render's exporter already writes it.
+	useEffect(() => {
+		if (!saveAfterReview || !hasReview) return
+		setSaveAfterReview(false)
+		void exporter.save().then((saved) => saved && setExportOpen(false))
+	}, [saveAfterReview, hasReview, exporter])
 
 	const hasText = (job?.segments.length ?? 0) > 0
 	// A transcript still being written exports only once it is finished.
@@ -308,7 +329,9 @@ export default function TranscriptToolbar({
 				onFormatChange={(format: TextFormat) => updateExport({ format })}
 				content={exportOptions.content}
 				onContentChange={(content) => updateExport({ content })}
-				hasSummary={Boolean(aiText)}
+				hasSummary={Boolean(aiText) || canMakeReview}
+				reviewOnSave={reviewOnSave}
+				reviewing={reviewing}
 				showTimestamps={exportOptions.showTimestamps}
 				onShowTimestampsChange={(showTimestamps) => updateExport({ showTimestamps })}
 				showSpeakers={exportOptions.showSpeakers}

@@ -161,6 +161,19 @@ describe('export dialog v2: what to save', () => {
 	})
 })
 
+describe('export dialog v2: AI review made on save', () => {
+	it('без разбора карточка говорит, что разбор сделаем при сохранении', () => {
+		mount({ content: 'summary', hasSummary: true, reviewOnSave: true })
+		expect(radio('ИИ-разбор').closest('label')?.textContent).toContain('Разбор сделаем при сохранении')
+	})
+
+	it('пока делается разбор, кнопка сохранения ждет и говорит об этом', () => {
+		mount({ content: 'summary', hasSummary: true, reviewOnSave: true, reviewing: true })
+		const save = screen.getByRole('button', { name: /Делаем ИИ-разбор/ }) as HTMLButtonElement
+		expect(save.disabled).toBe(true)
+	})
+})
+
 describe('export dialog v2: appearance', () => {
 	it.each<TextFormat>(['srt', 'vtt'])('for %s the timestamps box is checked, locked and says why', (format) => {
 		mount({ format, showTimestamps: false })

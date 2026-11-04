@@ -8,6 +8,7 @@ import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/pris
 import { m } from '~/paraglide/messages.js'
 import { formatExtensions, type TextFormat } from '~/components/format-select'
 import { Button } from '~/components/ui/button'
+import { Spinner } from '~/components/ui/spinner'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '~/components/ui/dialog'
 import { projectExportFilename } from '~/lib/project-name'
 import { cn } from '~/lib/style'
@@ -35,6 +36,10 @@ export interface TranscriptExportDialogProps {
 	content: TranscriptExportContent
 	onContentChange: (content: TranscriptExportContent) => void
 	hasSummary: boolean
+	/** «ИИ-разбор» is chosen but not made yet: saving makes it first (Denis, 2026-11-04). */
+	reviewOnSave?: boolean
+	/** The review is being made: the save button says so and the buttons wait. */
+	reviewing?: boolean
 	showTimestamps: boolean
 	onShowTimestampsChange: (show: boolean) => void
 	showSpeakers: boolean
@@ -152,6 +157,8 @@ export default function TranscriptExportDialog({
 	content,
 	onContentChange,
 	hasSummary,
+	reviewOnSave = false,
+	reviewing = false,
 	showTimestamps,
 	onShowTimestampsChange,
 	showSpeakers,
@@ -206,7 +213,12 @@ export default function TranscriptExportDialog({
 				<div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[420px_minmax(0,1fr)] md:overflow-hidden">
 					<div className="space-y-6 p-6 md:overflow-y-auto md:border-e md:border-border">
 						<ExportGroup id="tyto-export-content" label={m.exportContent()}>
-							<ExportContentCards value={content} onChange={onContentChange} hasSummary={hasSummary} />
+							<ExportContentCards
+								value={content}
+								onChange={onContentChange}
+								hasSummary={hasSummary}
+								summaryNote={reviewOnSave ? m.exportReviewOnSave() : undefined}
+							/>
 						</ExportGroup>
 
 						<ExportGroup id="tyto-export-format" label={m.format()}>
@@ -294,9 +306,9 @@ export default function TranscriptExportDialog({
 							{m.exportCopy()}
 						</Button>
 					)}
-					<Button type="button" variant="primary" onClick={() => void onSave()}>
-						<Download aria-hidden="true" />
-						{m.exportSave({ format: selectedFormat?.extension ?? format.toUpperCase() })}
+					<Button type="button" variant="primary" disabled={reviewing} onClick={() => void onSave()}>
+						{reviewing ? <Spinner className="h-4 w-4" /> : <Download aria-hidden="true" />}
+						{reviewing ? m.exportReviewing() : m.exportSave({ format: selectedFormat?.extension ?? format.toUpperCase() })}
 					</Button>
 				</div>
 			</DialogContent>

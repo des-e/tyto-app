@@ -93,18 +93,21 @@ export function ExportContentCards({
 	value,
 	onChange,
 	hasSummary,
+	summaryNote,
 }: {
 	/** 'both' (an older stored choice) leaves neither card selected, as before. */
 	value: TranscriptExportContent
 	onChange: (value: TranscriptExportContent) => void
 	hasSummary: boolean
+	/** Shown under «ИИ-разбор» in place of its description, e.g. that the review is made on save. */
+	summaryNote?: string
 }) {
 	const cards = [
 		{ value: 'transcript' as const, name: m.exportContentTranscript(), description: m.exportContentTranscriptDescription(), disabled: false },
 		{
 			value: 'summary' as const,
 			name: m.exportContentSummary(),
-			description: hasSummary ? m.exportContentSummaryDescription() : m.exportSummaryUnavailable(),
+			description: summaryNote ?? (hasSummary ? m.exportContentSummaryDescription() : m.exportSummaryUnavailable()),
 			disabled: !hasSummary,
 		},
 	]
