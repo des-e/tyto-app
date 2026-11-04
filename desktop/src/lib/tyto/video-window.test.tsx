@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 const tauri = vi.hoisted(() => ({
 	listeners: new Map<string, Set<(event: { payload: unknown }) => void>>(),
-	emitted: [] as { target: string; event: string }[],
+	emitted: [] as { target: string; event: string; payload?: unknown }[],
 }))
 vi.mock('@tauri-apps/api/core', () => ({
 	invoke: vi.fn(async (cmd: string) => (cmd === 'video_window_source' ? { path: 'D:/zoom/plan.mp4', title: 'Планерка' } : null)),
@@ -18,8 +18,8 @@ vi.mock('@tauri-apps/api/event', () => ({
 		tauri.listeners.set(event, set)
 		return () => set.delete(cb)
 	}),
-	emitTo: vi.fn(async (target: string, event: string) => {
-		tauri.emitted.push({ target, event })
+	emitTo: vi.fn(async (target: string, event: string, payload?: unknown) => {
+		tauri.emitted.push(payload === undefined ? { target, event } : { target, event, payload })
 	}),
 }))
 
@@ -90,5 +90,21 @@ describe('окно видео', () => {
 		await act(async () => {})
 		fireEvent.click(document.querySelector('video')!)
 		expect(tauri.emitted).toContainEqual({ target: 'main', event: 'video-window-toggle' })
+	})
+
+	it('полоса при наведении: время и ползунок; ползунок перематывает главный плеер', async () => {
+		render(<VideoWindow />)
+		await act(async () => {})
+		const video = document.querySelector('video')!
+		Object.defineProperty(video, 'duration', { configurable: true, value: 2880 })
+		fireEvent.loadedMetadata(video)
+		video.currentTime = 14
+		fireEvent.timeUpdate(video)
+		expect(document.querySelector('.tyto-video-time')?.textContent).toBe('0:14 / 48:00')
+		expect(document.querySelector('.tyto-video-note')?.textContent).toBe('sound plays from Tyto')
+		const slider = document.querySelector('input[type="range"]') as HTMLInputElement
+		fireEvent.change(slider, { target: { value: '600' } })
+		fireEvent.pointerUp(slider)
+		expect(tauri.emitted).toContainEqual({ target: 'main', event: 'video-window-seek', payload: { seconds: 600 } })
 	})
 })

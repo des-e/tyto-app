@@ -1063,5 +1063,7 @@
 	"callsAskTitle": "Offer to record when a call starts?",
 	"callsAskInfo": "Telemost, Bitrix24, Zoom, Meet, Teams and calls in a browser",
 	"callsAskYes": "Yes, offer",
-	"callsAskNo": "No"
+	"callsAskNo": "No",
+	"tytoPillStopLong": "Stop recording",
+	"videoSoundFromTyto": "sound plays from Tyto"
 }

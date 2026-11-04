@@ -1063,5 +1063,7 @@
 	"callsAskTitle": "Предлагать запись, когда начинается звонок?",
 	"callsAskInfo": "Телемост, Битрикс24, Zoom, Meet, Teams и звонки в браузере",
 	"callsAskYes": "Да, предлагать",
-	"callsAskNo": "Нет"
+	"callsAskNo": "Нет",
+	"tytoPillStopLong": "Остановить запись",
+	"videoSoundFromTyto": "звук идет из Tyto"
 }

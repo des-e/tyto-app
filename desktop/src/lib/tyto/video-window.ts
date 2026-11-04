@@ -11,6 +11,8 @@ export const VIDEO_WINDOW_LABEL = 'video-window'
 export const VIDEO_SYNC_EVENT = 'video-sync'
 /** From the video window: a click on the picture plays or pauses the main player. */
 export const VIDEO_TOGGLE_EVENT = 'video-window-toggle'
+/** From the video window: its slider moved, `{ seconds }`; the main player jumps there (design round 7). */
+export const VIDEO_SEEK_EVENT = 'video-window-seek'
 /** From the video window: its page loaded and wants the current position. */
 export const VIDEO_READY_EVENT = 'video-window-ready'
 const CLOSED_EVENT = 'video-window-closed'

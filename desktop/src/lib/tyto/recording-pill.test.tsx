@@ -56,7 +56,7 @@ test('плашка: сова, красная точка мигает при за
 	expect(await screen.findByText('0:07')).toBeTruthy()
 	expect(screen.getByTestId('owl-mark')).toBeTruthy()
 	expect(screen.getByTestId('recording-dot').getAttribute('data-blinking')).toBe('true')
-	expect(screen.getByRole('button', { name: 'Стоп' })).toBeTruthy()
+	expect(screen.getByRole('button', { name: 'Остановить запись' })).toBeTruthy()
 
 	fireEvent.click(screen.getByRole('button', { name: 'Пауза' }))
 	await waitFor(() => expect(backend.calls).toContain('recording_pause'))
@@ -70,13 +70,13 @@ test('плашка: сова, красная точка мигает при за
 
 	// Everything but the buttons drags the pill.
 	expect(screen.getByTestId('recording-pill-label').hasAttribute('data-tauri-drag-region')).toBe(true)
-	expect(screen.getByRole('button', { name: 'Стоп' }).closest('[data-tauri-drag-region]')).not.toBeNull()
-	expect(screen.getByRole('button', { name: 'Стоп' }).hasAttribute('data-tauri-drag-region')).toBe(false)
+	expect(screen.getByRole('button', { name: 'Остановить запись' }).closest('[data-tauri-drag-region]')).not.toBeNull()
+	expect(screen.getByRole('button', { name: 'Остановить запись' }).hasAttribute('data-tauri-drag-region')).toBe(false)
 })
 
 test('«Стоп» вызывает recording_stop; в состоянии finishing кнопки неактивны и видно «Сохраняем запись»', async () => {
 	render(<RecordingPillWindow />)
-	fireEvent.click(await screen.findByRole('button', { name: 'Стоп' }))
+	fireEvent.click(await screen.findByRole('button', { name: 'Остановить запись' }))
 	await waitFor(() => expect(backend.calls).toContain('recording_stop'))
 
 	act(() => bus.emit('recording_state', { status: 'finishing', mode: 'audio', activeMs: 9_000 }))

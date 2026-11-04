@@ -40,6 +40,17 @@ export function createRecordingHandlers(emit: Emit, unfinished: MockUnfinished[]
 		startedAt: Date
 		timers: ReturnType<typeof setInterval>[]
 	} | null = null
+	// `?window=recording-pill&mockRecording=1` shows the pill mid-recording (12:34), for screenshots.
+	if (new URLSearchParams(window.location.search).get('mockRecording')) {
+		session = {
+			options: { mode: 'audio' } as MockStartOptions,
+			status: 'recording',
+			activeMs: 754_000,
+			runningSince: null,
+			startedAt: new Date(),
+			timers: [],
+		}
+	}
 
 	const activeMs = () => (session ? session.activeMs + (session.runningSince === null ? 0 : Date.now() - session.runningSince) : 0)
 	const state = () => (session ? { status: session.status, mode: session.options.mode, activeMs: activeMs() } : null)

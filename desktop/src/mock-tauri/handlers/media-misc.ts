@@ -24,7 +24,11 @@ const YTDLP_TICK_MS = 100
 // Module-level mock state (survives across invokes for the lifetime of the page).
 let dictationIndicatorEnabled = false
 let meetingDetectionEnabled = false
-let meetingPromptState: { source: 'meet' | 'zoom' | 'teams' } | null = null
+// `?window=meeting-prompt&mockCall=zoom` opens the prompt on a call, for screenshots of that window.
+let meetingPromptState: { source: string } | null = (() => {
+	const source = new URLSearchParams(window.location.search).get('mockCall')
+	return source ? { source } : null
+})()
 
 function sleep(ms: number) {
 	return new Promise<void>((resolve) => setTimeout(resolve, ms))

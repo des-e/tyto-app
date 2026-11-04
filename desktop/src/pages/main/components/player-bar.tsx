@@ -13,7 +13,7 @@ import { usePlaybackRate } from '~/lib/playback-rate'
 import { MissingMedia } from '~/lib/tyto/media-missing'
 import { createPlayerMedia, releasePlayerMedia } from '~/lib/tyto/player-media'
 import { VideoThumb } from '~/lib/tyto/video-pane'
-import { syncVideoWindow, VIDEO_TOGGLE_EVENT } from '~/lib/tyto/video-window'
+import { syncVideoWindow, VIDEO_SEEK_EVENT, VIDEO_TOGGLE_EVENT } from '~/lib/tyto/video-window'
 import { listen } from '@tauri-apps/api/event'
 import { PlayerClock, ReplicaTimeline } from '~/lib/tyto/replica-timeline'
 import type { NamedPath } from '~/lib/types'
@@ -208,6 +208,16 @@ export default function PlayerBar({ job }: { job: Job }) {
 			void unlisten.then((dispose) => dispose()).catch(() => {})
 		}
 	}, [toggle])
+
+	// The slider in the video window moves this player; the copy there follows it back.
+	useEffect(() => {
+		const unlisten = listen<{ seconds: number }>(VIDEO_SEEK_EVENT, ({ payload }) => {
+			if (Number.isFinite(payload?.seconds)) window.dispatchEvent(new CustomEvent(PLAYER_SEEK_EVENT, { detail: { seconds: payload.seconds } }))
+		})
+		return () => {
+			void unlisten.then((dispose) => dispose()).catch(() => {})
+		}
+	}, [])
 
 	async function revealInFolder() {
 		try {

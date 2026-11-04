@@ -142,7 +142,7 @@ export default function MeetingPromptWindow() {
 	if (!state) return null
 
 	return (
-		// A dark row like a system notification, the same in both themes: it sits over other apps.
+		// Light or dark like the app (design round 7), with a shadow so it reads over other apps.
 		<div className="flex h-screen w-screen items-center justify-center bg-transparent p-2">
 			<section className="tyto-meeting-row">
 				<OwlMark className="tyto-meeting-row-owl" />
@@ -151,6 +151,7 @@ export default function MeetingPromptWindow() {
 					<p className="tyto-meeting-row-sub">{m.tytoMeetingRowSources()}</p>
 				</div>
 				<button type="button" className="tyto-meeting-row-primary" disabled={busy} onClick={() => void startRecording('audio')}>
+					<span aria-hidden className="tyto-meeting-row-dot" />
 					{m.tytoMeetingRowRecord()}
 				</button>
 				{videoSupported && (

@@ -42,7 +42,7 @@ const MAIN_LABEL: &str = "main";
 const MEETING_PROMPT_LABEL: &str = "meeting-prompt";
 const POSITION_KEY: &str = "recording.pillPosition";
 const STATE_EVENT: &str = "recording_state";
-const WIDTH: f64 = 264.0;
+const WIDTH: f64 = 224.0;
 const HEIGHT: f64 = 52.0;
 /// Gap above the pill at the top center of a monitor, physical pixels.
 const TOP_MARGIN: i32 = 12;

@@ -1,7 +1,7 @@
 import { resolveTheme } from '~/lib/tyto/theme-choice'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { useEffect, useLayoutEffect, useState } from 'react'
-import { Button } from '~/components/ui/button'
+import { Pause, Play } from 'lucide-react'
 import { CONFIG_KEYS } from '~/lib/config-keys'
 import { readConfig } from '~/lib/config-store'
 import { supportedLanguages } from '~/lib/i18n'
@@ -106,14 +106,18 @@ export default function RecordingPillWindow() {
 		}
 	}
 
+	const pauseLabel = paused ? m.tytoPillResume() : m.tytoPillPause()
+
+	// Variant A (design round 7): owl, red dot, the time in mono, then pause and stop as icons whose
+	// names show on hover. Light or dark like the app (the theme is read above).
 	return (
 		<div data-tauri-drag-region className="flex h-screen w-screen items-center justify-center bg-transparent p-1">
 			<section
 				data-tauri-drag-region
 				aria-label={m.recordingControls()}
-				className="flex h-full w-full items-center gap-1.5 rounded-full border border-border/70 bg-card ps-2.5 pe-1.5 text-card-foreground shadow-lg select-none">
+				className="flex h-full w-full items-center gap-2.5 rounded-full border border-border bg-card ps-3.5 pe-1.5 text-card-foreground shadow-lg select-none">
 				<span data-tauri-drag-region className="flex shrink-0 items-center">
-					<OwlMark className="pointer-events-none h-6 w-auto text-foreground" />
+					<OwlMark className="pointer-events-none h-5 w-auto text-foreground" />
 				</span>
 				{!finishing && (
 					<span
@@ -121,7 +125,7 @@ export default function RecordingPillWindow() {
 						data-testid="recording-dot"
 						data-blinking={state.status === 'recording'}
 						className={cn(
-							'h-2.5 w-2.5 shrink-0 rounded-full bg-red-500',
+							'h-[9px] w-[9px] shrink-0 rounded-full bg-[#ff5b4f]',
 							state.status === 'recording' ? 'motion-safe:animate-pulse' : 'opacity-60',
 						)}
 					/>
@@ -130,28 +134,28 @@ export default function RecordingPillWindow() {
 					data-tauri-drag-region
 					data-testid="recording-pill-label"
 					aria-live="polite"
-					className={cn('min-w-0 flex-1 truncate text-sm font-medium', finishing ? 'text-xs text-muted-foreground' : 'tabular-nums')}>
+					className={cn('min-w-0 flex-1 truncate', finishing ? 'text-xs text-muted-foreground' : 'font-mono text-[14px] tabular-nums')}>
 					{finishing ? m.tytoPillSaving() : elapsed}
 				</span>
-				<div className="flex shrink-0 gap-1">
-					<Button
+				<div className="flex shrink-0 items-center gap-1">
+					<button
 						type="button"
-						variant="ghost"
-						size="sm"
-						className="h-8 rounded-full px-2 text-xs"
+						aria-label={pauseLabel}
+						title={pauseLabel}
 						disabled={busy || finishing}
-						onClick={() => void (paused ? run(resumeRecording, 'resume') : run(pauseRecording, 'pause'))}>
-						{paused ? m.tytoPillResume() : m.tytoPillPause()}
-					</Button>
-					<Button
+						onClick={() => void (paused ? run(resumeRecording, 'resume') : run(pauseRecording, 'pause'))}
+						className="tyto-pill-icon">
+						{paused ? <Play aria-hidden className="h-3.5 w-3.5 fill-current" /> : <Pause aria-hidden className="h-3.5 w-3.5 fill-current" />}
+					</button>
+					<button
 						type="button"
-						variant="destructive"
-						size="sm"
-						className="h-8 rounded-full px-2.5 text-xs"
+						aria-label={m.tytoPillStopLong()}
+						title={m.tytoPillStopLong()}
 						disabled={busy || finishing}
-						onClick={() => void run(stopRecording, 'stop')}>
-						{m.tytoPillStop()}
-					</Button>
+						onClick={() => void run(stopRecording, 'stop')}
+						className="tyto-pill-icon tyto-pill-stop">
+						<span aria-hidden className="h-2.5 w-2.5 rounded-[2px] bg-[#ff5b4f]" />
+					</button>
 				</div>
 			</section>
 		</div>
