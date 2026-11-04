@@ -44,6 +44,6 @@ describe('composeSkill', () => {
 
 describe('withFrontmatter', () => {
 	it('opens with the frontmatter the agent runtimes index by', () => {
-		expect(withFrontmatter(composeSkill(context)).split('\n').slice(0, 4)).toEqual(['---', 'name: vibe', expect.stringContaining('description:'), '---'])
+		expect(withFrontmatter(composeSkill(context)).split('\n').slice(0, 4)).toEqual(['---', 'name: tyto', expect.stringContaining('description:'), '---'])
 	})
 })

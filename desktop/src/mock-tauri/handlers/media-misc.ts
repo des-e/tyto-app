@@ -141,10 +141,10 @@ export const mediaMiscHandlers: CommandHandlerMap = {
 
 	get_agent_paths: () => ({ server: `${APP_LOCAL_DATA}/server`, vibe: `${APP_LOCAL_DATA}/vibe` }),
 
-	// Mirrors the Rust command: `<home>/.claude|.codex/skills/vibe/SKILL.md`, parents created.
+	// Mirrors the Rust command: `<home>/.claude|.codex/skills/tyto/SKILL.md`, parents created.
 	install_agent_skill: (args) => {
 		const folder = String(args?.target ?? 'claude') === 'codex' ? '.codex' : '.claude'
-		const path = `${HOME_FOLDER}/${folder}/skills/vibe/SKILL.md`
+		const path = `${HOME_FOLDER}/${folder}/skills/tyto/SKILL.md`
 		virtualFs.set(path, String(args?.contents ?? ''))
 		return path
 	},

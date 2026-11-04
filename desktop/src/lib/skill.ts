@@ -219,7 +219,7 @@ export function composeSkill(context: SkillContext) {
 export function withFrontmatter(body: string) {
 	return [
 		'---',
-		'name: vibe',
+		'name: tyto',
 		'description: Work with Tyto — read saved transcripts, transcribe audio through the local Tyto API, and read or change Tyto settings.',
 		'---',
 		'',
@@ -248,7 +248,7 @@ export async function buildSkill(baseUrl: string) {
 }
 
 /**
- * Write the skill to `<home>/.claude|.codex/skills/vibe/SKILL.md`, overwriting any earlier install
+ * Write the skill to `<home>/.claude|.codex/skills/tyto/SKILL.md`, overwriting any earlier install
  * (a reinstall is how a stale base URL gets refreshed).
  * @returns the absolute path written.
  */

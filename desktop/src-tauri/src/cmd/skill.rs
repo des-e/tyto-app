@@ -34,17 +34,39 @@ pub fn get_agent_paths(app_handle: tauri::AppHandle) -> AgentPaths {
     }
 }
 
-/// Write the skill under `home`, creating `<runtime>/skills/vibe/` on the way.
+/// Folder name of the skill. Early Tyto builds installed it as `vibe` (see `remove_legacy_skill`).
+const SKILL_NAME: &str = "tyto";
+
+/// Write the skill under `home`, creating `<runtime>/skills/tyto/` on the way.
 /// Overwriting is intended: reinstalling is how a stale API base URL gets refreshed.
 fn write_skill(home: &Path, target: &str, contents: &str) -> Result<PathBuf> {
-    let folder = home.join(runtime_folder(target)?).join("skills").join("vibe");
+    let skills = home.join(runtime_folder(target)?).join("skills");
+    let folder = skills.join(SKILL_NAME);
     fs::create_dir_all(&folder).context("create the agent skill folder")?;
     let path = folder.join("SKILL.md");
     fs::write(&path, contents).context("write the agent skill file")?;
+    remove_legacy_skill(&skills);
     Ok(path)
 }
 
-/// Install the Vibe skill for one agent runtime.
+/// Remove the skill an early Tyto build wrote to `skills/vibe/`, so the agent does not see it twice.
+/// Only a file that mentions Tyto is removed: the original Vibe app installs to the same folder.
+fn remove_legacy_skill(skills: &Path) {
+    let folder = skills.join("vibe");
+    let path = folder.join("SKILL.md");
+    let Ok(old) = fs::read_to_string(&path) else { return };
+    if !old.contains("Tyto") {
+        return;
+    }
+    if let Err(error) = fs::remove_file(&path) {
+        tracing::warn!("could not remove the old skill {}: {error}", path.display());
+        return;
+    }
+    // Leaves the folder alone if anything else is in it.
+    let _ = fs::remove_dir(&folder);
+}
+
+/// Install the Tyto skill for one agent runtime.
 ///
 /// The target lives outside every directory the fs plugin is scoped to, so this goes through
 /// `std::fs` here instead of the frontend — no capability to widen, and nothing the browser mock
@@ -72,16 +94,36 @@ mod tests {
 
     #[test]
     fn creates_the_skill_folder_and_overwrites_an_earlier_install() {
-        let home = std::env::temp_dir().join(format!("vibe-skill-test-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("tyto-skill-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
 
         let path = write_skill(&home, "codex", "first").unwrap();
-        assert_eq!(path, home.join(".codex/skills/vibe/SKILL.md"));
+        assert_eq!(path, home.join(".codex/skills/tyto/SKILL.md"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "first");
 
         let again = write_skill(&home, "codex", "second").unwrap();
         assert_eq!(again, path);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn removes_the_old_tyto_skill_but_not_the_vibe_one() {
+        let home = std::env::temp_dir().join(format!("tyto-legacy-skill-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+
+        let ours = home.join(".claude/skills/vibe");
+        std::fs::create_dir_all(&ours).unwrap();
+        std::fs::write(ours.join("SKILL.md"), "description: Work with Tyto").unwrap();
+        write_skill(&home, "claude", "new").unwrap();
+        assert!(!ours.exists());
+
+        let theirs = home.join(".codex/skills/vibe");
+        std::fs::create_dir_all(&theirs).unwrap();
+        std::fs::write(theirs.join("SKILL.md"), "description: Work with Vibe").unwrap();
+        write_skill(&home, "codex", "new").unwrap();
+        assert!(theirs.join("SKILL.md").exists());
 
         std::fs::remove_dir_all(&home).unwrap();
     }
