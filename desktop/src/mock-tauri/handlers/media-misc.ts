@@ -26,7 +26,7 @@ let dictationIndicatorEnabled = false
 let meetingDetectionEnabled = false
 // `?window=meeting-prompt&mockCall=zoom` opens the prompt on a call, for screenshots of that window.
 let meetingPromptState: { source: string } | null = (() => {
-	const source = new URLSearchParams(window.location.search).get('mockCall')
+	const source = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('mockCall')
 	return source ? { source } : null
 })()
 
