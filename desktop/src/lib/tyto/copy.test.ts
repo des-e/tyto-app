@@ -85,7 +85,6 @@ const COPY: Array<[string, string]> = [
 	['launchAtStartup', 'Запускать вместе с системой'],
 	['preventSleep', 'Не давать компьютеру засыпать'],
 	['generalHelp', 'Помощь'],
-	['basedOnVibe', 'Tyto основан на открытом проекте Vibe (лицензия MIT). Спасибо автору.'],
 	['generalTrayInfo', 'Tyto продолжит работать в фоне. Выйти можно из меню значка в трее.'],
 	['launchAtStartupInfo', 'Tyto откроется сам, когда вы войдете в систему.'],
 	['generalAwakeInfo', 'Пока Tyto открыт. Экран при этом может гаснуть, ноутбук быстрее разряжается.'],

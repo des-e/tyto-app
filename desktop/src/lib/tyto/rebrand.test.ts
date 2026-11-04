@@ -30,12 +30,10 @@ describe('tyto links', () => {
 
 describe('tyto texts', () => {
 	for (const locale of ['ru-RU', 'en-US']) {
-		it(`${locale} never says Vibe except in the credit line`, () => {
+		// The credit to Vibe lives in the README on GitHub, not in the app (Denis, 2026-11-03).
+		it(`${locale} never says Vibe`, () => {
 			const messages = readMessages(locale)
-			for (const [key, value] of Object.entries(messages)) {
-				if (key !== 'basedOnVibe') expect(value, key).not.toMatch(/\bVibe\b/)
-			}
-			expect(messages.basedOnVibe).toMatch(/Vibe/)
+			for (const [key, value] of Object.entries(messages)) expect(value, key).not.toMatch(/\bVibe\b/)
 		})
 	}
 })

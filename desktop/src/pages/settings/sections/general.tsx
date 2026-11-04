@@ -115,12 +115,6 @@ export function GeneralSection({ vm }: { vm: SettingsViewModel }) {
 			</SettingsGroup>
 
 			<div className="mt-6 flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
-				<button
-					type="button"
-					onClick={() => openUrl(config.upstreamURL)}
-					className="text-start underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-					{m.basedOnVibe()}
-				</button>
 				<Button variant="ghost" size="sm" className="ml-auto" onClick={() => openUrl(config.aboutURL)}>
 					{m.projectLink()}
 				</Button>

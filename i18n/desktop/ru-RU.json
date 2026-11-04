@@ -734,7 +734,6 @@
 	"phoneRevokeDevice": "Отозвать",
 	"phoneRevokeDeviceNamed": "Отозвать {name}",
 	"whatsNew": "Что нового",
-	"basedOnVibe": "Tyto основан на открытом проекте Vibe (лицензия MIT). Спасибо автору.",
 	"diarizeDownloadFailed": "Не получилось скачать модель говорящих. Включить их можно позже в настройках.",
 	"diarizeModelMissing": "Модель говорящих не найдена. Включите их снова в настройках.",
 	"playFromTime": "Воспроизвести с {time}",
