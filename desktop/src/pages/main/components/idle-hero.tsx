@@ -1,3 +1,4 @@
+import { CallsQuestion } from '~/lib/tyto/calls-question'
 import { listen } from '@tauri-apps/api/event'
 import * as fs from '@tauri-apps/plugin-fs'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -481,6 +482,7 @@ export default function IdleHero() {
 			linkContent={<LinkPanel />}
 			waiting={entries && entries.length > 0 ? <WaitingList entries={entries} /> : null}
 			options={<QuietRow />}
+			notice={<CallsQuestion />}
 		/>
 	)
 }

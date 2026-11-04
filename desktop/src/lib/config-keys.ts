@@ -48,6 +48,8 @@ export const CONFIG_KEYS = {
 	recordingShortcut: 'recording.shortcut',
 	meetingDetectionEnabled: 'recording.meetingDetectionEnabled',
 	autoTranscribeAfterRecording: 'recording.autoTranscribeAfterRecording',
+	/** The one-time «Предлагать запись, когда начинается звонок?» on the main screen was answered. */
+	callsQuestionAsked: 'recording.callsQuestionAsked',
 	screenQuality: 'recording.screenQuality',
 
 	// Reading the transcript

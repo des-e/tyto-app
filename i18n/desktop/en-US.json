@@ -1052,5 +1052,16 @@
 	"privTranscriptionInfo": "Never. Audio and text stay on this computer",
 	"privAi": "Summary, topics and AI review",
 	"privAiInfo": "Only with the AI assistant connected through a service. With Ollama the text stays here",
-	"privPolicy": "Privacy policy"
+	"privPolicy": "Privacy policy",
+	"setupPreparing": "Tyto is getting ready",
+	"setupOnce": "Downloading the models once",
+	"setupOnceEta": "Downloading the models once, about {minutes} min",
+	"setupOnceSoon": "Downloading the models once, under a minute",
+	"setupManual": "Choose files myself",
+	"setupCancel": "Cancel",
+	"setupProgress": "Downloading models",
+	"callsAskTitle": "Offer to record when a call starts?",
+	"callsAskInfo": "Telemost, Bitrix24, Zoom, Meet, Teams and calls in a browser",
+	"callsAskYes": "Yes, offer",
+	"callsAskNo": "No"
 }

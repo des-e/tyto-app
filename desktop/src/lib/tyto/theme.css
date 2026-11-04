@@ -1483,6 +1483,15 @@ svg.lucide {
 	margin-top: 28px;
 }
 
+/* The one-time calls question sits between the title and the cards (design round 6). */
+.tyto-home-inner > .tyto-pending-row {
+	margin-top: var(--tyto-sp-24);
+}
+
+.tyto-home-inner > .tyto-pending-row + .tyto-home-cards {
+	margin-top: var(--tyto-sp-16);
+}
+
 /* Two cards need about 2 × 270px; an 800px window with the sidebar open leaves ~450px of content. */
 @container (max-width: 580px) {
 	.tyto-home-cards,

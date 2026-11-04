@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -81,50 +81,43 @@ function mountPage() {
 	)
 }
 
-const step = (n: 1 | 2) => screen.queryByTestId(`setup-step-${n}`)
+const bar = () => screen.getByRole('progressbar', { name: 'Загрузка моделей' })
 
-describe('первый запуск: шаги загрузки', () => {
-	it('во время загрузки виден шаг 1 с размером, шаг 2 «Следующим»', async () => {
+describe('первый запуск: тихий экран', () => {
+	it('«Tyto готовится · N%», обе модели одним процентом', async () => {
 		h.downloadModel.mockReturnValue(new Promise(() => {}))
 		mountPage()
 		await waitFor(() => expect(h.progress).not.toBeNull())
-		act(() => h.progress!({ payload: [1.0 * GB, 1.6 * GB] }))
-
-		const first = step(1)!
-		expect(within(first).getByText('Распознавание речи')).toBeTruthy()
-		expect(within(first).getByText('1,0 из 1,6 ГБ')).toBeTruthy()
-		expect(within(first).getByText('63%')).toBeTruthy()
-		expect(first.getAttribute('data-state')).toBe('active')
-		expect(within(step(2)!).getByText('Следующим')).toBeTruthy()
-		expect(step(2)!.getAttribute('data-state')).toBe('waiting')
+		act(() => h.progress!({ payload: [0.8 * GB, 1.6 * GB] }))
+		// Половина распознавания речи = 45% всего, когда следом идет модель говорящих.
+		expect(screen.getByRole('heading').textContent).toBe('Tyto готовится · 45%')
+		expect(bar().getAttribute('aria-valuenow')).toBe('45')
+		expect(screen.getByText(/^Скачиваем модели один раз/)).toBeTruthy()
 	})
 
-	it('после перехода на модель говорящих активен шаг 2', async () => {
+	it('после перехода на модель говорящих процент продолжается с 90', async () => {
 		h.downloadModel.mockResolvedValueOnce('/models/main.bin').mockReturnValueOnce(new Promise(() => {}))
 		mountPage()
 		await waitFor(() => expect(h.downloadModel).toHaveBeenCalledTimes(2))
-		await waitFor(() => expect(step(2)!.getAttribute('data-state')).toBe('active'))
-		expect(step(1)!.getAttribute('data-state')).toBe('done')
-		expect(within(step(2)!).queryByText('Следующим')).toBeNull()
 		act(() => h.progress!({ payload: [20_000_000, 40_000_000] }))
-		expect(within(step(2)!).getByText('20 из 40 МБ')).toBeTruthy()
+		await waitFor(() => expect(bar().getAttribute('aria-valuenow')).toBe('95'))
 	})
 
-	it('при выключенных говорящих шага 2 нет', async () => {
+	it('при выключенных говорящих процент только распознавания', async () => {
 		h.preference.diarizeEnabled = false
 		h.downloadModel.mockReturnValue(new Promise(() => {}))
 		mountPage()
-		await waitFor(() => expect(h.downloadModel).toHaveBeenCalled())
-		expect(step(1)).not.toBeNull()
-		expect(step(2)).toBeNull()
+		await waitFor(() => expect(h.progress).not.toBeNull())
+		act(() => h.progress!({ payload: [0.8 * GB, 1.6 * GB] }))
+		expect(bar().getAttribute('aria-valuenow')).toBe('50')
 	})
 
-	it('без сети: текст, «Повторить» и «Указать файл вручную»; сова стоит', async () => {
+	it('без сети: текст, «Повторить» и «Указать файлы вручную»; сова стоит', async () => {
 		h.isOnline = false
 		mountPage()
 		expect(await screen.findByText('Нет подключения к интернету')).toBeTruthy()
 		expect(screen.getByRole('button', { name: 'Повторить' })).toBeTruthy()
-		expect(screen.getByRole('button', { name: 'Указать файл вручную' })).toBeTruthy()
+		expect(screen.getByRole('button', { name: 'Указать файлы вручную' })).toBeTruthy()
 		expect(screen.getByTestId('owl-walk').getAttribute('data-walking')).toBe('false')
 		expect(h.downloadModel).not.toHaveBeenCalled()
 	})
@@ -160,19 +153,18 @@ describe('SetupSteps', () => {
 		expect(screen.getByTestId('owl-walk').getAttribute('data-walking')).toBe('false')
 	})
 
-	it('на экране одна сова — идущая, неподвижной над заголовком нет', () => {
+	it('на экране одна сова — идущая', () => {
 		render(<SetupSteps vm={model()} />)
 		expect(screen.queryByTestId('owl-mark')).toBeNull()
 		expect(screen.getByTestId('owl-walk')).toBeTruthy()
 	})
 
-	it('кнопки загрузки: «Отменить загрузку» и «Указать файл модели вручную» ведут в настройки', () => {
+	it('внизу мелко «Указать файлы вручную» и «Отменить», обе ведут в настройки', () => {
 		const vm = model()
 		render(<SetupSteps vm={vm} />)
-		screen.getByRole('button', { name: 'Отменить загрузку' }).click()
-		screen.getByRole('button', { name: 'Указать файл модели вручную' }).click()
+		screen.getByRole('button', { name: 'Указать файлы вручную' }).click()
+		screen.getByRole('button', { name: 'Отменить' }).click()
 		expect(vm.cancelSetup).toHaveBeenCalledTimes(2)
-		expect(screen.getByText('Записи расшифровываются на этом компьютере и никуда не отправляются.')).toBeTruthy()
 	})
 })
 

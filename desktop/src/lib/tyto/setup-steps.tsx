@@ -1,8 +1,7 @@
-import { Check, Lock, WifiOff } from 'lucide-react'
+import { WifiOff } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '~/components/ui/button'
 import { m } from '~/paraglide/messages.js'
-import { getLocale } from '~/paraglide/runtime.js'
 import { estimateEta, type DownloadSample } from './download-eta'
 import { OwlWalk } from './owl-walk'
 
@@ -18,153 +17,80 @@ export interface SetupStepsModel {
 	downloadIfOnline: () => void
 }
 
-type StepState = 'waiting' | 'active' | 'done'
+/** Share of the whole download taken by speech recognition when the speakers model follows (1,6 GB vs ~0,2 GB). */
+const SPEECH_SHARE = 0.9
+
+/** Both models as one percentage: speech recognition first, then the speakers model. */
+export function overallPercent(step: SetupStepsModel['step'], bytes: [number, number] | null, speakersEnabled: boolean): number {
+	const fraction = bytes && bytes[1] > 0 ? Math.min(1, bytes[0] / bytes[1]) : 0
+	if (!speakersEnabled) return Math.round((step === 'speech' ? fraction : 1) * 100)
+	const whole = step === 'speech' ? fraction * SPEECH_SHARE : SPEECH_SHARE + fraction * (1 - SPEECH_SHARE)
+	return Math.round(whole * 100)
+}
 
 /**
- * First run (docs/design/2026-10-25-tyto-visual-language.md, «Первый запуск»): title, the
- * walking owl (the only owl on this screen, owner's call 2026-10-26), what is being downloaded and why, two steps with size and time left, privacy line and
- * two labelled ways out. Without a connection the same column explains it in place of a modal.
+ * Quiet first run (design round 6): the walking owl, «Tyto готовится · 17%», one thin bar for both
+ * models, one line about the download, and two small ways out at the bottom. Without a connection
+ * the same place says so and offers to try again.
  */
 export function SetupSteps({ vm }: { vm: SetupStepsModel }) {
 	const offline = vm.isOnline === false
 	const eta = useEta(vm.bytes)
-	const stateOf = (step: SetupStepsModel['step']): StepState => (vm.step === step ? 'active' : step === 'speech' ? 'done' : 'waiting')
+	const percent = overallPercent(vm.step, vm.bytes, vm.speakersEnabled)
+	const note = eta === null ? m.setupOnce() : eta < 60 ? m.setupOnceSoon() : m.setupOnceEta({ minutes: String(Math.round(eta / 60)) })
 
 	return (
-		<div className="flex min-h-screen items-center justify-center px-4 py-12">
-			<div className="w-full max-w-[460px]">
-				<h1 className="tyto-title-screen text-balance">{m.downloadingModel()}</h1>
+		<div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-12 text-center">
+			{/* The owl walks over the width of the bar. */}
+			<div className="w-[220px]">
 				<OwlWalk walking={!offline} />
+			</div>
 
-				{offline ? (
-					<div className="mt-6">
-						<WifiOff className="size-6 text-muted-foreground" aria-hidden="true" />
-						<h2 className="tyto-title-dialog mt-4">{m.noConnection()}</h2>
-						<p className="mt-2 text-sm text-muted-foreground">{m.infoManualDownload()}</p>
-						<div className="mt-6 flex items-center gap-2">
-							<Button variant="primary" onClick={vm.downloadIfOnline}>
-								{m.tryAgain()}
-							</Button>
-							<Button variant="ghost" onClick={vm.cancelSetup}>
-								{m.setupManualFile()}
-							</Button>
-						</div>
+			{offline ? (
+				<>
+					<h1 className="mt-6 flex items-center gap-2 text-[15px] font-medium text-foreground">
+						<WifiOff className="size-4 text-muted-foreground" aria-hidden="true" />
+						{m.noConnection()}
+					</h1>
+					<p className="mt-2 max-w-[360px] text-[13px] leading-[1.5] text-muted-foreground">{m.infoManualDownload()}</p>
+					<Button variant="primary" size="sm" className="mt-5" onClick={vm.downloadIfOnline}>
+						{m.tryAgain()}
+					</Button>
+				</>
+			) : (
+				<>
+					<h1 className="mt-6 text-[15px] font-medium text-foreground">
+						{m.setupPreparing()} <span className="font-normal text-muted-foreground">·</span>{' '}
+						<span className="font-mono text-[14px] tabular-nums">{percent}%</span>
+					</h1>
+					<div
+						role="progressbar"
+						aria-label={m.setupProgress()}
+						aria-valuemin={0}
+						aria-valuemax={100}
+						aria-valuenow={percent}
+						className="mt-3.5 h-[3px] w-[220px] overflow-hidden rounded-[2px] bg-[var(--tyto-track)]">
+						<div
+							className="h-full w-full origin-left bg-foreground transition-transform duration-200 ease-[var(--tyto-ease)] motion-reduce:transition-none"
+							style={{ transform: `scaleX(${percent / 100})` }}
+						/>
 					</div>
-				) : (
-					<>
-						<p className="mt-2 text-[15px] leading-[1.55] text-muted-foreground">{m.setupIntro()}</p>
-						<ol className="mt-6 rounded-[var(--tyto-r-lg)] border border-border">
-							<Step
-								n={1}
-								state={stateOf('speech')}
-								title={m.setupStepSpeech()}
-								description={m.setupStepSpeechDescription()}
-								bytes={vm.bytes}
-								eta={eta}
-							/>
-							{vm.speakersEnabled && (
-								<Step
-									n={2}
-									state={stateOf('speakers')}
-									title={m.setupStepSpeakers()}
-									description={m.setupStepSpeakersDescription()}
-									bytes={vm.bytes}
-									eta={eta}
-								/>
-							)}
-						</ol>
-						<p className="mt-4 flex items-start gap-2 text-[13px] leading-[1.45] text-muted-foreground">
-							<Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-							<span>{m.setupPrivacy()}</span>
-						</p>
-						<div className="mt-6 flex items-center gap-2">
-							<Button variant="secondary" size="sm" onClick={vm.cancelSetup}>
-								{m.setupCancelDownload()}
-							</Button>
-							<Button variant="ghost" size="sm" onClick={vm.cancelSetup}>
-								{m.iPreferManualSetup()}
-							</Button>
-						</div>
-					</>
+					<p className="mt-3.5 text-[13px] text-muted-foreground">{note}</p>
+				</>
+			)}
+
+			<div className="absolute bottom-7 flex gap-[18px] text-[12.5px] text-muted-foreground">
+				<button type="button" onClick={vm.cancelSetup} className="cursor-pointer hover:text-foreground">
+					{m.setupManual()}
+				</button>
+				{!offline && (
+					<button type="button" onClick={vm.cancelSetup} className="cursor-pointer hover:text-foreground">
+						{m.setupCancel()}
+					</button>
 				)}
 			</div>
 		</div>
 	)
-}
-
-function Step({
-	n,
-	state,
-	title,
-	description,
-	bytes,
-	eta,
-}: {
-	n: 1 | 2
-	state: StepState
-	title: string
-	description: string
-	bytes: [number, number] | null
-	eta: number | null
-}) {
-	const active = state === 'active'
-	const fraction = active && bytes && bytes[1] > 0 ? Math.min(1, bytes[0] / bytes[1]) : 0
-	const right = state === 'waiting' ? m.setupStepNext() : state === 'done' ? m.setupStepDone() : bytes ? formatSize(bytes) : null
-
-	return (
-		<li data-testid={`setup-step-${n}`} data-state={state} className={`grid grid-cols-[24px_1fr_auto] items-start gap-3 p-4 ${n > 1 ? 'border-t border-border' : ''}`}>
-			<span
-				className={`flex size-6 items-center justify-center rounded-full border text-[12px] font-medium tabular-nums ${
-					state === 'waiting' ? 'border-[var(--tyto-track)] text-muted-foreground' : 'border-foreground text-foreground'
-				}`}>
-				{state === 'done' ? <Check className="size-3.5" aria-label={m.setupStepDone()} /> : n}
-			</span>
-			<div>
-				<div className="text-sm font-medium">{title}</div>
-				<div className="mt-0.5 text-[12.5px] leading-[1.45] text-muted-foreground">{description}</div>
-			</div>
-			<div className="pt-0.5 text-right text-[12.5px] text-muted-foreground tabular-nums">{right}</div>
-			{active && (
-				<div className="col-start-2 col-end-4 mt-3">
-					<div
-						role="progressbar"
-						aria-label={title}
-						aria-valuemin={0}
-						aria-valuemax={100}
-						aria-valuenow={Math.round(fraction * 100)}
-						className="h-[3px] overflow-hidden rounded-[2px] bg-[var(--tyto-track)]">
-						<div
-							className="h-full w-full origin-left bg-foreground transition-transform duration-200 ease-[var(--tyto-ease)] motion-reduce:transition-none"
-							style={{ transform: `scaleX(${fraction})` }}
-						/>
-					</div>
-					{bytes && (
-						<div className="mt-2 flex justify-between text-[12px] text-muted-foreground tabular-nums">
-							<span>{Math.round(fraction * 100)}%</span>
-							<span>{formatEta(eta)}</span>
-						</div>
-					)}
-				</div>
-			)}
-		</li>
-	)
-}
-
-/** «1,0 из 1,6 ГБ» for the big model, «20 из 40 МБ» for files under a gigabyte (decimal units). */
-function formatSize([current, total]: [number, number]) {
-	const locale = getLocale()
-	if (total >= 1e9) {
-		const gb = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-		return m.setupSizeGb({ current: gb.format(current / 1e9), total: gb.format(total / 1e9) })
-	}
-	const mb = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
-	return m.setupSizeMb({ current: mb.format(current / 1e6), total: mb.format(total / 1e6) })
-}
-
-function formatEta(eta: number | null) {
-	if (eta === null) return ''
-	if (eta < 60) return m.setupEtaUnderMinute()
-	return m.setupEtaMinutes({ minutes: String(Math.round(eta / 60)) })
 }
 
 /** Remaining seconds of the current download, from the progress events seen so far. */

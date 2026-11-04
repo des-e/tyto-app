@@ -25,6 +25,8 @@ interface EmptyScreenProps {
 	waiting?: ReactNode
 	/** language and «Еще настройки» (QuietRow), restyled as links */
 	options: ReactNode
+	/** a one-time question above the cards (CallsQuestion) */
+	notice?: ReactNode
 }
 
 /** One step of the welcome. The order reads left to right; no index numbers (design review, Taste). */
@@ -43,7 +45,19 @@ function Step({ title, body }: { title: string; body: string }) {
  * run (no projects yet) greets with three steps; afterwards three short labels say what Tyto does.
  * The whole right-hand area still takes a dropped file (theme.css `.tyto-home*`).
  */
-export function EmptyScreen({ dragging, collectingFolder, firstRun, panel, onBrowse, onSelectPanel, recordCard, linkContent, waiting, options }: EmptyScreenProps) {
+export function EmptyScreen({
+	dragging,
+	collectingFolder,
+	firstRun,
+	panel,
+	onBrowse,
+	onSelectPanel,
+	recordCard,
+	linkContent,
+	waiting,
+	options,
+	notice,
+}: EmptyScreenProps) {
 	const linkOpen = panel === 'link'
 
 	return (
@@ -86,6 +100,8 @@ export function EmptyScreen({ dragging, collectingFolder, firstRun, panel, onBro
 						<Step title={m.tytoHomeStep3Title()} body={m.tytoHomeStep3Body()} />
 					</ol>
 				)}
+
+				{notice}
 
 				<div className="tyto-home-cards">
 					{recordCard}

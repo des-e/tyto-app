@@ -171,10 +171,9 @@ describe('tyto theme tokens', () => {
 		}
 	})
 
-	it('setup progress bar and waiting step circle use the shared track token', () => {
+	it('setup progress bar uses the shared track token', () => {
 		const setup = read('lib/tyto/setup-steps.tsx')
 		expect(setup).toContain('bg-[var(--tyto-track)]')
-		expect(setup).toContain('border-[var(--tyto-track)]')
 		expect(setup).not.toMatch(/\bbg-border\b/)
 	})
 
