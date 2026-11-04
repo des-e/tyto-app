@@ -33,7 +33,7 @@ function record(name: string, texts: string[], audioFile?: string) {
 
 /** A project folder: the record plus the copy of the media it was transcribed from. */
 function seedProject(name: string, stamp: string, texts: string[]) {
-	const folder = `${DOCUMENTS_FOLDER}/Vibe/${name}-${stamp}`
+	const folder = `${DOCUMENTS_FOLDER}/Tyto/${name}-${stamp}`
 	virtualFs.set(`${folder}/transcript.vibe.json`, record(name, texts, 'audio.mp3'))
 	virtualFs.set(`${folder}/audio.mp3`, null)
 }
@@ -49,9 +49,47 @@ seedProject('podcast-episode', '20260818-174200', [
 	'Thanks for listening, see you next week.',
 ])
 
+// A Russian meeting with speakers, a summary and topics: the transcript screen of the design canvas (page 3).
+{
+	const folder = `${DOCUMENTS_FOLDER}/Tyto/Планерка отдела продаж-20261029-100000`
+	const lines: [number, number, string][] = [
+		[0, 0, 'Давайте начнем с поставок. По второму складу сроки сдвигаются на неделю.'],
+		[9, 1, 'Это из-за перевозчика? Они обещали машину на четверг.'],
+		[14, 1, 'Если не успеют, клиенту надо сказать сегодня, а не в пятницу.'],
+		[21, 0, 'Да, перевозчик. Я напишу клиенту после созвона и предложу частичную отгрузку.'],
+		[33, 2, 'Частичную можем собрать к среде, остатки есть на первом складе.'],
+		[460, 3, 'По частичной отгрузке: клиент обычно соглашается, если дать дату на остаток.'],
+		[920, 0, 'Теперь бюджет на ноябрь. Предлагаю оставить как в октябре.'],
+		[1445, 4, 'Перевозчика надо менять, это уже третий сдвиг за квартал.'],
+		[1990, 5, 'Кладовщика ищем с понедельника, вакансия уже висит.'],
+		[2490, 6, 'Итого: Денис пишет клиенту, Андрей собирает отгрузку к среде.'],
+	]
+	virtualFs.set(
+		`${folder}/transcript.vibe.json`,
+		JSON.stringify({
+			version: 1,
+			name: 'Планерка отдела продаж',
+			sourcePath: `${DOCUMENTS_FOLDER}/planerka.mp3`,
+			createdAt: new Date(2026, 9, 29, 10, 0).toISOString(),
+			language: 'russian',
+			audioFile: 'audio.mp3',
+			segments: lines.map(([seconds, speaker, text], index) => ({
+				start: seconds * 100,
+				stop: (lines[index + 1]?.[0] ?? 2880) * 100 - 50,
+				text,
+				speaker,
+			})),
+			speakerNames: { 0: 'Денис', 1: 'Ольга Смирнова', 2: 'Андрей', 3: 'Мария Ковалева' },
+			summary:
+				'Обсудили сдвиг поставки по второму складу на неделю из-за перевозчика. Клиенту предложат частичную отгрузку в среду, Денис напишет ему сегодня. Еще согласовали бюджет на ноябрь и начали искать кладовщика.\n\n### Темы\n\n- **00:00** Поставки по второму складу\n- **07:40** Частичная отгрузка клиенту\n- **15:20** Бюджет на ноябрь\n- **24:05** Новый перевозчик\n- **33:10** Найм кладовщика\n- **41:30** Итоги и задачи',
+		}),
+	)
+	virtualFs.set(`${folder}/audio.mp3`, null)
+}
+
 // One save in the pre-project-folder layout, so the mock keeps exercising back-compat.
 virtualFs.set(
-	`${DOCUMENTS_FOLDER}/Vibe/legacy-interview-20260810-101500.vibe.json`,
+	`${DOCUMENTS_FOLDER}/Tyto/legacy-interview-20260810-101500.vibe.json`,
 	record('legacy-interview', ['This transcript was saved as a flat file by an older build.', 'It still opens, renames and deletes in place.']),
 )
 

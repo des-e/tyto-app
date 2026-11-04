@@ -76,6 +76,16 @@
 	--tyto-danger: #b4453c;
 	/* Progress tracks and unplayed timeline pieces: >= 3:1 on the page and the sidebar (WCAG 1.4.11). */
 	--tyto-track: #8a8a8a;
+	/* Speakers: the first six have a colour, the rest grey (speaker-mark.tsx). */
+	--tyto-speaker-0: #a8a8a8;
+	--tyto-speaker-1: #5a86d6;
+	--tyto-speaker-2: #e8915a;
+	--tyto-speaker-3: #4fa877;
+	--tyto-speaker-4: #b475d1;
+	--tyto-speaker-5: #d3a62a;
+	--tyto-speaker-6: #3fa6b6;
+	/* The current line and the current topic: a quiet grey plate. */
+	--tyto-line-active: #f2f2f2;
 }
 
 .dark {
@@ -136,6 +146,14 @@
 	/* Upstream's dark --destructive (#c4655c) gives white text only 3.9:1, so the button plate keeps the deeper red. */
 	--tyto-danger: #b4453c;
 	--tyto-track: #66666e;
+	--tyto-speaker-0: #6b6b72;
+	--tyto-speaker-1: #6f97e0;
+	--tyto-speaker-2: #e8915a;
+	--tyto-speaker-3: #5bb583;
+	--tyto-speaker-4: #bd85d8;
+	--tyto-speaker-5: #d8b040;
+	--tyto-speaker-6: #4fb3c2;
+	--tyto-line-active: #1c1c1c;
 }
 
 /* Sidebar surface. On macOS vibrancy the sidebar stays see-through, as upstream intends. */
@@ -822,7 +840,7 @@ svg.lucide {
  * speaker are 4 px apart (the list gap), a new speaker starts 20 + 4 px lower. The current line gets a
  * 2 px rule at its start edge. No grey plates.
  */
-.tyto-script-doc > :is(button, input, p),
+.tyto-script-doc > :is(button, input, p, .tyto-doc-indent),
 .tyto-script-doc > .animate-pulse {
 	margin-inline-start: 76px;
 	max-width: calc(100% - 76px);
@@ -913,16 +931,19 @@ svg.lucide {
 .tyto-script-text::before {
 	content: '';
 	position: absolute;
-	inset-inline-start: calc(-1 * var(--tyto-sp-12));
-	top: 5px;
-	bottom: 5px;
-	width: 2px;
-	border-radius: 2px;
-	background: var(--foreground);
+	z-index: -1;
+	inset: 0 calc(-1 * var(--tyto-sp-8));
+	border-radius: var(--tyto-r-sm);
+	background: var(--tyto-line-active);
 	opacity: 0;
 	transition: opacity 200ms var(--tyto-ease);
 }
 
+.tyto-script-text {
+	isolation: isolate;
+}
+
+/* The line being spoken sits on a grey plate (design round 3), no rule at its edge. */
 .tyto-script-line[data-active='true'] .tyto-script-text::before {
 	opacity: 1;
 }
@@ -965,92 +986,161 @@ svg.lucide {
 	flex-shrink: 0;
 }
 
-/* Speaker mark (difference 7): 18 px square, filled / outlined / grey, tells speakers apart without colour. */
+/* Speaker mark (speaker-mark.tsx): a coloured dot in the text, a pale round badge in the participant list. */
 .tyto-speaker-mark {
+	--tyto-speaker: var(--tyto-speaker-0);
 	display: inline-flex;
+	flex-shrink: 0;
 	align-items: center;
 	justify-content: center;
 	box-sizing: border-box;
-	min-width: 18px;
-	height: 18px;
-	padding: 0 var(--tyto-sp-2);
-	border-radius: var(--tyto-r-xs);
-	font-size: 10.5px;
-	line-height: 1;
+	border-radius: 999px;
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	print-color-adjust: exact;
 	-webkit-print-color-adjust: exact;
 }
 
-.tyto-speaker-mark[data-tone='filled'] {
-	background: var(--foreground);
-	color: var(--background);
+.tyto-speaker-mark[data-color='1'] { --tyto-speaker: var(--tyto-speaker-1); }
+.tyto-speaker-mark[data-color='2'] { --tyto-speaker: var(--tyto-speaker-2); }
+.tyto-speaker-mark[data-color='3'] { --tyto-speaker: var(--tyto-speaker-3); }
+.tyto-speaker-mark[data-color='4'] { --tyto-speaker: var(--tyto-speaker-4); }
+.tyto-speaker-mark[data-color='5'] { --tyto-speaker: var(--tyto-speaker-5); }
+.tyto-speaker-mark[data-color='6'] { --tyto-speaker: var(--tyto-speaker-6); }
+
+.tyto-speaker-mark[data-variant='dot'] {
+	width: 8px;
+	height: 8px;
+	background: var(--tyto-speaker);
 }
 
-.tyto-speaker-mark[data-tone='outline'] {
-	border: 1.5px solid var(--foreground);
+.tyto-speaker-mark[data-variant='avatar'] {
+	width: 22px;
+	height: 22px;
+	font-size: 11px;
+	line-height: 1;
 	color: var(--foreground);
+	background: color-mix(in srgb, var(--tyto-speaker) 26%, var(--background));
 }
 
-.tyto-speaker-mark[data-tone='grey'] {
-	background: var(--tyto-line2);
-	color: var(--foreground);
+/* Overlapping badges on the «N участников» plate. */
+.tyto-people-faces {
+	display: flex;
+}
+
+.tyto-people-faces > .tyto-speaker-mark {
+	width: 16px;
+	height: 16px;
+	font-size: 0;
+	border: 1.5px solid var(--background);
+}
+
+.tyto-people-faces > .tyto-speaker-mark + .tyto-speaker-mark {
+	margin-inline-start: -6px;
 }
 
 /*
- * Text tabs «Текст / Сводка / Темы» (lib/tyto/transcript-tabs.tsx, difference 10): the full height of
- * the toolbar, a 2 px rule under the active tab sitting on the toolbar's bottom line.
+ * «Саммари · Темы · ИИ-разбор» over the text (transcript-toolbar.tsx, design round 3): toggles, the
+ * pressed one on a grey plate.
  */
-.tyto-tabs {
-	display: flex;
-	align-self: stretch;
-	height: calc(var(--tyto-bar-h) - 1px);
-}
-
-.tyto-tab {
-	position: relative;
+.tyto-toggle {
 	display: inline-flex;
 	align-items: center;
-	height: 100%;
-	padding: 0 var(--tyto-sp-12);
+	gap: 6px;
+	height: 28px;
+	padding: 0 10px;
 	border: 0;
-	background: none;
-	font-size: 13.5px;
+	border-radius: var(--tyto-r-sm);
+	background: transparent;
+	font-size: 13px;
 	color: var(--muted-foreground);
 	cursor: pointer;
-	transition: color 150ms var(--tyto-ease);
+	transition: background-color 150ms var(--tyto-ease), color 150ms var(--tyto-ease);
 }
 
-.tyto-tab:hover:not(:disabled) {
+.tyto-toggle:hover:not(:disabled) {
 	color: var(--foreground);
+	background: var(--tyto-line-active);
 }
 
-.tyto-tab[aria-selected='true'] {
+.tyto-toggle[aria-pressed='true'] {
 	color: var(--foreground);
 	font-weight: 500;
+	background: var(--tyto-nav-selected);
 }
 
-.tyto-tab[aria-selected='true']::after {
-	content: '';
-	position: absolute;
-	inset-inline: var(--tyto-sp-12);
-	bottom: -1px;
-	height: 2px;
-	border-radius: 2px;
-	background: var(--foreground);
-}
-
-/* Unavailable tabs read fainter than inactive ones (muted), still ≥3:1. */
-.tyto-tab:disabled {
+.tyto-toggle:disabled {
 	color: var(--tyto-faint);
 	cursor: not-allowed;
 }
 
-.tyto-tab:focus-visible {
+.tyto-toggle:focus-visible {
 	outline: 2px solid var(--foreground);
-	outline-offset: -4px;
+	outline-offset: 1px;
+}
+
+/* The summary at the start of the text. */
+.tyto-summary-card {
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+}
+
+.tyto-summary-text {
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--foreground);
+}
+
+.tyto-summary-text > * + * {
+	margin-top: 8px;
+}
+
+.tyto-summary-text :is(ul, ol) {
+	padding-inline-start: 18px;
+	list-style: disc;
+}
+
+/* Topics column at the right: a click moves the player, the current topic sits on a grey plate. */
+.tyto-topic {
+	display: grid;
+	grid-template-columns: 44px minmax(0, 1fr);
+	gap: 6px;
+	width: 100%;
+	padding: 6px 8px;
+	border: 0;
 	border-radius: var(--tyto-r-sm);
+	background: transparent;
+	text-align: start;
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--foreground);
+	cursor: pointer;
+	transition: background-color 150ms var(--tyto-ease);
+}
+
+.tyto-topic:hover {
+	background: var(--tyto-line-active);
+}
+
+.tyto-topic[aria-current='true'] {
+	font-weight: 500;
+	background: var(--tyto-line-active);
+}
+
+.tyto-topic:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: -2px;
+}
+
+.tyto-topic-time {
+	padding-top: 1px;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	font-weight: 400;
+	color: var(--tyto-faint);
+	font-variant-numeric: tabular-nums;
 }
 
 /*
@@ -1857,7 +1947,7 @@ svg.lucide {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	:is(.tyto-script-time, .tyto-script-play, .tyto-script-text, .tyto-script-aside, .tyto-tab, .tyto-empty-drop, .tyto-recent, .tyto-mini-progress > div),
+	:is(.tyto-script-time, .tyto-script-play, .tyto-script-text, .tyto-script-aside, .tyto-toggle, .tyto-topic, .tyto-empty-drop, .tyto-recent, .tyto-mini-progress > div),
 	.tyto-script-text::before {
 		transition: none;
 	}

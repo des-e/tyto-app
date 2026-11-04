@@ -65,6 +65,8 @@ export interface Job {
 	thread?: AiThreadEntry[]
 	/** Names the user gave the diarized speakers, by zero-based speaker index. */
 	speakerNames?: SpeakerNames
+	/** When the recording was made (ISO 8601): from the saved project, else when the job was queued. */
+	createdAt?: string
 	/** What auto-export did with this transcript, when it ran. */
 	exported?: AutoExportResult
 }
@@ -596,6 +598,7 @@ export function useTranscribeQueue(): TranscribeQueue {
 				status: 'queued',
 				progress: 0,
 				segments: [],
+				createdAt: new Date().toISOString(),
 			}))
 			commit([...jobsRef.current, ...created])
 			if (!selectedIdRef.current) select(created[0].id)
@@ -625,6 +628,7 @@ export function useTranscribeQueue(): TranscribeQueue {
 				summary: record.summary,
 				thread: record.thread,
 				speakerNames: record.speakerNames,
+				createdAt: record.createdAt,
 			}
 			pinnedRef.current = true
 			commit(runningRef.current ? [...jobsRef.current, job] : [job])

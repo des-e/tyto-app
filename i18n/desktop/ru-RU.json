@@ -887,5 +887,17 @@
 	"tytoAiInLevel": "Есть в уровне",
 	"tytoAiReviewLevels": "В уровнях Сипуха и Филин",
 	"tytoAiOwnOnly": "Вопросы по записи и чистка диктовки",
-	"tytoAiOwnOnlyInfo": "Работают со своим ключом или Ollama"
+	"tytoAiOwnOnlyInfo": "Работают со своим ключом или Ollama",
+	"transcriptParticipantsOne": "{count} участник",
+	"transcriptParticipantsFew": "{count} участника",
+	"transcriptParticipantsMany": "{count} участников",
+	"transcriptParticipantsHint": "Нажмите на имя, чтобы переименовать. Имя сменится во всем тексте.",
+	"transcriptAiNeeded": "Саммари и темы делает ИИ-ассистент: короткий пересказ и оглавление записи по времени.",
+	"transcriptTopicsNeedAi": "Темы делает ИИ-ассистент: он разобьет запись на части по времени.",
+	"transcriptAiWays": "Tyto ИИ по коду из Telegram, свой ключ или Ollama на этом компьютере.",
+	"transcriptAiConnect": "Подключить",
+	"transcriptMakeSummary": "Сделать саммари и темы",
+	"transcriptTopicsNone": "В этом саммари нет тем. Сделайте его заново, и они появятся.",
+	"transcriptReviewEmpty": "О чем говорили, какие задачи поставили (кто, что, срок) и таймлайн по времени записи.",
+	"transcriptAskEmpty": "Спросите что-нибудь о записи: ответ появится здесь и сохранится в проекте."
 }

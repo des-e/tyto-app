@@ -1,18 +1,14 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Download, NotebookPen, Pencil, PilcrowLeft, PilcrowRight, Plus, Search, Settings2, Sparkles, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { splitSummary } from '~/lib/ai'
+import { ChevronDown, Download, PilcrowLeft, PilcrowRight, Search, Settings2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
 import { usePreferenceProvider } from '~/providers/preference'
 import { Button } from '~/components/ui/button'
-import ResummarizeDialog from '~/components/resummarize-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '~/components/ui/popover'
 import { Spinner } from '~/components/ui/spinner'
 import { Switch } from '~/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
-import { cn } from '~/lib/style'
 import { SegmentedControl } from '~/lib/tyto/segmented-control'
-import { TranscriptTabs } from '~/lib/tyto/transcript-tabs'
 import type { TextFormat } from '~/components/format-select'
 import type { Job } from '../hooks/use-transcribe-queue'
 import type { TranscriptTab, TranscriptTextSize, TranscriptViewOptions } from '../hooks/use-transcript-view'
@@ -85,101 +81,54 @@ function ViewOptions({ options }: { options: TranscriptViewOptions }) {
 }
 
 /**
- * Everything the AI step can do for the open transcript, behind one icon — same popover grammar as
- * the view options, so the toolbar keeps its shape whether or not a summary exists.
+ * «Саммари · Темы · ИИ-разбор» at the start of the toolbar (design round 3). The first two show and
+ * hide their blocks around the text, and the first press on a transcript without a summary makes one
+ * (the same request brings the topics). «ИИ-разбор» puts the review in place of the text.
  */
-function SummaryMenu({ job, tab, setTab }: { job: Job | null; tab: TranscriptTab; setTab: (tab: TranscriptTab) => void }) {
+function AiToggles({
+	job,
+	options,
+	tab,
+	setTab,
+}: {
+	job: Job | null
+	options: TranscriptViewOptions
+	tab: TranscriptTab
+	setTab: (tab: TranscriptTab) => void
+}) {
 	const { summaries } = useSession()
-	const [open, setOpen] = useState(false)
-	const [promptOpen, setPromptOpen] = useState(false)
-
 	const summarizing = job ? Boolean(summaries.pending[job.id]) : false
-	const summaryError = job ? summaries.errors[job.id] : undefined
-	const hasSummary = Boolean(job?.summary)
-	const hasText = (job?.segments.length ?? 0) > 0
-	const canSummarize = summaries.enabled && hasText && job?.status !== 'running'
-	const actionLabel =
-		!canSummarize && hasSummary
-			? m.summaryTab()
-			: summarizing
-				? m.summarizeLoading()
-				: summaryError
-					? m.retrySummary()
-					: hasSummary
-						? m.regenerateSummary()
-						: m.summarizeTranscript()
+	const reviewing = job ? Boolean(summaries.reviewing[job.id]) : false
+	const canSummarize = Boolean(job) && summaries.enabled && (job?.segments.length ?? 0) > 0 && job?.status !== 'running'
 
-	// Nothing to offer: the feature is off in settings and this transcript has no summary either.
-	if (!canSummarize && !hasSummary) return null
-
-	function run(prompt?: string) {
-		setOpen(false)
-		if (job) void summaries.summarize(job, prompt)
+	function show(set: (value: boolean) => void, on: boolean) {
+		const next = !on
+		set(next)
+		if (tab === 'review') setTab('transcript')
+		if (next && job && !job.summary && canSummarize && !summarizing) void summaries.summarize(job)
 	}
 
+	const summaryOn = options.showSummary && tab === 'transcript'
+	const topicsOn = options.showTopics && tab === 'transcript'
+
 	return (
-		<>
-			<Popover open={open} onOpenChange={setOpen}>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<PopoverTrigger asChild>
-							<Button variant="ghost" size="sm" aria-label={actionLabel}>
-								{summarizing ? <Spinner className="h-3.5 w-3.5" /> : <NotebookPen className="h-3.5 w-3.5" />}
-								<span className="@max-[720px]:sr-only">{actionLabel}</span>
-							</Button>
-						</PopoverTrigger>
-					</TooltipTrigger>
-					<TooltipContent>{actionLabel}</TooltipContent>
-				</Tooltip>
-				<PopoverContent align="end" className="w-64 rounded-[var(--tyto-r-lg)] p-4">
-					<p className="tyto-eyebrow mb-2">{m.aiSection()}</p>
-
-					<div className="space-y-3">
-						{hasSummary && (
-							<SegmentedControl
-								ariaLabel={m.aiSection()}
-								value={tab}
-								options={[
-									{ value: 'transcript', label: m.segmentsTab() },
-									{ value: 'summary', label: m.summaryTab() },
-								]}
-								onChange={setTab}
-								className="flex w-full [&>button]:flex-1"
-							/>
-						)}
-
-						<div className={cn('space-y-0.5', hasSummary && 'border-t border-border pt-2')}>
-							{canSummarize && (
-								<button
-									type="button"
-									disabled={summarizing}
-									onClick={() => run()}
-									className="flex w-full cursor-pointer items-center gap-2.5 rounded-[var(--tyto-r-sm)] px-2 py-2 text-start text-sm text-foreground transition-colors duration-150 hover:bg-muted/70 disabled:pointer-events-none disabled:opacity-50">
-									<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-									{summaryError ? m.retrySummary() : hasSummary ? m.regenerateSummary() : m.summarizeTranscript()}
-								</button>
-							)}
-							{canSummarize && !summaries.tyto && (
-								<button
-									type="button"
-									disabled={summarizing}
-									onClick={() => {
-										setOpen(false)
-										setPromptOpen(true)
-									}}
-									className="flex w-full cursor-pointer items-center gap-2.5 rounded-[var(--tyto-r-sm)] px-2 py-2 text-start text-sm text-foreground transition-colors duration-150 hover:bg-muted/70 disabled:pointer-events-none disabled:opacity-50">
-									<Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-									{m.customizeSummary()}
-								</button>
-							)}
-							{summaryError && <p className="px-2 pt-1 text-xs text-destructive">{m.summaryFailed()}</p>}
-						</div>
-					</div>
-				</PopoverContent>
-			</Popover>
-
-			<ResummarizeDialog open={promptOpen} onOpenChange={setPromptOpen} loading={summarizing} onSubmit={(prompt) => run(prompt)} />
-		</>
+		<div className="flex items-center gap-1">
+			<button type="button" aria-pressed={summaryOn} onClick={() => show(options.setShowSummary, summaryOn)} className="tyto-toggle">
+				{summarizing && <Spinner className="h-3 w-3" />}
+				{m.summaryTab()}
+			</button>
+			<button type="button" aria-pressed={topicsOn} onClick={() => show(options.setShowTopics, topicsOn)} className="tyto-toggle">
+				{m.topicsTab()}
+			</button>
+			<button
+				type="button"
+				aria-pressed={tab === 'review'}
+				onClick={() => setTab(tab === 'review' ? 'transcript' : 'review')}
+				className="tyto-toggle">
+				{reviewing && <Spinner className="h-3 w-3" />}
+				{m.tytoAiReview()}
+			</button>
+		</div>
 	)
 }
 
@@ -198,7 +147,7 @@ export default function TranscriptToolbar({
 	tab: TranscriptTab
 	setTab: (tab: TranscriptTab) => void
 }) {
-	const { queue, startNew, summaries } = useSession()
+	const { queue } = useSession()
 	const preference = usePreferenceProvider()
 	const [exportOpen, setExportOpen] = useState(false)
 	const autoExport = preference.autoExport
@@ -256,17 +205,11 @@ export default function TranscriptToolbar({
 
 	const hasText = (job?.segments.length ?? 0) > 0
 	const hasExportContent = hasText || Boolean(job?.summary)
-	const topicsReady = useMemo(() => (job?.summary ? splitSummary(job.summary).topics.length > 0 : false), [job?.summary])
 
 	return (
 		<>
-			<div className="@container sticky top-0 z-10 flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background/85 px-4 backdrop-blur-md">
-				<TranscriptTabs
-					tab={tab}
-					setTab={setTab}
-					summaryReady={Boolean(job?.summary) || (summaries.enabled && hasText && job?.status !== 'running')}
-					topicsReady={topicsReady}
-				/>
+			<div className="@container sticky top-0 z-10 flex h-12 shrink-0 items-center gap-1 bg-background ps-8 pe-4">
+				<AiToggles job={job} options={options} tab={tab} setTab={setTab} />
 				<AnimatePresence initial={false} mode="wait">
 					{searching ? (
 						<motion.div
@@ -302,11 +245,23 @@ export default function TranscriptToolbar({
 							exit={{ opacity: 0, y: -4 }}
 							transition={{ duration: 0.15, ease: 'easeOut' }}
 							className="flex min-w-0 flex-1 items-center justify-end gap-1">
+							{queue.running && (
+								<Button variant="ghost" size="sm" onClick={queue.cancelAll} disabled={queue.isAborting}>
+									{queue.isAborting ? m.aborting() : m.cancel()}
+								</Button>
+							)}
+
+							<Button variant="ghost" size="md" iconOnly aria-label={m.searchTranscript()} onClick={() => setSearching(true)} disabled={!hasText}>
+								<Search className="h-4 w-4" />
+							</Button>
+
+							<ViewOptions options={options} />
+
 							{queue.jobs.length > 1 ? (
 								/* A batch: the same word, with everything that writes files behind it. */
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
-										<Button variant="secondary" size="sm">
+										<Button variant="secondary" size="sm" className="ms-1.5">
 											<Download className="h-3.5 w-3.5" />
 											{m.exportDialogTitle()}
 											<ChevronDown className="h-3 w-3 opacity-70" />
@@ -333,36 +288,12 @@ export default function TranscriptToolbar({
 									</DropdownMenuContent>
 								</DropdownMenu>
 							) : (
-								<Button variant="secondary" size="sm" onClick={openExport} disabled={!hasExportContent}>
+								<Button variant="secondary" size="sm" className="ms-1.5" onClick={openExport} disabled={!hasExportContent}>
 									<Download className="h-3.5 w-3.5" />
 									{m.exportDialogTitle()}
 								</Button>
 							)}
 
-							<Button variant="ghost" size="md" iconOnly aria-label={m.searchTranscript()} onClick={() => setSearching(true)} disabled={!hasText}>
-								<Search className="h-3.5 w-3.5" />
-							</Button>
-
-							<SummaryMenu job={job} tab={tab} setTab={setTab} />
-
-							<ViewOptions options={options} />
-
-							<div className="flex items-center gap-1">
-								{queue.running && (
-									<Button variant="ghost" size="sm" onClick={queue.cancelAll} disabled={queue.isAborting}>
-										{queue.isAborting ? m.aborting() : m.cancel()}
-									</Button>
-								)}
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button variant="ghost" size="sm" aria-label={m.newSession()} onClick={startNew}>
-											<Plus className="h-3.5 w-3.5" />
-											<span className="@max-[720px]:sr-only">{m.newSession()}</span>
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>{m.newSession()}</TooltipContent>
-								</Tooltip>
-							</div>
 						</motion.div>
 					)}
 				</AnimatePresence>

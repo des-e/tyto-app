@@ -20,12 +20,17 @@ export default function SessionView() {
 		setTab('transcript')
 	}, [queue.selectedId])
 
-	// A summary that starts, by hand or on its own, opens its tab once so the text is seen arriving.
+	// A summary that starts, by hand or on its own, turns its block and the topics on, so it is seen arriving.
+	const { setShowSummary, setShowTopics } = options
 	useEffect(() => {
 		if (!summaries.showSummary) return
-		if (summaries.showSummary === queue.selectedId) setTab('summary')
+		if (summaries.showSummary === queue.selectedId) {
+			setShowSummary(true)
+			setShowTopics(true)
+			setTab('transcript')
+		}
 		summaries.clearShowSummary()
-	}, [queue.selectedId, summaries])
+	}, [queue.selectedId, summaries, setShowSummary, setShowTopics])
 
 	return (
 		<motion.div

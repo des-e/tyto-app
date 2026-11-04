@@ -887,5 +887,17 @@
 	"tytoAiInLevel": "In your level",
 	"tytoAiReviewLevels": "Сипуха and Филин levels",
 	"tytoAiOwnOnly": "Questions about a recording and dictation cleanup",
-	"tytoAiOwnOnlyInfo": "Work with your own key or Ollama"
+	"tytoAiOwnOnlyInfo": "Work with your own key or Ollama",
+	"transcriptParticipantsOne": "{count} participant",
+	"transcriptParticipantsFew": "{count} participants",
+	"transcriptParticipantsMany": "{count} participants",
+	"transcriptParticipantsHint": "Click a name to rename it. The name changes across the whole text.",
+	"transcriptAiNeeded": "The AI assistant writes the summary and topics: a short recap and a timed outline of the recording.",
+	"transcriptTopicsNeedAi": "The AI assistant writes the topics: it splits the recording into timed parts.",
+	"transcriptAiWays": "Tyto AI with a code from Telegram, your own key, or Ollama on this computer.",
+	"transcriptAiConnect": "Connect",
+	"transcriptMakeSummary": "Make summary and topics",
+	"transcriptTopicsNone": "This summary has no topics. Make it again and they will appear.",
+	"transcriptReviewEmpty": "What was discussed, which tasks were set (who, what, by when) and a timeline of the recording.",
+	"transcriptAskEmpty": "Ask anything about the recording: the answer appears here and is saved with the project."
 }

@@ -15,10 +15,12 @@ import type { Job } from '../hooks/use-transcribe-queue'
 import { textSizeClass, type TranscriptTab, type TranscriptViewOptions } from '../hooks/use-transcript-view'
 import { PLAYER_SEEK_EVENT, PLAYER_TOGGLE_EVENT, PLAYER_TIME_EVENT, type PlayerTimeDetail } from './player-bar'
 import { ProjectNameEditor } from './project-name-editor'
+import { ParticipantsButton } from './participants-button'
 import QuietRow from './quiet-row'
+import ReviewView from './review-view'
 import { SpeakerLabel } from './speaker-label'
-import SummaryView from './summary-view'
-import TopicsView from './topics-view'
+import SummaryBlock from './summary-view'
+import TopicsColumn from './topics-view'
 
 /** Segment timestamps are centiseconds (see `formatTimestamp` / `asJson` in lib/transcript). */
 const CENTISECONDS_PER_SECOND = 100
@@ -35,6 +37,25 @@ type CaretIntent = { start: number; end: number } | 'start' | 'end'
 interface EditTarget {
 	index: number
 	caret: CaretIntent
+}
+
+/** «29 октября», with the year only when it is not this year's. */
+function recordingDate(iso: string | undefined): string {
+	if (!iso) return ''
+	const date = new Date(iso)
+	if (Number.isNaN(date.getTime()) || date.getTime() <= 0) return ''
+	const sameYear = date.getFullYear() === new Date().getFullYear()
+	return new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) }).format(date)
+}
+
+/** «48:00» or «1:12:30» from centiseconds. */
+function recordingLength(centiseconds: number): string {
+	const total = Math.round(centiseconds / CENTISECONDS_PER_SECOND)
+	if (total <= 0) return ''
+	const h = Math.floor(total / 3600)
+	const mm = String(Math.floor((total % 3600) / 60)).padStart(h ? 2 : 1, '0')
+	const ss = String(total % 60).padStart(2, '0')
+	return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -591,11 +612,15 @@ export default function TranscriptView({
 	const canTranscribeSaved =
 		job.hydrated === true && ['done', 'error', 'cancelled'].includes(job.status) && job.segments.length === 0 && Boolean(job.savedPath && job.path)
 
-	if (tab === 'summary') return <SummaryView job={job} options={options} />
-	if (tab === 'topics') return <TopicsView job={job} options={options} />
+	if (tab === 'review') return <ReviewView job={job} options={options} />
+
+	const date = recordingDate(job.createdAt)
+	const length = recordingLength(job.segments[job.segments.length - 1]?.stop ?? 0)
+	const hasMeta = Boolean(date || length || speakers.length)
 
 	return (
-		<div className="relative h-full min-h-0">
+		<div className="flex h-full min-h-0">
+		<div className="relative h-full min-h-0 min-w-0 flex-1">
 			<div ref={scrollRef} onScroll={onScroll} className="transcript-editor h-full min-h-0 overflow-x-hidden overflow-y-auto">
 				<div dir={preference.textAreaDirection} className="tyto-script-doc mx-auto w-full max-w-[86ch] px-8 py-10 xl:max-w-[96ch]">
 					<ProjectNameEditor
@@ -604,6 +629,21 @@ export default function TranscriptView({
 						onDraftChange={(name) => queue.previewJobName(job.id, name)}
 						onRename={(name) => queue.renameJob(job.id, name)}
 					/>
+
+					{hasMeta && !canTranscribeSaved && (
+						<div className="tyto-doc-indent -mt-6 mb-5 flex flex-wrap items-center gap-2.5 text-[13px] text-muted-foreground">
+							{(date || length) && (
+								<span>
+									{date}
+									{date && length && ' · '}
+									{length && <span className="font-mono tabular-nums">{length}</span>}
+								</span>
+							)}
+							<ParticipantsButton speakers={speakers} speakerNames={job.speakerNames} editable={editable} onRename={renameSpeaker} />
+						</div>
+					)}
+
+					{options.showSummary && !canTranscribeSaved && !query && <SummaryBlock job={job} />}
 
 					{job.status === 'error' && <p className="mb-8 text-sm text-destructive">{job.error}</p>}
 
@@ -688,6 +728,8 @@ export default function TranscriptView({
 					</motion.button>
 				)}
 			</AnimatePresence>
+		</div>
+		{options.showTopics && !canTranscribeSaved && <TopicsColumn job={job} />}
 		</div>
 	)
 }

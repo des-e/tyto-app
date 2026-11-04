@@ -9,6 +9,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 const h = vi.hoisted(() => ({
 	listeners: new Map<string, (event: { payload: unknown }) => void>(),
 	queue: {} as Record<string, ReturnType<typeof vi.fn>>,
+	summaries: {} as Record<string, unknown>,
 }))
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -23,14 +24,14 @@ vi.mock('@tauri-apps/plugin-store', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 vi.mock('~/providers/preference', () => ({ usePreferenceProvider: () => ({ textAreaDirection: 'ltr', modelPath: '/m.bin' }) }))
-vi.mock('~/pages/main/session', () => ({ useSession: () => ({ queue: h.queue }) }))
+vi.mock('~/pages/main/session', () => ({ useSession: () => ({ queue: h.queue, summaries: h.summaries }) }))
 vi.mock('~/pages/main/components/player-bar', () => ({
 	PLAYER_SEEK_EVENT: 'vibe:player-seek',
 	PLAYER_TIME_EVENT: 'vibe:player-time',
 	PLAYER_TOGGLE_EVENT: 'vibe:player-toggle',
 }))
 vi.mock('~/pages/main/components/quiet-row', () => ({ default: () => null }))
-vi.mock('~/pages/main/components/summary-view', () => ({ default: () => <div data-testid="summary-view" /> }))
+vi.mock('~/lib/app', () => ({ openSettingsSection: vi.fn() }))
 // jsdom has no layout: the virtualizer would render nothing, so it hands every row over.
 vi.mock('@tanstack/react-virtual', () => ({
 	defaultRangeExtractor: () => [],
@@ -49,8 +50,8 @@ import TranscriptView from '~/pages/main/components/transcript-view'
 import { SpeakerLabel } from '~/pages/main/components/speaker-label'
 import { useDropTarget } from '~/pages/main/hooks/use-drop-target'
 import { EmptyScreen } from './empty-screen'
+import { participantsLabel } from '~/pages/main/components/participants-button'
 import { SpeakerMark } from './speaker-mark'
-import { TranscriptTabs } from './transcript-tabs'
 
 beforeAll(() => {
 	setLocale('ru-RU', { reload: false })
@@ -71,6 +72,19 @@ beforeEach(() => {
 		renameJob: vi.fn(async () => true),
 		transcribeJob: vi.fn(),
 	}
+	h.summaries = {
+		enabled: false,
+		tyto: false,
+		pending: {},
+		drafts: {},
+		progress: {},
+		errors: {},
+		asking: {},
+		answerDrafts: {},
+		reviewing: {},
+		summarize: vi.fn(),
+		review: vi.fn(),
+	}
 })
 
 afterEach(cleanup)
@@ -82,6 +96,10 @@ const options = {
 	setShowTimestamps: vi.fn(),
 	showSpeakers: true,
 	setShowSpeakers: vi.fn(),
+	showSummary: false,
+	setShowSummary: vi.fn(),
+	showTopics: false,
+	setShowTopics: vi.fn(),
 }
 
 const segments: Segment[] = [
@@ -104,7 +122,7 @@ describe('расшифровка как сценарий', () => {
 		const lines = rows(container)
 		expect(lines.map((row) => row.getAttribute('data-series-start'))).toEqual(['true', 'false', 'true', 'true'])
 		const headers = [...container.querySelectorAll('.tyto-script-who')].map((node) => node.textContent?.trim())
-		expect(headers).toEqual(['ААнна', 'ИИгорь', 'ААнна'])
+		expect(headers).toEqual(['Анна', 'Игорь', 'Анна'])
 		// Lines inside a series carry no visible name: only a hover chip to move that one line.
 		expect(lines[1].querySelector('.tyto-script-who')).toBeNull()
 	})
@@ -148,7 +166,7 @@ describe('расшифровка как сценарий', () => {
 		const { container } = renderTranscript()
 		const second = rows(container)[1]
 		const chip = second.querySelector<HTMLButtonElement>('.tyto-script-aside button')!
-		expect(chip.textContent).toBe('ААнна')
+		expect(chip.textContent).toBe('Анна')
 		fireEvent.click(chip)
 		const igor = [...document.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((button) => button.textContent === 'Игорь')!
 		fireEvent.click(igor)
@@ -173,37 +191,27 @@ describe('расшифровка как сценарий', () => {
 })
 
 describe('метка говорящего', () => {
-	const mark = (speaker: number, name?: string) => {
-		const { container } = render(<SpeakerMark speaker={speaker} name={name} />)
+	const mark = (speaker: number, name?: string, variant?: 'avatar' | 'dot') => {
+		const { container } = render(<SpeakerMark speaker={speaker} name={name} variant={variant} />)
 		return container.querySelector<HTMLElement>('.tyto-speaker-mark')!
 	}
 
-	it('квадрат с первой буквой: залитая, контурная, серая, дальше повтор с цифрой', () => {
-		expect([mark(0, 'Анна'), mark(1, 'игорь'), mark(2, 'Мария')].map((node) => [node.dataset.tone, node.textContent])).toEqual([
-			['filled', 'А'],
-			['outline', 'И'],
-			['grey', 'М'],
-		])
-		const fourth = mark(3, 'Олег')
-		expect(fourth.dataset.tone).toBe('filled')
-		expect(fourth.textContent).toBe('О2')
-		expect(mark(6, 'Вера').textContent).toBe('В3')
+	it('цвет только у первых шести, дальше серый', () => {
+		expect([0, 1, 2, 3, 4, 5, 6, 9].map((speaker) => mark(speaker).dataset.color)).toEqual(['1', '2', '3', '4', '5', '6', '0', '0'])
 	})
 
-	it('без выбранного имени метка показывает номер говорящего', () => {
-		expect([mark(0), mark(1), mark(2), mark(3), mark(9, '  ')].map((node) => [node.dataset.tone, node.textContent])).toEqual([
-			['filled', '1'],
-			['outline', '2'],
-			['grey', '3'],
-			['filled', '4'],
-			['filled', '10'],
-		])
+	it('кружок: первая буква имени, без имени номер говорящего', () => {
+		expect([mark(0, 'Анна'), mark(1, 'игорь'), mark(2), mark(9, '  ')].map((node) => node.textContent)).toEqual(['А', 'И', '3', '10'])
 	})
 
-	it('в расшифровке неназванный говорящий получает номер, названный букву', () => {
+	it('в тексте перед именем точка того же цвета, без букв', () => {
 		const job = { id: 'j2', name: 'x', status: 'done', hydrated: true, speakerNames: { 0: 'Анна' }, segments: [segments[0], segments[2]] }
 		const { container } = render(<TranscriptView job={job as never} query="" options={options} />)
-		expect([...container.querySelectorAll('.tyto-speaker-mark')].map((node) => node.textContent)).toEqual(['А', '2'])
+		const dots = [...container.querySelectorAll<HTMLElement>('.tyto-script-who .tyto-speaker-mark')]
+		expect(dots.map((node) => [node.dataset.variant, node.dataset.color, node.textContent])).toEqual([
+			['dot', '1', ''],
+			['dot', '2', ''],
+		])
 	})
 
 	it('метка декоративная: имя читается рядом', () => {
@@ -211,31 +219,82 @@ describe('метка говорящего', () => {
 	})
 })
 
-describe('вкладки «Текст / Саммари / Темы»', () => {
-	it('три вкладки; без тем «Темы» неактивна и объясняет почему', () => {
-		const setTab = vi.fn()
-		render(<TranscriptTabs tab="transcript" setTab={setTab} summaryReady />)
-		const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
-		expect(tabs.map((tab) => tab.textContent)).toEqual(['Текст', 'Саммари', 'Темы'])
-		expect(tabs[0].getAttribute('aria-selected')).toBe('true')
-		expect((tabs[2] as HTMLButtonElement).disabled).toBe(true)
-		const hint = document.getElementById(tabs[2].getAttribute('aria-describedby')!)
-		expect(hint?.textContent).toBe('Темы появятся вместе с саммари Tyto ИИ')
-		fireEvent.click(tabs[2])
-		fireEvent.click(tabs[1])
-		expect(setTab.mock.calls).toEqual([['summary']])
+describe('участники', () => {
+	it('число по-русски', () => {
+		expect([1, 3, 7, 21, 12].map(participantsLabel)).toEqual(['1 участник', '3 участника', '7 участников', '21 участник', '12 участников'])
 	})
 
-	it('с темами вкладка «Темы» открывается', () => {
-		const setTab = vi.fn()
-		render(<TranscriptTabs tab="transcript" setTab={setTab} summaryReady topicsReady />)
-		fireEvent.click(screen.getByRole('tab', { name: 'Темы' }))
-		expect(setTab.mock.calls).toEqual([['topics']])
+	it('под заголовком дата, длина и «2 участника»; по клику список, имя меняется во всем тексте', () => {
+		const job = {
+			id: 'j1',
+			name: 'Планерка',
+			status: 'done',
+			hydrated: true,
+			createdAt: new Date(new Date().getFullYear(), 9, 29, 10, 0).toISOString(),
+			segments,
+			speakerNames: { 0: 'Анна' },
+		}
+		render(<TranscriptView job={job as never} query="" options={options} />)
+		expect(document.body.textContent).toContain('29 октября · 1:40')
+		fireEvent.click(screen.getByRole('button', { name: '2 участника' }))
+		const dialog = screen.getByRole('dialog')
+		expect(within(dialog).getAllByRole('button').map((button) => button.textContent)).toEqual(['ААнна', '2Говорящий 2'])
+		fireEvent.click(within(dialog).getByText('Говорящий 2'))
+		const input = within(dialog).getByRole('textbox')
+		fireEvent.change(input, { target: { value: 'Игорь' } })
+		fireEvent.keyDown(input, { key: 'Enter' })
+		expect(h.queue.setSpeakerName).toHaveBeenCalledWith('j1', 1, 'Игорь')
+	})
+})
+
+describe('саммари и темы вокруг текста', () => {
+	const on = { ...options, showSummary: true, showTopics: true }
+	const summary = 'Обсудили план на ноябрь.\n\n### Темы\n\n- **00:00** Приветствие\n- **00:51** Итоги октября'
+
+	it('без ИИ: в начале текста и в колонке тем объяснение и «Подключить»', () => {
+		const job = { id: 'j1', name: 'x', status: 'done', hydrated: true, segments }
+		render(<TranscriptView job={job as never} query="" options={on} />)
+		expect(screen.getByRole('region', { name: 'Саммари' }).textContent).toContain('Саммари и темы делает ИИ-ассистент')
+		expect(screen.getAllByRole('button', { name: 'Подключить' })).toHaveLength(2)
+		expect(screen.getByRole('complementary').textContent).toContain('Темы делает ИИ-ассистент')
 	})
 
-	it('без саммари и без ИИ вкладка «Саммари» неактивна', () => {
-		render(<TranscriptTabs tab="transcript" setTab={vi.fn()} summaryReady={false} />)
-		expect((screen.getByRole('tab', { name: 'Саммари' }) as HTMLButtonElement).disabled).toBe(true)
+	it('с саммари: текст в начале, темы колонкой, клик по теме переводит плеер', () => {
+		h.summaries.enabled = true
+		const job = { id: 'j1', name: 'x', status: 'done', hydrated: true, segments, summary }
+		render(<TranscriptView job={job as never} query="" options={on} />)
+		const block = screen.getByRole('region', { name: 'Саммари' })
+		expect(block.textContent).toContain('Обсудили план на ноябрь.')
+		expect(block.textContent).not.toContain('Итоги октября')
+		const seek = vi.fn()
+		window.addEventListener('vibe:player-seek', seek)
+		fireEvent.click(screen.getByRole('button', { name: /Итоги октября/ }))
+		window.removeEventListener('vibe:player-seek', seek)
+		expect((seek.mock.calls[0][0] as CustomEvent).detail).toEqual({ seconds: 51 })
+	})
+
+	it('с ИИ, но без саммари: одна кнопка делает саммари и темы', () => {
+		h.summaries.enabled = true
+		const job = { id: 'j1', name: 'x', status: 'done', hydrated: true, segments }
+		render(<TranscriptView job={job as never} query="" options={{ ...options, showSummary: true }} />)
+		fireEvent.click(screen.getByRole('button', { name: 'Сделать саммари и темы' }))
+		expect(h.summaries.summarize).toHaveBeenCalledWith(job)
+	})
+
+	it('выключенные блоки не показываются', () => {
+		const job = { id: 'j1', name: 'x', status: 'done', hydrated: true, segments, summary }
+		render(<TranscriptView job={job as never} query="" options={options} />)
+		expect(screen.queryByRole('region', { name: 'Саммари' })).toBeNull()
+		expect(screen.queryByRole('complementary')).toBeNull()
+	})
+
+	it('«ИИ-разбор» на месте текста: с Tyto ИИ кнопка разбора', () => {
+		Object.assign(h.summaries, { enabled: true, tyto: true })
+		const job = { id: 'j1', name: 'x', status: 'done', hydrated: true, segments }
+		const { container } = render(<TranscriptView job={job as never} query="" options={options} tab="review" />)
+		expect(rows(container)).toHaveLength(0)
+		fireEvent.click(screen.getByRole('button', { name: 'Сделать ИИ-разбор' }))
+		expect(h.summaries.review).toHaveBeenCalledWith(job)
 	})
 })
 

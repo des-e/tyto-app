@@ -254,20 +254,14 @@ describe('no leftover Vibe look in the main screens', () => {
 	it('toolbar popovers use the SegmentedControl, not pills', () => {
 		const toolbar = read('pages/main/components/transcript-toolbar.tsx')
 		expect(toolbar).not.toContain('rounded-full')
-		expect(toolbar.match(/<SegmentedControl/g)).toHaveLength(3)
+		expect(toolbar.match(/<SegmentedControl/g)).toHaveLength(2)
 	})
 
-	it('toolbar fits the 800px window: in a narrow row the summary and new-transcript buttons keep only their icons', () => {
+	it('toolbar: «Саммари · Темы · ИИ-разбор» are toggles; «+ Новая» lives in the sidebar only (design round 3)', () => {
 		const toolbar = read('pages/main/components/transcript-toolbar.tsx')
 		expect(toolbar).toMatch(/className="@container sticky top-0/)
-		expect(toolbar).toContain('<span className="@max-[720px]:sr-only">{actionLabel}</span>')
-		expect(toolbar).toContain('<span className="@max-[720px]:sr-only">{m.newSession()}</span>')
-	})
-
-	it('icon-only new-transcript button keeps a name and a tooltip, like the summary button', () => {
-		const toolbar = read('pages/main/components/transcript-toolbar.tsx')
-		expect(toolbar).toMatch(/<TooltipTrigger asChild>\s*<Button variant="ghost" size="sm" aria-label=\{m\.newSession\(\)\} onClick=\{startNew\}>/)
-		expect(toolbar).toContain('<TooltipContent>{m.newSession()}</TooltipContent>')
+		expect(toolbar.match(/aria-pressed=/g)).toHaveLength(3)
+		expect(toolbar).not.toContain('m.newSession()')
 	})
 
 	it('history rows land on the 4px grid: 8 + 18 title + 2 + 16 meta + 8 = 52px', () => {
