@@ -122,7 +122,7 @@ describe('export dialog v2: what to save', () => {
 	it('shows two cards with descriptions', () => {
 		mount()
 		const transcript = radio('Расшифровку')
-		const summary = radio('Сводку')
+		const summary = radio('Саммари')
 		expect(transcript.closest('label')?.textContent).toContain('Весь разговор с именами и временем')
 		expect(summary.closest('label')?.textContent).toContain('Главное: решения и задачи')
 		expect(transcript.checked).toBe(true)
@@ -131,23 +131,23 @@ describe('export dialog v2: what to save', () => {
 
 	it('without a summary the summary card is disabled and says why', () => {
 		mount({ hasSummary: false })
-		const summary = radio('Сводку')
+		const summary = radio('Саммари')
 		expect(summary.disabled).toBe(true)
-		expect(summary.closest('label')?.textContent).toContain('Сначала создайте сводку')
+		expect(summary.closest('label')?.textContent).toContain('Сначала сделайте саммари')
 		expect(summary.closest('label')?.textContent).not.toContain('Главное: решения и задачи')
 	})
 
 	it('choosing the summary card reports it', () => {
 		const onContentChange = vi.fn()
 		mount({ onContentChange })
-		fireEvent.click(radio('Сводку'))
+		fireEvent.click(radio('Саммари'))
 		expect(onContentChange).toHaveBeenCalledWith('summary')
 	})
 
 	it('cards are outlined, not filled: transparent, ink text, selected = ink border', () => {
 		mount()
 		const selected = radio('Расшифровку').closest('label') as HTMLElement
-		const other = radio('Сводку').closest('label') as HTMLElement
+		const other = radio('Саммари').closest('label') as HTMLElement
 		for (const card of [selected, other]) {
 			expect(card.className).toContain('bg-transparent')
 			expect(card.className).toContain('text-foreground')
@@ -327,7 +327,7 @@ describe('export dialog v2: contrast of the cards', () => {
 		const dialog = screen.getByRole('dialog')
 		// The dialog surface is the page background; the cards are transparent over it.
 		expect(dialog.className).toContain('bg-background')
-		const disabledCard = radio('Сводку').closest('label') as HTMLElement
+		const disabledCard = radio('Саммари').closest('label') as HTMLElement
 		expect(disabledCard.className).toContain('text-[var(--tyto-disabled-fg)]')
 		expect(disabledCard.className).not.toMatch(/opacity-/)
 		const description = within(radio('Расшифровку').closest('label') as HTMLElement).getByText('Весь разговор с именами и временем')

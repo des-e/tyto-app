@@ -8,6 +8,8 @@ import type { Segment } from '~/lib/transcript'
  */
 export const TYTO_AI_URL = 'https://eliseevdenis.ru/tyto-ai'
 export const TYTO_BOT_URL = 'https://t.me/Tytotranscribe_bot'
+/** Opens the bot straight on the Stars levels (`/start buy`). */
+export const TYTO_BOT_BUY_URL = `${TYTO_BOT_URL}?start=buy`
 export const TYTO_BOOSTY_URL = 'https://boosty.to/tytoapp'
 /** Public channel: news and updates. */
 export const TYTO_CHANNEL_URL = 'https://t.me/tytoapp'

@@ -8,9 +8,8 @@ export interface SegmentedOption<T extends string> {
 }
 
 /**
- * Tyto's segmented control: the selected segment is a solid foreground plate with inverted text
- * (`tyto-selected`, styled in theme.css), so it reads at a glance in both themes. Vibe's version was
- * a white segment on a near-white track, which disappeared in the light theme.
+ * Tyto's segmented control: a white segment with a hairline ring on a grey track (`.tyto-segmented`
+ * in theme.css, design round 5). The ring keeps the selected segment visible in the light theme.
  */
 export function SegmentedControl<T extends string>({
 	value,
@@ -26,7 +25,7 @@ export function SegmentedControl<T extends string>({
 	className?: string
 }) {
 	return (
-		<div role="radiogroup" aria-label={ariaLabel} className={cn('inline-flex rounded-[var(--tyto-r-md)] border border-border p-0.5', className)}>
+		<div role="radiogroup" aria-label={ariaLabel} className={cn('tyto-segmented inline-flex gap-0.5 rounded-[var(--tyto-r-md)] p-0.5', className)}>
 			{options.map((option) => {
 				const selected = option.value === value
 				return (
@@ -40,8 +39,8 @@ export function SegmentedControl<T extends string>({
 						data-selected={selected}
 						onClick={() => onChange(option.value)}
 						className={cn(
-							'flex h-8 cursor-pointer items-center justify-center gap-1 rounded-[var(--tyto-r-sm)] px-3 text-xs font-medium focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-foreground focus-visible:outline-offset-2',
-							selected ? 'tyto-selected' : 'text-muted-foreground hover:text-foreground',
+							'flex h-7 cursor-pointer items-center justify-center gap-1 rounded-[var(--tyto-r-sm)] px-3 text-[12.5px] focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-foreground focus-visible:outline-offset-2',
+							selected ? 'font-medium' : 'text-muted-foreground hover:text-foreground',
 						)}>
 						{option.icon}
 						{option.label}

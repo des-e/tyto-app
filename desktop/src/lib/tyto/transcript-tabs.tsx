@@ -5,14 +5,14 @@ import type { TranscriptTab } from '~/pages/main/hooks/use-transcript-view'
 interface TranscriptTabsProps {
 	tab: TranscriptTab
 	setTab: (tab: TranscriptTab) => void
-	/** «Сводка» opens: a summary exists, or the AI can write one (opening the tab starts it). */
+	/** «Саммари» opens: a summary exists, or the AI can write one (opening the tab starts it). */
 	summaryReady: boolean
 	/** The summary came with topics, so «Темы» has something to show. */
 	topicsReady?: boolean
 }
 
 /**
- * «Текст / Сводка / Темы» as text tabs with a 2 px rule under the active one, at the start of the
+ * «Текст / Саммари / Темы» as text tabs with a 2 px rule under the active one, at the start of the
  * document toolbar (theme.css `.tyto-tab`). Stays visible while search is open. A tab with nothing
  * behind it is disabled and drawn fainter; «Темы» then explains through aria-describedby and a tooltip.
  */

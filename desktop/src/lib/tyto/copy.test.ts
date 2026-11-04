@@ -33,22 +33,22 @@ const COPY: Array<[string, string]> = [
 	['transcribing', 'Расшифровываем…'],
 	['transcribeTook', 'Готово за {total} с'],
 	['segmentsTab', 'Текст'],
-	['summaryTab', 'Сводка'],
-	['summarizeLoading', 'Готовим сводку…'],
-	['regenerateSummary', 'Пересоздать сводку'],
+	['summaryTab', 'Саммари'],
+	['summarizeLoading', 'Готовим саммари…'],
+	['regenerateSummary', 'Сделать саммари заново'],
 	['saveSuccess', 'Файл сохранен'],
 	['copied', 'Скопировано'],
 	['exportCopied', 'Текст скопирован'],
 	['exportContent', 'Что сохранить'],
 	['exportTranscript', 'Расшифровка'],
-	['exportSummary', 'Сводка'],
+	['exportSummary', 'Саммари'],
 	['exportContentTranscript', 'Расшифровку'],
-	['exportContentSummary', 'Сводку'],
+	['exportContentSummary', 'Саммари'],
 	['exportSave', 'Сохранить {format}'],
 	// Export dialog v2 (section «Диалог экспорта»).
 	['exportContentTranscriptDescription', 'Весь разговор с именами и временем'],
 	['exportContentSummaryDescription', 'Главное: решения и задачи'],
-	['exportSummaryUnavailable', 'Сначала создайте сводку'],
+	['exportSummaryUnavailable', 'Сначала сделайте саммари'],
 	['exportFormatGroupDocument', 'Документ'],
 	['exportFormatGroupWeb', 'Субтитры и веб'],
 	['exportAppearance', 'Оформление'],
@@ -123,9 +123,9 @@ describe('tyto ru copy', () => {
 		}
 	})
 
-	it('uses one word per concept: no транскрипция, транскрибировать, саммари, суммаризация', () => {
+	it('uses one word per concept: no транскрипция, транскрибировать, сводка, суммаризация (саммари, Денис 2026-11-04)', () => {
 		for (const [key, value] of Object.entries(ru)) {
-			expect(value.toLowerCase(), key).not.toMatch(/транскрип|транскриб|саммари|суммариз/)
+			expect(value.toLowerCase(), key).not.toMatch(/транскрип|транскриб|сводк|суммариз/)
 		}
 	})
 })

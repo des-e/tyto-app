@@ -46,6 +46,10 @@
 	--chart-5: #737373;
 
 	--sidebar: #fafafa;
+	/* Settings, variant B: grey page, white group cards, softer row lines, grey selected nav item. */
+	--tyto-settings-bg: #fafafa;
+	--tyto-row-line: #f0f0f0;
+	--tyto-nav-selected: #ebebeb;
 	--sidebar-foreground: #171717;
 	--sidebar-primary: #171717;
 	--sidebar-primary-foreground: #ffffff;
@@ -104,6 +108,9 @@
 	--chart-5: #8a8a90;
 
 	--sidebar: #111111;
+	--tyto-settings-bg: #0a0a0a;
+	--tyto-row-line: #1f1f1f;
+	--tyto-nav-selected: #222222;
 	--sidebar-foreground: #ededed;
 	--sidebar-primary: #ededed;
 	--sidebar-primary-foreground: #0a0a0a;
@@ -1882,21 +1889,76 @@ svg.lucide {
 	background-color: var(--accent);
 }
 
+/* Selected section: a plain grey plate, no side line or raised card (design round 5, variant B). */
 .tyto-settings-nav-item[aria-current='page'] {
-	font-weight: 600;
-	background-color: var(--background);
-	box-shadow: 0 0 0 1px var(--border);
+	font-weight: 500;
+	background-color: var(--tyto-nav-selected);
 }
 
-.tyto-settings-nav-item[aria-current='page']::before {
-	content: '';
-	position: absolute;
-	inset-inline-start: 0;
-	top: 8px;
-	bottom: 8px;
-	width: 2px;
-	border-radius: 2px;
-	background-color: var(--foreground);
+/*
+ * Settings, variant B: groups are white cards on a grey page. The title sits above the card in
+ * small grey type; rows inside get their own side padding and lighter hairlines.
+ */
+.tyto-settings-main {
+	background-color: var(--tyto-settings-bg);
+}
+
+.tyto-settings-group + .tyto-settings-group {
+	margin-top: 20px;
+}
+
+.tyto-settings-group-title {
+	margin: 0 0 8px 4px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.3;
+	color: var(--muted-foreground);
+}
+
+.tyto-settings-group-card {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--tyto-r-lg);
+	background-color: var(--card);
+}
+
+.tyto-settings-group-card > * + * {
+	border-top: 1px solid var(--tyto-row-line);
+}
+
+.tyto-settings-group-card > :not(button) {
+	padding-inline: 16px;
+}
+
+/* Fields in a white card are white too, with a plain hairline (the grey fill is for the bare page). */
+.tyto-settings-group-card input:not([type='checkbox'], [type='radio']),
+.tyto-settings-group-card [data-slot='select-trigger'] {
+	background-color: var(--card);
+	border-color: var(--tyto-line2);
+	box-shadow: none;
+}
+
+/* ActionRow bleeds into the page margin in the old layout; inside a card it is a plain full row. */
+.tyto-settings-group-card > button {
+	margin-inline: 0;
+	width: 100%;
+	padding-inline: 16px;
+	border-radius: 0;
+}
+
+/*
+ * Segmented control: a white segment on a grey track (design round 5). Overrides the solid plate
+ * that radio groups get elsewhere, which read as too heavy for a two- or three-way switch.
+ */
+.tyto-segmented {
+	background-color: var(--muted);
+}
+
+.tyto-segmented [role='radio'][aria-checked='true'] {
+	background-color: var(--card);
+	color: var(--foreground);
+	border-color: transparent;
+	box-shadow: 0 0 0 1px var(--tyto-line2);
 }
 
 .tyto-settings-nav-item:focus-visible {

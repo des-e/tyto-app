@@ -10,8 +10,8 @@ export type SettingsViewModel = ReturnType<typeof viewModel>
 export const rowControlClass = 'h-9 rounded-md'
 
 /**
- * A settings group: optional sub-heading, then plain rows on hairlines. No card around it:
- * the page margin is the only container (`.tyto-rows` in theme.css drops the rows' side padding).
+ * A settings group (variant B): a small grey title above, the rows inside a white card with
+ * hairlines between them. Spacing, padding and colours live in theme.css (`.tyto-settings-group*`).
  */
 export function SettingsGroup({
 	title,
@@ -25,14 +25,10 @@ export function SettingsGroup({
 	className?: string
 }) {
 	return (
-		<section className="mt-8 first:mt-0">
-			{(title || description) && (
-				<div className="mb-2">
-					{title && <h3 className="text-[13.5px] leading-tight font-semibold text-foreground">{title}</h3>}
-					{description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
-				</div>
-			)}
-			<div className={cn('tyto-rows divide-y divide-border border-t border-border', className)}>{children}</div>
+		<section className="tyto-settings-group">
+			{title && <h3 className="tyto-settings-group-title">{title}</h3>}
+			{description && <p className="-mt-1 mb-2 ms-1 text-xs text-muted-foreground">{description}</p>}
+			<div className={cn('tyto-settings-group-card', className)}>{children}</div>
 		</section>
 	)
 }
@@ -41,7 +37,7 @@ export function SettingsGroup({
 function RowLabel({ label, description, clamp = false }: { label: ReactNode; description?: ReactNode; clamp?: boolean }) {
 	return (
 		<div className="min-w-0">
-			<div className="text-sm text-foreground">{label}</div>
+			<div className="text-sm font-medium text-foreground">{label}</div>
 			{description && <p className={cn('mt-0.5 max-w-[460px] text-xs text-muted-foreground', clamp && 'line-clamp-1')}>{description}</p>}
 		</div>
 	)

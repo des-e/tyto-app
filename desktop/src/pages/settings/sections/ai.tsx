@@ -1,12 +1,15 @@
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Check, ChevronRight, Copy, ExternalLink, Waypoints } from 'lucide-react'
 import { siClaude, siOllama } from 'simple-icons'
 import { OPENAI_PATH } from '~/components/brand-glyph'
 import { m } from '~/paraglide/messages.js'
+import { getLocale } from '~/paraglide/runtime.js'
 import { ReactComponent as LinkIcon } from '~/icons/link.svg'
 import * as config from '~/lib/config'
-import { TYTO_BOOSTY_URL, TYTO_BOT_URL, defaultModel, type AiPlatform, type AiSettings } from '~/lib/ai'
+import { TYTO_BOOSTY_URL, TYTO_BOT_BUY_URL, TYTO_BOT_URL, defaultModel, formatHours, tytoStatus, type AiPlatform, type AiSettings, type TytoStatus } from '~/lib/ai'
 import { ClaudeAddressRow, ProxyFields } from '~/lib/tyto/proxy-fields'
+import { SegmentedControl } from '~/lib/tyto/segmented-control'
 import NumberField from '~/components/number-field'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -82,9 +85,125 @@ export function presetLabel(preset: string) {
 	return labels[preset]?.() ?? m.presetCustom()
 }
 
+/** The three answers to «Which AI»: our service, a key of your own (Claude, OpenAI-compatible, proxy), or Ollama. */
+type AiKind = 'tyto' | 'own' | 'ollama'
+const OWN_PLATFORMS = ['claude', 'openai', 'proxy'] as const
+
+function kindOf(platform: AiPlatform): AiKind {
+	return platform === 'tyto' || platform === 'ollama' ? platform : 'own'
+}
+
+type StatusState = { state: 'idle' } | { state: 'loading' } | { state: 'ok'; status: TytoStatus } | { state: 'error'; message: string }
+
+/** Hours left on a Tyto AI code: asked when the section opens and again a moment after the code changes. */
+function useTytoStatus(code: string) {
+	const [result, setResult] = useState<StatusState>({ state: 'idle' })
+	const [attempt, setAttempt] = useState(0)
+	useEffect(() => {
+		const trimmed = code.trim()
+		if (!trimmed) {
+			setResult({ state: 'idle' })
+			return
+		}
+		let cancelled = false
+		setResult({ state: 'loading' })
+		const timer = setTimeout(() => {
+			tytoStatus(trimmed)
+				.then((status) => !cancelled && setResult({ state: 'ok', status }))
+				.catch((error: unknown) => !cancelled && setResult({ state: 'error', message: error instanceof Error ? error.message : String(error) }))
+		}, 500)
+		return () => {
+			cancelled = true
+			clearTimeout(timer)
+		}
+	}, [code, attempt])
+	return { result, refresh: () => setAttempt((n) => n + 1) }
+}
+
+function HoursBar({ status }: { status: TytoStatus }) {
+	const share = status.limit_s > 0 ? Math.min(100, Math.round((status.left_s / status.limit_s) * 100)) : 0
+	return (
+		<div
+			role="progressbar"
+			aria-label={m.tytoAiStatus({ tier: status.tier_name, left: formatHours(status.left_s), limit: formatHours(status.limit_s) })}
+			aria-valuenow={share}
+			aria-valuemin={0}
+			aria-valuemax={100}
+			className="h-1.5 w-40 overflow-hidden rounded-full bg-[var(--tyto-row-line)]">
+			<div className="h-full rounded-full bg-foreground" style={{ width: `${share}%` }} />
+		</div>
+	)
+}
+
+/** Tyto AI: the code, the hours left with the date they start over, and where to get more. */
+function TytoRows({ ai, setAi, result, refresh }: { ai: AiSettings; setAi: (ai: AiSettings) => void; result: StatusState; refresh: () => void }) {
+	const { connection, tasks } = ai
+	const hasCode = Boolean(connection.tytoCode.trim())
+
+	let statusRow: ReactNode = null
+	if (result.state === 'loading') statusRow = <SettingsRow label={m.tytoAiChecking()} />
+	if (result.state === 'error')
+		statusRow = (
+			<SettingsRow label={m.tytoAiCheck()} description={<span className="text-destructive">{result.message}</span>}>
+				<Button variant="outline" size="sm" onClick={refresh}>
+					{m.tytoAiRefresh()}
+				</Button>
+			</SettingsRow>
+		)
+	if (result.state === 'ok') {
+		const { status } = result
+		statusRow = (
+			<SettingsRow
+				label={m.tytoAiStatus({ tier: status.tier_name, left: formatHours(status.left_s), limit: formatHours(status.limit_s) })}
+				description={status.period_end ? m.tytoAiRenews({ date: new Date(status.period_end * 1000).toLocaleDateString(getLocale(), { day: 'numeric', month: 'long' }) }) : undefined}>
+				<HoursBar status={status} />
+			</SettingsRow>
+		)
+	}
+
+	return (
+		<>
+			<SettingsRow label={m.tytoAiCode()} description={m.tytoAiCodeInfo()}>
+				<Input
+					aria-label={m.tytoAiCode()}
+					value={connection.tytoCode}
+					onChange={(e) => {
+						const tytoCode = e.target.value.trim().toUpperCase()
+						// A pasted code means "I want summaries": switch them on, or nothing visible happens.
+						const summary = tytoCode && !connection.tytoCode ? { ...tasks.summary, enabled: true } : tasks.summary
+						setAi({ ...ai, connection: { ...connection, tytoCode }, tasks: { ...tasks, summary } })
+					}}
+					placeholder="TYTO-XXXX-XXXX"
+					spellCheck={false}
+					className={`w-56 font-mono ${rowControlClass}`}
+				/>
+			</SettingsRow>
+			{hasCode ? (
+				<>
+					{statusRow}
+					<SettingsRow label={m.tytoAiMoreHours()} description={m.tytoAiMoreHoursInfo()}>
+						<Button variant="outline" size="sm" onClick={() => openUrl(TYTO_BOT_BUY_URL)}>
+							{m.tytoAiPayStars()}
+						</Button>
+						<Button variant="outline" size="sm" onClick={() => openUrl(TYTO_BOOSTY_URL)}>
+							{m.tytoAiPayBoosty()}
+						</Button>
+					</SettingsRow>
+				</>
+			) : (
+				<SettingsRow label={m.tytoAiNoCodeYet()} description={m.tytoAiTrialInfo()}>
+					<Button size="sm" onClick={() => openUrl(TYTO_BOT_URL)}>
+						{m.tytoAiGetCode()}
+					</Button>
+				</SettingsRow>
+			)}
+		</>
+	)
+}
+
 /**
- * AI in settings: the connection once, then one row per task. Each task has its own switch and
- * its own prompt page, so tuning summaries never changes what dictation does to a sentence.
+ * AI in settings, variant B: «Which AI» first (Tyto AI, own key, Ollama), then what each one does.
+ * Tyto AI keeps its hours in view; the other two keep their connection fields, prompts and check.
  */
 export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenPrompt: (task: AiTaskId) => void }) {
 	const { ai, setAi } = vm.preference
@@ -93,64 +212,48 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 	const setTask = <T extends AiTaskId>(task: T, patch: Partial<AiSettings['tasks'][T]>) =>
 		setAi({ ...ai, tasks: { ...tasks, [task]: { ...tasks[task], ...patch } } })
 	const test = vm.aiTest
-	const tyto = connection.platform === 'tyto'
+	const kind = kindOf(connection.platform)
+	const tyto = kind === 'tyto'
+	const choosePlatform = (platform: AiPlatform) => setConnection({ platform, model: defaultModel(platform) })
+	const chooseKind = (next: AiKind) => {
+		if (next === kind) return
+		choosePlatform(next === 'own' ? 'claude' : next)
+	}
+	// One status request feeds both the hours row and the review row.
+	const { result: tytoResult, refresh: refreshTyto } = useTytoStatus(tyto ? connection.tytoCode : '')
 
 	return (
-		<div className="space-y-6">
-			<SettingsGroup title={m.aiTasks()}>
-				<SettingsRow label={m.aiSummaryTask()} description={tyto ? m.tytoAiSummaryFixed() : presetLabel(tasks.summary.preset)}>
-					{!tyto && (
-						<Button variant="outline" size="sm" onClick={() => onOpenPrompt('summary')}>
-							{m.aiEditPrompt()}
-						</Button>
-					)}
-					<Switch checked={tasks.summary.enabled} onCheckedChange={(enabled) => setTask('summary', { enabled })} />
-				</SettingsRow>
-				{tasks.summary.enabled && (
-					<SettingsRow label={m.autoSummarizeOnFinish()} description={m.autoSummarizeOnFinishInfo()}>
-						<Switch checked={tasks.summary.autoOnFinish} onCheckedChange={(autoOnFinish) => setTask('summary', { autoOnFinish })} />
-					</SettingsRow>
-				)}
-				<SettingsRow label={m.aiDictationTask()} description={tyto ? m.tytoAiDictationOff() : presetLabel(tasks.dictation.preset)}>
-					{!tyto && (
-						<Button variant="outline" size="sm" onClick={() => onOpenPrompt('dictation')}>
-							{m.aiEditPrompt()}
-						</Button>
-					)}
-					<Switch checked={tasks.dictation.enabled && !tyto} disabled={tyto} onCheckedChange={(enabled) => setTask('dictation', { enabled })} />
-				</SettingsRow>
-			</SettingsGroup>
-
+		<div>
 			<SettingsGroup title={m.connection()}>
-				<SettingsRow label={m.llmPlatform()}>
-					<Select value={connection.platform} onValueChange={(platform: AiPlatform) => setConnection({ platform, model: defaultModel(platform) })}>
-						<SelectTrigger className={`w-64 ${rowControlClass}`}>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{(['tyto', 'claude', 'ollama', 'openai', 'proxy'] as const).map((name) => (
-								<SelectItem key={name} value={name}>
-									<PlatformOption platform={name} />
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+				<SettingsRow label={m.aiWhich()}>
+					<SegmentedControl<AiKind>
+						ariaLabel={m.aiWhich()}
+						value={kind}
+						onChange={chooseKind}
+						options={[
+							{ value: 'tyto', label: m.tytoAiPlatform() },
+							{ value: 'own', label: m.aiOwnKey() },
+							{ value: 'ollama', label: m.aiOllamaLocal() },
+						]}
+					/>
 				</SettingsRow>
 
-				{tyto && (
-					<SettingsRow label={m.tytoAiCode()} description={m.tytoAiCodeInfo()}>
-						<Input
-							value={connection.tytoCode}
-							onChange={(e) => {
-								const tytoCode = e.target.value.trim().toUpperCase()
-								// A pasted code means "I want summaries": switch them on, or nothing visible happens.
-								const summary = tytoCode && !connection.tytoCode ? { ...tasks.summary, enabled: true } : tasks.summary
-								setAi({ ...ai, connection: { ...connection, tytoCode }, tasks: { ...tasks, summary } })
-							}}
-							placeholder="TYTO-XXXX-XXXX"
-							spellCheck={false}
-							className={`w-64 font-mono ${rowControlClass}`}
-						/>
+				{tyto && <TytoRows ai={ai} setAi={setAi} result={tytoResult} refresh={refreshTyto} />}
+
+				{kind === 'own' && (
+					<SettingsRow label={m.aiService()}>
+						<Select value={connection.platform} onValueChange={(platform: AiPlatform) => choosePlatform(platform)}>
+							<SelectTrigger aria-label={m.aiService()} className={`w-56 ${rowControlClass}`}>
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{OWN_PLATFORMS.map((name) => (
+									<SelectItem key={name} value={name}>
+										<PlatformOption platform={name} />
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					</SettingsRow>
 				)}
 
@@ -165,7 +268,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 								onChange={(e) => setConnection({ claudeApiKey: e.target.value })}
 								placeholder={m.pasteApiKey()}
 								type="password"
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 						<SettingsRow
@@ -180,7 +283,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 								value={connection.model}
 								onChange={(e) => setConnection({ model: e.target.value })}
 								placeholder={defaultModel('claude')}
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 					</>
@@ -192,7 +295,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 							<Input
 								value={connection.ollamaBaseUrl}
 								onChange={(e) => setConnection({ ollamaBaseUrl: e.target.value })}
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 						<SettingsRow
@@ -207,7 +310,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 								value={connection.model}
 								onChange={(e) => setConnection({ model: e.target.value })}
 								placeholder={defaultModel('ollama')}
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 					</>
@@ -220,7 +323,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 								value={connection.openaiBaseUrl}
 								onChange={(e) => setConnection({ openaiBaseUrl: e.target.value })}
 								placeholder="https://api.openai.com/v1"
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 						<SettingsRow label={m.apiKey()}>
@@ -229,7 +332,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 								onChange={(e) => setConnection({ openaiApiKey: e.target.value })}
 								placeholder={m.optionalLocalServerKey()}
 								type="password"
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 						<SettingsRow label={m.llmModel()}>
@@ -237,7 +340,7 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 								value={connection.model}
 								onChange={(e) => setConnection({ model: e.target.value })}
 								placeholder={defaultModel('openai')}
-								className={`w-64 ${rowControlClass}`}
+								className={`w-56 ${rowControlClass}`}
 							/>
 						</SettingsRow>
 					</>
@@ -260,45 +363,79 @@ export function AiSection({ vm, onOpenPrompt }: { vm: SettingsViewModel; onOpenP
 						<SettingsNote>
 							<span className="italic">{m.contextSizeRuleOfThumb()}</span>
 						</SettingsNote>
+						<SettingsRow
+							label={m.aiTestConnection()}
+							description={
+								test?.status === 'ok' ? (
+									<span className="text-success">{m.aiTestOk({ ms: String(test.ms) })}</span>
+								) : test?.status === 'error' ? (
+									<span className="text-destructive">{m.checkError()}</span>
+								) : (
+									m.aiTestInfo()
+								)
+							}>
+							<Button variant="outline" size="sm" onClick={() => void vm.testAi()} disabled={test?.status === 'testing'}>
+								{test?.status === 'testing' ? <Spinner className="h-3.5 w-3.5" /> : null}
+								{m.runLlmCheck()}
+							</Button>
+						</SettingsRow>
+						{test?.status === 'error' && (
+							<div className="relative py-3">
+								<button
+									type="button"
+									className="absolute end-5 top-4 cursor-pointer p-1 text-muted-foreground hover:text-foreground"
+									onClick={vm.copyAiError}
+									aria-label={m.copy()}>
+									{vm.aiErrorCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+								</button>
+								<pre className="max-h-40 overflow-y-auto pe-8 text-xs break-all whitespace-pre-wrap text-destructive">{test.error}</pre>
+							</div>
+						)}
 					</>
-				)}
-
-				<SettingsRow
-					label={tyto ? m.tytoAiCheck() : m.aiTestConnection()}
-					description={
-						test?.status === 'ok' ? (
-							<span className="text-success">{tyto ? test.reply : m.aiTestOk({ ms: String(test.ms) })}</span>
-						) : test?.status === 'error' ? (
-							<span className="text-destructive">{m.checkError()}</span>
-						) : (
-							m.aiTestInfo()
-						)
-					}>
-					<Button variant="outline" size="sm" onClick={() => void vm.testAi()} disabled={test?.status === 'testing'}>
-						{test?.status === 'testing' ? <Spinner className="h-3.5 w-3.5" /> : null}
-						{m.runLlmCheck()}
-					</Button>
-				</SettingsRow>
-				{test?.status === 'error' && (
-					<div className="relative px-4 py-3">
-						<button
-							type="button"
-							className="absolute end-5 top-4 cursor-pointer p-1 text-muted-foreground hover:text-foreground"
-							onClick={vm.copyAiError}
-							aria-label={m.copy()}>
-							{vm.aiErrorCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-						</button>
-						<pre className="max-h-40 overflow-y-auto pe-8 text-xs break-all whitespace-pre-wrap text-destructive">{test.error}</pre>
-					</div>
 				)}
 			</SettingsGroup>
 
-			{tyto && (
-				<SettingsGroup title={m.settingsUsageAndBilling()}>
-					<ActionRow label={m.tytoAiGetCode()} icon={<LinkIcon className="h-4 w-4" />} onClick={() => openUrl(TYTO_BOT_URL)} />
-					<ActionRow label={m.tytoAiPlans()} icon={<LinkIcon className="h-4 w-4" />} onClick={() => openUrl(TYTO_BOOSTY_URL)} />
-				</SettingsGroup>
-			)}
+			<SettingsGroup title={m.aiWhatItDoes()}>
+				{tyto ? (
+					<>
+						<SettingsRow label={m.tytoAiAutoSummary()} description={m.tytoAiAutoSummaryInfo()}>
+							<Switch
+								aria-label={m.tytoAiAutoSummary()}
+								checked={tasks.summary.enabled && tasks.summary.autoOnFinish}
+								onCheckedChange={(autoOnFinish) => setTask('summary', { enabled: true, autoOnFinish })}
+							/>
+						</SettingsRow>
+						<SettingsRow label={m.tytoAiReview()} description={m.tytoAiReviewInfo()}>
+							{tytoResult.state === 'ok' && (
+								<span className="rounded-md bg-muted px-2 py-0.5 text-[12.5px] text-muted-foreground">
+									{tytoResult.status.review ? m.tytoAiInLevel() : m.tytoAiReviewLevels()}
+								</span>
+							)}
+						</SettingsRow>
+						<SettingsRow label={<span className="text-muted-foreground">{m.tytoAiOwnOnly()}</span>} description={m.tytoAiOwnOnlyInfo()} />
+					</>
+				) : (
+					<>
+						<SettingsRow label={m.aiSummaryTask()} description={presetLabel(tasks.summary.preset)}>
+							<Button variant="outline" size="sm" onClick={() => onOpenPrompt('summary')}>
+								{m.aiEditPrompt()}
+							</Button>
+							<Switch checked={tasks.summary.enabled} onCheckedChange={(enabled) => setTask('summary', { enabled })} />
+						</SettingsRow>
+						{tasks.summary.enabled && (
+							<SettingsRow label={m.autoSummarizeOnFinish()} description={m.autoSummarizeOnFinishInfo()}>
+								<Switch checked={tasks.summary.autoOnFinish} onCheckedChange={(autoOnFinish) => setTask('summary', { autoOnFinish })} />
+							</SettingsRow>
+						)}
+						<SettingsRow label={m.aiDictationTask()} description={presetLabel(tasks.dictation.preset)}>
+							<Button variant="outline" size="sm" onClick={() => onOpenPrompt('dictation')}>
+								{m.aiEditPrompt()}
+							</Button>
+							<Switch checked={tasks.dictation.enabled} onCheckedChange={(enabled) => setTask('dictation', { enabled })} />
+						</SettingsRow>
+					</>
+				)}
+			</SettingsGroup>
 
 			{connection.platform === 'claude' && (
 				<SettingsGroup title={m.settingsUsageAndBilling()}>

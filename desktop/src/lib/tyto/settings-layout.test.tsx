@@ -63,7 +63,7 @@ describe('Tyto: настройки строками', () => {
 		expect(view.queryByText(m.phone())).toBeNull()
 	})
 
-	it('группа и строки рендерятся без обёртки-карточки', () => {
+	it('группа — белая карточка с заголовком над ней (вариант B), строки без своих карточек', () => {
 		const view = render(
 			<SettingsGroup title="Группа">
 				<SettingsRow label="Строка" description="Описание" />
@@ -73,11 +73,13 @@ describe('Tyto: настройки строками', () => {
 				<ActionRow label="Действие" />
 			</SettingsGroup>,
 		)
-		const html = view.container.innerHTML
-		for (const card of ['bg-card', 'rounded-xl', 'overflow-hidden', 'border-border/60']) expect(html).not.toContain(card)
-		expect(view.container.querySelector('.tyto-rows')).not.toBeNull()
+		expect(view.getByText('Группа').className).toContain('tyto-settings-group-title')
+		const card = view.container.querySelector('.tyto-settings-group-card') as HTMLElement
+		expect(card).not.toBeNull()
 		const row = view.getByText('Строка').closest('div[class*="min-h-"]') as HTMLElement
+		expect(row.parentElement).toBe(card)
 		expect(row.className).toContain('min-h-[56px]')
+		// Side padding comes from the card rule in theme.css, not from each row.
 		expect(row.className).not.toMatch(/\bpx-4\b/)
 	})
 })

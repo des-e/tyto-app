@@ -276,7 +276,7 @@ describe('no leftover Vibe look in the main screens', () => {
 	})
 
 	it('settings close button sticks at the scroller padding edge (top-0: sticky already insets by py-6) and masks the text scrolling under it', () => {
-		expect(read('pages/settings/page.tsx')).toMatch(/className="sticky top-0 z-10 float-end -me-3 bg-card"/)
+		expect(read('pages/settings/page.tsx')).toMatch(/className="sticky top-0 z-10 float-end -me-3 bg-\[var\(--tyto-settings-bg\)\]"/)
 	})
 
 	it('sidebar toggle is a square 32px ghost icon button; banner and speaker chips are not pills', () => {
@@ -302,7 +302,9 @@ describe('no leftover Vibe look in the main screens', () => {
 
 	it('RTL: settings nav and close button use logical properties', () => {
 		expect(rule(css(), '.tyto-settings-nav-item')).toMatch(/text-align: start/)
-		expect(css()).toMatch(/\.tyto-settings-nav-item\[aria-current='page'\]::before\s*\{[^}]*inset-inline-start: 0/)
+		// Selected item is a grey plate with no side line (design round 5), so there is nothing to mirror.
+		expect(css()).not.toMatch(/\.tyto-settings-nav-item\[aria-current='page'\]::before/)
+		expect(css()).toMatch(/\.tyto-settings-nav-item\[aria-current='page'\]\s*\{[^}]*background-color: var\(--tyto-nav-selected\)/)
 		const page = read('pages/settings/page.tsx')
 		expect(page).not.toMatch(/\bright-6\b|-mr-3\b/)
 	})

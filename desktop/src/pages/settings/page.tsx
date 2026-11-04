@@ -140,8 +140,8 @@ export default function SettingsPage({ setVisible, scrollTo }: SettingsPageProps
 		<div className="tyto-settings-frame flex min-h-screen items-center justify-center p-6">
 			<div
 				onMouseDown={(event) => event.stopPropagation()}
-				className="tyto-settings-card flex h-[640px] max-h-[calc(100dvh-3rem)] w-full max-w-3xl overflow-hidden rounded-[var(--tyto-r-lg)] border border-border/60 bg-card shadow-2xl">
-				<div className="tyto-sidebar flex w-[220px] shrink-0 flex-col border-r border-border bg-sidebar px-2 py-6">
+				className="tyto-settings-card flex h-[720px] max-h-[calc(100dvh-3rem)] w-full max-w-[952px] overflow-hidden rounded-[14px] border border-border/60 bg-card shadow-2xl">
+				<div className="tyto-sidebar flex w-[232px] shrink-0 flex-col border-r border-border bg-sidebar px-2 py-6">
 					<div className="mb-3 flex h-7 items-center px-2">
 						<span className="text-[15px] leading-7 font-semibold tracking-[-0.015em]">{m.settings()}</span>
 					</div>
@@ -187,7 +187,7 @@ export default function SettingsPage({ setVisible, scrollTo }: SettingsPageProps
 					</div>
 				</div>
 
-				<div className="relative min-w-0 flex-1 overflow-y-auto px-8 py-6">
+				<div className="tyto-settings-main relative min-w-0 flex-1 overflow-y-auto px-8 py-6">
 					{/* Stays in view while the section scrolls; floats beside the title row. */}
 					<Button
 						onMouseDown={() => setVisible(false)}
@@ -195,7 +195,7 @@ export default function SettingsPage({ setVisible, scrollTo }: SettingsPageProps
 						size="sm"
 						iconOnly
 						aria-label={m.modalClose()}
-						className="sticky top-0 z-10 float-end -me-3 bg-card">
+						className="sticky top-0 z-10 float-end -me-3 bg-[var(--tyto-settings-bg)]">
 						<X className="h-4 w-4" />
 					</Button>
 					<div className="mb-6 flex h-7 items-center">
