@@ -30,7 +30,7 @@ describe('tyto tauri config', () => {
 
 	it('has Tyto name, version and identifier', () => {
 		expect(merged.productName).toBe('Tyto')
-		expect(merged.version).toBe('0.1.6')
+		expect(merged.version).toBe('0.2.1')
 		expect(merged.identifier).toBe('ru.eliseevdenis.tyto')
 	})
 
