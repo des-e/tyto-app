@@ -66,7 +66,6 @@ export function TranscriptionSection({
 	onOpenAutoExport: () => void
 	onOpenDictionary: () => void
 }) {
-	const projectsPath = vm.preference.projectsPath ?? vm.defaultProjectsPath
 	const autoExport = vm.preference.autoExport
 	const words = parseDictionary(vm.preference.modelOptions.init_prompt)
 
@@ -106,24 +105,6 @@ export function TranscriptionSection({
 						onCheckedChange={(enabled) => vm.preference.setAutoExport({ ...autoExport, enabled })}
 						aria-label={m.setAutoSave()}
 					/>
-				</SettingsRow>
-			</SettingsGroup>
-
-			<SettingsGroup title={m.projectsFolder()}>
-				<SettingsRow
-					label={
-						<span title={projectsPath} className="block truncate font-mono text-xs text-muted-foreground">
-							{projectsPath}
-						</span>
-					}>
-					{vm.preference.projectsPath && (
-						<Button variant="ghost" size="sm" onMouseDown={vm.resetProjectsPath}>
-							{m.resetToDefault()}
-						</Button>
-					)}
-					<Button variant="outline" size="sm" onMouseDown={vm.changeProjectsPath}>
-						{m.changeProjectsFolder()}
-					</Button>
 				</SettingsRow>
 			</SettingsGroup>
 

@@ -1,3 +1,4 @@
+import { resolveTheme } from '~/lib/tyto/theme-choice'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { Button } from '~/components/ui/button'
@@ -36,7 +37,7 @@ export default function RecordingPillWindow() {
 	const [received, setReceived] = useState<Received | null>(null)
 	const [now, setNow] = useState(() => Date.now())
 	const [busy, setBusy] = useState(false)
-	const theme = readConfig<'light' | 'dark'>(CONFIG_KEYS.theme, window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+	const theme = resolveTheme(readConfig<string>(CONFIG_KEYS.theme, 'system'))
 	const direction = getTextDirection(configuredLocale)
 
 	useLayoutEffect(() => {

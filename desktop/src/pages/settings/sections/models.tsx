@@ -1,101 +1,67 @@
-import { useState } from 'react'
-import { Check, Download, FolderOpen, Pencil, X } from 'lucide-react'
+import { Check, Download, FolderOpen } from 'lucide-react'
 import { m } from '~/paraglide/messages.js'
-import { ReactComponent as FolderIcon } from '~/icons/folder.svg'
-import { ReactComponent as LinkIcon } from '~/icons/link.svg'
-import { ReactComponent as WrenchIcon } from '~/icons/wrench.svg'
 import NumberField from '~/components/number-field'
 import { Input } from '~/components/ui/input'
-import { Switch } from '~/components/ui/switch'
+import { Button } from '~/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
-import { ActionRow, IconAction, SettingsGroup, SettingsRow, rowControlClass, type SettingsViewModel } from './shared'
+import { IconAction, SettingsGroup, SettingsRow, rowControlClass, type SettingsViewModel } from './shared'
 import { getFriendlyModelName } from '~/lib/model'
-import { ModelGlyph } from '~/components/brand-glyph'
+import { MODEL_CATALOG, fileName } from '~/lib/tyto/model-catalog'
+import { SegmentedControl } from '~/lib/tyto/segmented-control'
 
 export function ModelsSection({ vm }: { vm: SettingsViewModel }) {
-	const [editingPath, setEditingPath] = useState<string | null>(null)
-	const [editingName, setEditingName] = useState('')
-	const currentModel = vm.models.find((model) => model.path === vm.preference.modelPath)
-	const isRenaming = Boolean(currentModel && editingPath === currentModel.path)
+	const installed = vm.models
+	const byFile = new Map(installed.map((model) => [fileName(model.path), model]))
+	const catalogFiles = new Set(MODEL_CATALOG.map((entry) => entry.file))
+	// Models the catalog does not know (pasted links, the Hebrew one, older downloads) are listed too.
+	const others = installed.filter((model) => !catalogFiles.has(fileName(model.path)))
 
-	function commitRename() {
-		if (!currentModel) return
-		const name = editingName.trim()
-		if (name) vm.preference.setModelDisplayNames({ ...vm.preference.modelDisplayNames, [currentModel.path]: name })
-		setEditingPath(null)
-	}
-
-	function startRename() {
-		if (!currentModel) return
-		setEditingPath(currentModel.path)
-		setEditingName(vm.preference.modelDisplayNames[currentModel.path] ?? getFriendlyModelName(currentModel.name))
+	function modelRow({ key, name, info, path, url }: { key: string; name: string; info: string; path?: string; url?: string }) {
+		const selected = Boolean(path) && path === vm.preference.modelPath
+		return (
+			<SettingsRow key={key} label={name} description={info}>
+				{selected ? (
+					<span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+						<Check aria-hidden className="h-3.5 w-3.5" />
+						{m.modSelected()}
+					</span>
+				) : path ? (
+					<Button variant="outline" size="sm" onClick={() => vm.selectModel(path)}>
+						{m.modSelect()}
+					</Button>
+				) : url ? (
+					<Button variant="outline" size="sm" onClick={() => vm.downloadCatalogModel(url)}>
+						<Download aria-hidden className="h-3.5 w-3.5" />
+						{m.modDownload()}
+					</Button>
+				) : null}
+			</SettingsRow>
+		)
 	}
 
 	return (
 		<div className="space-y-6">
-			<SettingsGroup>
-				<SettingsRow label={m.selectModel()}>
-					{isRenaming ? (
-						<>
-							<Input
-								autoFocus
-								value={editingName}
-								onChange={(event) => setEditingName(event.target.value)}
-								onKeyDown={(event) => {
-									if (event.key === 'Enter') commitRename()
-									if (event.key === 'Escape') setEditingPath(null)
-								}}
-								className={`w-56 ${rowControlClass}`}
-							/>
-							<IconAction variant="outline" label={m.save()} icon={<Check className="h-4 w-4" />} onClick={commitRename} />
-							<IconAction variant="outline" label={m.cancel()} icon={<X className="h-4 w-4" />} onClick={() => setEditingPath(null)} />
-						</>
-					) : (
-						<>
-							<Select
-								value={vm.preference.modelPath ?? undefined}
-								onValueChange={vm.selectModel}
-								onOpenChange={(open) => {
-									if (open) vm.loadModels()
-								}}>
-								<SelectTrigger className={`w-56 ${rowControlClass}`}>
-									<SelectValue placeholder={m.selectModel()} />
-								</SelectTrigger>
-								<SelectContent>
-									{vm.models.map((model, index) => (
-										<SelectItem key={index} value={model.path}>
-											<span className="flex items-center gap-2">
-												<ModelGlyph name={model.name} className="text-muted-foreground" />
-												{vm.preference.modelDisplayNames[model.path] ?? getFriendlyModelName(model.name)}
-											</span>
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<IconAction
-								variant="outline"
-								label={m.showInFolder()}
-								icon={<FolderOpen className="h-4 w-4" />}
-								disabled={!currentModel}
-								onClick={() => currentModel && vm.openSelectedModel(currentModel.path)}
-							/>
-							<IconAction
-								variant="outline"
-								label={m.rename()}
-								icon={<Pencil className="h-4 w-4" />}
-								disabled={!currentModel}
-								onClick={startRename}
-							/>
-						</>
-					)}
-				</SettingsRow>
+			<SettingsGroup title={m.modRecognition()}>
+				{MODEL_CATALOG.map((entry) => (
+					modelRow({ key: entry.file, name: entry.name, info: entry.info(), path: byFile.get(entry.file)?.path, url: entry.url })
+				))}
+				{others.map((model) => (
+					modelRow({ key: model.path, name: vm.preference.modelDisplayNames[model.path] ?? getFriendlyModelName(model.name), info: m.modOwnModel(), path: model.path })
+				))}
 			</SettingsGroup>
 
-			<SettingsGroup title={m.settingsHardware()}>
-				<SettingsRow label={m.transcribeOnCpu()} description={m.transcribeOnCpuInfo()}>
-					<Switch checked={vm.preference.noGpu} onCheckedChange={vm.preference.setNoGpu} aria-label={m.transcribeOnCpu()} />
+			<SettingsGroup title={m.modComputer()}>
+				<SettingsRow label={m.modEngine()} description={m.modEngineInfo()}>
+					<SegmentedControl
+						ariaLabel={m.modEngine()}
+						value={vm.preference.noGpu ? 'cpu' : 'gpu'}
+						onChange={(value) => vm.preference.setNoGpu(value === 'cpu')}
+						options={[
+							{ value: 'gpu', label: m.modGpu() },
+							{ value: 'cpu', label: m.modCpu() },
+						]}
+					/>
 				</SettingsRow>
-
 				{!vm.isMacOS && !vm.preference.noGpu && (
 					<SettingsRow label={m.gpuDevice()}>
 						{vm.gpuDevices.length > 0 ? (
@@ -145,21 +111,27 @@ export function ModelsSection({ vm }: { vm: SettingsViewModel }) {
 				</SettingsGroup>
 			)}
 
-			<SettingsGroup title={m.settingsModelFiles()}>
-				<SettingsRow label={m.downloadModel()}>
+			<SettingsGroup>
+				<SettingsRow label={m.modFolder()}>
+					<Button variant="ghost" size="sm" onClick={vm.openModelPath}>
+						{m.modOpen()}
+					</Button>
+					<Button variant="outline" size="sm" onClick={vm.changeModelsFolder}>
+						{m.modChange()}
+					</Button>
+				</SettingsRow>
+				<SettingsRow label={m.modByLink()} description={m.modByLinkInfo()}>
 					<Input
 						type="text"
 						value={vm.downloadURL}
 						onChange={(event) => vm.setDownloadURL(event.target.value)}
-						placeholder={m.pasteModelLink()}
+						placeholder={m.modPasteLink()}
+						aria-label={m.modByLink()}
 						onKeyDown={(event) => (event.key === 'Enter' ? vm.downloadModel() : null)}
 						className={`w-56 ${rowControlClass}`}
 					/>
 					<IconAction label={m.downloadModel()} icon={<Download className="h-4 w-4" />} onClick={vm.downloadModel} disabled={!vm.downloadURL} />
 				</SettingsRow>
-				<ActionRow label={m.downloadModelsLink()} icon={<LinkIcon className="h-4 w-4" />} onClick={vm.openModelsUrl} />
-				<ActionRow label={m.modelsFolder()} icon={<FolderIcon className="h-4 w-4" />} onClick={vm.openModelPath} />
-				<ActionRow label={m.changeModelsFolder()} icon={<WrenchIcon className="h-4 w-4" />} onClick={vm.changeModelsFolder} />
 			</SettingsGroup>
 		</div>
 	)

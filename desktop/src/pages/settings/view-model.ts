@@ -161,6 +161,11 @@ export function viewModel() {
 		navigate('/setup', { state: { downloadURL } })
 	}
 
+	/** A model from the list in «Модели» goes through the same download screen as a pasted link. */
+	function downloadCatalogModel(url: string) {
+		navigate('/setup', { state: { downloadURL: url } })
+	}
+
 	async function loadMeta() {
 		try {
 			const prettyVersion = await getPrettyVersion()
@@ -395,6 +400,7 @@ export function viewModel() {
 		isLogToFileSet,
 		setLogToFile,
 		downloadModel,
+		downloadCatalogModel,
 		downloadURL,
 		setDownloadURL,
 		apiBaseUrl,

@@ -68,6 +68,8 @@ type UpdaterContextType = {
 	 * and with nothing transcribing, queued, recording or downloading. False everywhere else.
 	 */
 	setAutoPromptReady: (ready: boolean) => void
+	/** «Проверить обновления» in General settings: asks the server now and opens the window when there is one. */
+	checkNow: () => Promise<'found' | 'none' | 'error'>
 }
 
 // Create the context
@@ -78,6 +80,7 @@ export const UpdaterContext = createContext<UpdaterContextType>({
 	setUpdating: () => {},
 	setManifest: () => {},
 	updateApp: async () => {},
+	checkNow: async () => 'none',
 	progress: null,
 	fakeUpdate: false,
 	setFakeUpdate: () => {},
@@ -277,9 +280,23 @@ export function UpdaterProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
+	async function checkNow(): Promise<'found' | 'none' | 'error'> {
+		try {
+			const found = await checkUpdate()
+			if (!found) return 'none'
+			setAvailableUpdate(found.available)
+			setUpdate(found)
+			return 'found'
+		} catch (error) {
+			console.error(error)
+			return 'error'
+		}
+	}
+
 	return (
 		<UpdaterContext.Provider
 			value={{
+				checkNow,
 				availableUpdate: availableUpdate || (fakeUpdate && !fakeDone),
 				setAvailableUpdate,
 				fakeUpdate,

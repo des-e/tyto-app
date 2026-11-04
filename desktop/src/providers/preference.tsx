@@ -17,6 +17,7 @@ import { message } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import type { ModelMetadata } from '~/lib/model'
 import type { Quality } from '~/lib/tyto/screen-recording'
+import { resolveTheme, systemPrefersDark, type ThemeChoice } from '~/lib/tyto/theme-choice'
 
 /** Which build of the engine's CPU backend to run; `auto` lets CPUID decide. */
 export type CpuVariant = 'auto' | 'avx2' | 'baseline'
@@ -77,8 +78,10 @@ export interface Preference {
 	setTextFormatSummary: ModifyState<TextFormat>
 	modelOptions: ModelOptions
 	setModelOptions: ModifyState<ModelOptions>
+	/** The theme in effect: the choice, or the system's when the choice is «Как в системе». */
 	theme: 'light' | 'dark'
-	setTheme: ModifyState<'light' | 'dark'>
+	themeChoice: ThemeChoice
+	setTheme: ModifyState<ThemeChoice>
 	projectsPath: string | null
 	setProjectsPath: ModifyState<string | null>
 	setLanguageDirections: () => void
@@ -171,7 +174,6 @@ export interface ModelOptions {
 	beam_size?: number
 }
 
-const systemIsDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
 const defaultDisplayLanguage = 'en-US'
 
 export const DEFAULT_MODEL_OPTIONS: ModelOptions = {
@@ -220,7 +222,16 @@ export function PreferenceProvider({ children }: { children: ReactNode }) {
 	const [textFormatTranscript, setTextFormatTranscript] = usePersisted<TextFormat>(CONFIG_KEYS.textFormatTranscript, 'pdf')
 	const [textFormatSummary, setTextFormatSummary] = usePersisted<TextFormat>(CONFIG_KEYS.textFormatSummary, 'md')
 	const isMounted = useRef<boolean>(false)
-	const [theme, setTheme] = usePersisted<'dark' | 'light'>(CONFIG_KEYS.theme, systemIsDark ? 'dark' : 'light')
+	const [themeChoice, setTheme] = usePersisted<ThemeChoice>(CONFIG_KEYS.theme, 'system')
+	const [systemDark, setSystemDark] = useState(systemPrefersDark)
+	useEffect(() => {
+		const query = window.matchMedia?.('(prefers-color-scheme: dark)')
+		if (!query) return
+		const update = () => setSystemDark(query.matches)
+		query.addEventListener('change', update)
+		return () => query.removeEventListener('change', update)
+	}, [])
+	const theme = resolveTheme(themeChoice, systemDark)
 	const [homeTab, setHomeTab] = usePersisted<HomeTab>(CONFIG_KEYS.homeTab, 'file')
 
 	const [soundOnFinish, setSoundOnFinish] = usePersisted(CONFIG_KEYS.soundOnFinish, defaultOptions.soundOnFinish)
@@ -344,11 +355,11 @@ export function PreferenceProvider({ children }: { children: ReactNode }) {
 		// Keep the native window appearance in sync so macOS vibrancy (glass sidebar)
 		// renders light glass in light mode instead of the system appearance.
 		try {
-			void getCurrentWebviewWindow().setTheme(theme)
+			void getCurrentWebviewWindow().setTheme(themeChoice === 'system' ? null : theme)
 		} catch {
 			/* browser mode */
 		}
-	}, [theme])
+	}, [theme, themeChoice])
 
 	function setLanguageDefaults() {
 		if (supportedLanguages[preference.displayLanguage]) {
@@ -437,6 +448,7 @@ export function PreferenceProvider({ children }: { children: ReactNode }) {
 		modelDisplayNames,
 		setModelDisplayNames,
 		theme,
+		themeChoice,
 		setTheme,
 		homeTab,
 		setHomeTab,

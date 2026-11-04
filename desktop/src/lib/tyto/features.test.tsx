@@ -51,9 +51,13 @@ describe('Tyto v1: скрытые функции', () => {
 	})
 
 	it('конфиденциальность: нет переключателя аналитики', () => {
-		const vm = { preference: { analyticsEnabled: true, setAnalyticsEnabled: vi.fn(), saveTranscripts: true, setSaveTranscripts: vi.fn() } }
+		const vm = {
+			preference: { analyticsEnabled: true, setAnalyticsEnabled: vi.fn(), saveTranscripts: true, setSaveTranscripts: vi.fn(), projectsPath: null },
+			defaultProjectsPath: '/docs/Tyto',
+		}
 		const view = render(<PrivacySection vm={vm as never} />)
 		expect(view.queryByText(m.analyticsEnabled())).toBeNull()
-		expect(view.queryByText(m.saveProjects())).not.toBeNull()
+		expect(view.queryByText(m.privSave())).not.toBeNull()
+		expect(view.queryByText('/docs/Tyto')).not.toBeNull()
 	})
 })

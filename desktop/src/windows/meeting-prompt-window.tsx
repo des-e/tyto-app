@@ -1,3 +1,4 @@
+import { resolveTheme } from '~/lib/tyto/theme-choice'
 import { emit, listen } from '@tauri-apps/api/event'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { X } from 'lucide-react'
@@ -40,7 +41,7 @@ export default function MeetingPromptWindow() {
 	const [state, setState] = useState<MeetingPromptState | null>(null)
 	const [busy, setBusy] = useState(false)
 	const [videoSupported, setVideoSupported] = useState(false)
-	const theme = readConfig<'light' | 'dark'>(CONFIG_KEYS.theme, window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+	const theme = resolveTheme(readConfig<string>(CONFIG_KEYS.theme, 'system'))
 	const direction = getTextDirection(configuredLocale)
 
 	useLayoutEffect(() => {
