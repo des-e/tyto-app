@@ -3,7 +3,7 @@ import { platform } from '@tauri-apps/plugin-os'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import ShortcutRecorder from '~/components/shortcut-recorder'
-import { MeetingServiceIcons } from '~/components/meeting-service-icons'
+import { GoogleMeetIcon, MicrosoftTeamsIcon, ZoomIcon } from '~/components/meeting-service-icons'
 import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
 import { getDefaultRecordingShortcut } from '~/lib/config'
@@ -147,6 +147,38 @@ function MeetPermissionRow({ enabled }: { enabled: boolean }) {
 	)
 }
 
+/**
+ * «Где Tyto узнает звонок» (design round 5, table 3): each service and how soon the offer appears.
+ * Logos are drawn in one grey; services without a logo here get their first letter.
+ */
+function MeetingServices({ dimmed }: { dimmed: boolean }) {
+	const rows: { name: string; mark: React.ReactNode; when: string }[] = [
+		{ name: m.svcTelemost(), mark: 'Т', when: m.detectTab() },
+		{ name: m.svcBitrix(), mark: 'Б', when: m.detectApp() },
+		{ name: 'Google Meet', mark: <GoogleMeetIcon className="h-3.5 w-3.5" />, when: m.detectTab() },
+		{ name: 'Zoom', mark: <ZoomIcon className="h-3.5 w-3.5" />, when: m.detectNow() },
+		{ name: 'Microsoft Teams', mark: <MicrosoftTeamsIcon className="h-3.5 w-3.5" />, when: m.detectNow() },
+		{ name: m.svcOther(), mark: '…', when: m.detectLater() },
+	]
+	return (
+		<table className={`tyto-services w-full ${dimmed ? 'opacity-50' : ''}`}>
+			<tbody>
+				{rows.map((row) => (
+					<tr key={row.name}>
+						<td className="w-[30px]">
+							<span aria-hidden className="tyto-service-mark">
+								{row.mark}
+							</span>
+						</td>
+						<td>{row.name}</td>
+						<td className="text-end text-muted-foreground">{row.when}</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	)
+}
+
 export function RecordingSection() {
 	const shortcut = useRecordingShortcut()
 	const { meetingDetectionEnabled, setMeetingDetectionEnabled, autoTranscribeAfterRecording, setAutoTranscribeAfterRecording, screenQuality, setScreenQuality } =
@@ -156,9 +188,12 @@ export function RecordingSection() {
 	return (
 		<div className="space-y-6">
 			<SettingsGroup title={m.meetingDetection()}>
-				<SettingsRow label={<MeetingServiceIcons label={m.supportedMeetingServices()} />} description={m.meetingDetectionInfo()}>
-					<Switch checked={meetingDetectionEnabled} onCheckedChange={setMeetingDetectionEnabled} aria-label={m.meetingDetection()} />
+				<SettingsRow label={m.setOfferRecording()}>
+					<Switch checked={meetingDetectionEnabled} onCheckedChange={setMeetingDetectionEnabled} aria-label={m.setOfferRecording()} />
 				</SettingsRow>
+				<div className="py-2">
+					<MeetingServices dimmed={!meetingDetectionEnabled} />
+				</div>
 				<MeetPermissionRow enabled={meetingDetectionEnabled} />
 			</SettingsGroup>
 

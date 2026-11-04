@@ -1141,6 +1141,75 @@ svg.lucide {
 	background: var(--card);
 }
 
+/* A word in the dictionary (settings/sections/dictionary.tsx): a quiet chip with a remove cross. */
+.tyto-dict-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 6px 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--tyto-r-sm);
+	background: var(--background);
+	font-size: 13px;
+	color: var(--foreground);
+}
+
+.tyto-dict-chip > button {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted-foreground);
+	cursor: pointer;
+}
+
+.tyto-dict-chip > button:hover {
+	color: var(--foreground);
+	background: var(--tyto-line-active);
+}
+
+.tyto-dict-chip > button:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: 1px;
+}
+
+/* Call services in Recording settings: one row each, a hairline between, a grey mark. */
+.tyto-services {
+	border-collapse: collapse;
+	font-size: 12.5px;
+	color: var(--foreground);
+}
+
+.tyto-services tr + tr {
+	border-top: 1px solid var(--tyto-row-line);
+}
+
+.tyto-services td {
+	padding: 4px 0;
+}
+
+.tyto-service-mark {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--tyto-r-sm);
+	background: var(--tyto-line-active);
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+
+/* Official logos, but in one grey like the letters. */
+.tyto-service-mark > svg {
+	filter: grayscale(1) contrast(0.8);
+	opacity: 0.75;
+}
+
 /* Progress of a run (run-progress.tsx, batch-overview.tsx): a 4 px bar, the done part in the text colour. */
 .tyto-run-bar {
 	position: relative;

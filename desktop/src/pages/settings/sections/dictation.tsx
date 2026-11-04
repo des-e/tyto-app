@@ -1,40 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { Clipboard, TextCursorInput } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { platform } from '@tauri-apps/plugin-os'
 import { m } from '~/paraglide/messages.js'
 import ShortcutRecorder from '~/components/shortcut-recorder'
+import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
+import { SegmentedControl } from '~/lib/tyto/segmented-control'
 import { getDefaultHotkeyShortcut, useHotkeyProvider, type HotkeyActivationMode, type HotkeyOutputMode } from '~/providers/hotkey'
-import { SettingsGroup, SettingsNote, SettingsRow, type SettingsViewModel } from './shared'
-import { AiTaskLink } from './ai'
 import { getDictationIndicatorEnabled, setDictationIndicatorEnabled } from '~/lib/dictation-indicator'
+import { SettingsGroup, SettingsNote, SettingsRow, type SettingsViewModel } from './shared'
 
-function SegmentedControl<T extends string>({
-	value,
-	options,
-	onChange,
-}: {
-	value: T
-	options: { value: T; label: string; icon?: ReactNode }[]
-	onChange: (v: T) => void
-}) {
-	return (
-		<div className="flex items-center gap-1 rounded-lg border border-border/65 bg-muted/40 p-0.5">
-			{options.map((option) => (
-				<button
-					key={option.value}
-					type="button"
-					onClick={() => onChange(option.value)}
-					className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${
-						value === option.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-					}`}>
-					{option.icon}
-					{option.label}
-				</button>
-			))}
-		</div>
-	)
-}
-
+/** «Диктовка» (design round 8): turning it on, then what happens to the text. */
 export function DictationSection({ vm, onOpenCleanup }: { vm: SettingsViewModel; onOpenCleanup: () => void }) {
 	const hotkey = useHotkeyProvider()
 	const [indicatorEnabled, setIndicatorEnabled] = useState(true)
@@ -50,36 +25,35 @@ export function DictationSection({ vm, onOpenCleanup }: { vm: SettingsViewModel;
 			console.error(error)
 		}
 	}
+
+	const ai = vm.preference.ai
+	const cleanup = ai.tasks.dictation.enabled
+	const setCleanup = (enabled: boolean) => vm.preference.setAi({ ...ai, tasks: { ...ai.tasks, dictation: { ...ai.tasks.dictation, enabled } } })
+	const pasteKeys = platform() === 'macos' ? '⌘V' : 'Ctrl+V'
+
+	const activationOptions: { value: HotkeyActivationMode; label: string }[] = [
+		{ value: 'push-to-talk', label: m.setHold() },
+		{ value: 'toggle', label: m.setPress() },
+	]
 	const activationDescriptions = {
 		'push-to-talk': m.hotkeyActivationPushToTalkDescription,
 		toggle: m.hotkeyActivationToggleDescription,
 	} as const
-	const activationOptions: { value: HotkeyActivationMode; label: string }[] = [
-		{ value: 'push-to-talk', label: m.hotkeyActivationPushToTalk() },
-		{ value: 'toggle', label: m.hotkeyActivationToggle() },
+	const outputOptions: { value: HotkeyOutputMode; label: string }[] = [
+		{ value: 'type', label: m.setTypeIn() },
+		{ value: 'clipboard', label: m.setCopy() },
 	]
-	const outputOptions: { value: HotkeyOutputMode; label: string; icon: ReactNode }[] = [
-		{ value: 'clipboard', label: m.hotkeyOutputClipboard(), icon: <Clipboard aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /> },
-		{ value: 'type', label: m.hotkeyOutputType(), icon: <TextCursorInput aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /> },
-	]
+
 	return (
 		<div className="space-y-6">
-			<SettingsGroup title={m.settingsDictationActivation()}>
-				<SettingsRow label={m.globalHotkeyEnabled()}>
-					<Switch checked={hotkey.hotkeyEnabled} onCheckedChange={hotkey.setHotkeyEnabled} />
+			<SettingsGroup title={m.setGroupEnable()}>
+				<SettingsRow label={m.setDictationHotkey()} description={m.setDictationHotkeyInfo()}>
+					<Switch checked={hotkey.hotkeyEnabled} onCheckedChange={hotkey.setHotkeyEnabled} aria-label={m.setDictationHotkey()} />
 				</SettingsRow>
 
 				{hotkey.hotkeyEnabled && (
 					<>
-						<SettingsRow label={m.dictationIndicatorSetting()} description={m.dictationIndicatorSettingInfo()}>
-							<Switch checked={indicatorEnabled} onCheckedChange={changeIndicatorEnabled} />
-						</SettingsRow>
-
-						<SettingsRow label={m.hotkeyActivationMode()} description={activationDescriptions[hotkey.hotkeyActivationMode]()}>
-							<SegmentedControl value={hotkey.hotkeyActivationMode} options={activationOptions} onChange={hotkey.setHotkeyActivationMode} />
-						</SettingsRow>
-
-						<SettingsRow label={m.globalHotkeyShortcut()} description={m.globalHotkeyDescription()}>
+						<SettingsRow label={m.setShortcut()}>
 							<ShortcutRecorder
 								value={hotkey.hotkeyShortcut}
 								onChange={hotkey.setHotkeyShortcut}
@@ -87,30 +61,44 @@ export function DictationSection({ vm, onOpenCleanup }: { vm: SettingsViewModel;
 								onCapturingChange={hotkey.setHotkeyCapturing}
 							/>
 						</SettingsRow>
-						{hotkey.hotkeyShortcutError ? (
+						{hotkey.hotkeyShortcutError && (
 							<SettingsNote>
 								<span role="alert" className="text-destructive">
 									{m.shortcutRegistrationFailed({ error: hotkey.hotkeyShortcutError })}
 								</span>
 							</SettingsNote>
-						) : hotkey.hotkeyShortcutRegistered ? (
-							<SettingsNote>{m.shortcutRegistered()}</SettingsNote>
-						) : null}
+						)}
+						<SettingsRow label={m.setHowToStart()} description={activationDescriptions[hotkey.hotkeyActivationMode]()}>
+							<SegmentedControl
+								ariaLabel={m.setHowToStart()}
+								value={hotkey.hotkeyActivationMode}
+								options={activationOptions}
+								onChange={hotkey.setHotkeyActivationMode}
+							/>
+						</SettingsRow>
 					</>
 				)}
 			</SettingsGroup>
 
 			{hotkey.hotkeyEnabled && (
-				<SettingsGroup title={m.settingsDictationOutput()}>
-					<SettingsRow label={m.hotkeyOutputMode()}>
-						<SegmentedControl value={hotkey.hotkeyOutputMode} options={outputOptions} onChange={hotkey.setHotkeyOutputMode} />
+				<SettingsGroup title={m.setGroupText()}>
+					<SettingsRow label={m.setWhereText()} description={m.setWhereTextInfo({ keys: pasteKeys })}>
+						<SegmentedControl ariaLabel={m.setWhereText()} value={hotkey.hotkeyOutputMode} options={outputOptions} onChange={hotkey.setHotkeyOutputMode} />
 					</SettingsRow>
-
-					<SettingsRow label={m.normalizeHotkeyOutput()} description={m.normalizeHotkeyOutputInfo()}>
-						<Switch checked={hotkey.hotkeyNormalizeOutput} onCheckedChange={hotkey.setHotkeyNormalizeOutput} />
+					<SettingsRow label={m.setOneLine()} description={m.setOneLineInfo()}>
+						<Switch checked={hotkey.hotkeyNormalizeOutput} onCheckedChange={hotkey.setHotkeyNormalizeOutput} aria-label={m.setOneLine()} />
 					</SettingsRow>
-
-					<AiTaskLink label={m.aiDictationTask()} enabled={vm.preference.ai.tasks.dictation.enabled} onClick={onOpenCleanup} />
+					<SettingsRow label={m.setAiCleanup()} description={m.setAiCleanupInfo()}>
+						{cleanup && (
+							<Button variant="ghost" size="sm" onClick={onOpenCleanup}>
+								{m.setConfigure()}
+							</Button>
+						)}
+						<Switch checked={cleanup} onCheckedChange={setCleanup} aria-label={m.setAiCleanup()} />
+					</SettingsRow>
+					<SettingsRow label={m.setIndicator()} description={m.setIndicatorInfo()}>
+						<Switch checked={indicatorEnabled} onCheckedChange={changeIndicatorEnabled} aria-label={m.setIndicator()} />
+					</SettingsRow>
 				</SettingsGroup>
 			)}
 		</div>

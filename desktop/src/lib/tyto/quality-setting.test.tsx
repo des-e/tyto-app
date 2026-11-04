@@ -10,7 +10,7 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}), e
 vi.mock('@tauri-apps/plugin-os', () => ({ platform: () => 'windows' }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('~/components/shortcut-recorder', () => ({ default: () => null }))
-vi.mock('~/components/meeting-service-icons', () => ({ MeetingServiceIcons: () => null }))
+vi.mock('~/components/meeting-service-icons', () => ({ GoogleMeetIcon: () => null, ZoomIcon: () => null, MicrosoftTeamsIcon: () => null }))
 vi.mock('~/providers/recording-shortcut', () => ({
 	useRecordingShortcut: () => ({ recordingShortcutEnabled: false, setRecordingShortcutEnabled: () => {} }),
 }))

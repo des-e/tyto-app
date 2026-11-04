@@ -182,8 +182,10 @@ interface EngineSpecificOptions {
  * and back needs no retyping. Unknown capabilities (no metadata yet) leave the options alone.
  */
 export function withoutUnsupportedOptions<T extends EngineSpecificOptions>(options: T, capabilities: ModelCapabilities | null | undefined): T {
-	if (!capabilities) return options
+	// Tyto has no «translate to English» switch any more (design round 8): a value saved before stays off.
 	const next = { ...options }
+	delete next.translate
+	if (!capabilities) return next
 	if (!capabilities.text_prompts) delete next.init_prompt
 	if (!capabilities.translation) delete next.translate
 	return next

@@ -1,55 +1,62 @@
-import { ChevronRight, SlidersHorizontal, AudioLines } from 'lucide-react'
+import { message } from '@tauri-apps/plugin-dialog'
 import { DEFAULT_MODEL_OPTIONS } from '~/providers/preference'
 import { m } from '~/paraglide/messages.js'
+import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
-import { ActionRow, SettingsGroup, SettingsNote, SettingsRow, type SettingsViewModel } from './shared'
+import { SettingsGroup, SettingsRow, type SettingsViewModel } from './shared'
 
-export function TuningSection({ vm, onOpenWhisper, onOpenAudio }: { vm: SettingsViewModel; onOpenWhisper: () => void; onOpenAudio: () => void }) {
+/** «Тонкая настройка» (design round 8): accuracy and sound; Whisper and FFmpeg live in «Для опытных». */
+export function TuningSection({ vm, onOpenAdvanced }: { vm: SettingsViewModel; onOpenAdvanced: () => void }) {
 	const options = vm.preference.modelOptions
+	const ffmpeg = vm.preference.ffmpegOptions
 	const customized =
-		Boolean(options.translate) ||
+		Boolean(ffmpeg.custom_command) ||
 		(Object.keys(DEFAULT_MODEL_OPTIONS) as (keyof typeof DEFAULT_MODEL_OPTIONS)[])
-			.filter((key) => key !== 'lang' && key !== 'verbose')
+			.filter((key) => !['lang', 'verbose', 'init_prompt', 'word_timestamps', 'translate'].includes(key))
 			.some((key) => (options[key] ?? DEFAULT_MODEL_OPTIONS[key]) !== DEFAULT_MODEL_OPTIONS[key])
 
 	return (
 		<div className="space-y-6">
-			<SettingsGroup>
-				<SettingsRow label={m.enableDiarization()} description={m.infoDiarization()}>
-					<Switch checked={vm.preference.diarizeEnabled} onCheckedChange={vm.toggleDiarization} />
+			<SettingsGroup title={m.setGroupAccuracy()}>
+				<SettingsRow label={m.setStable()} description={m.setStableInfo()}>
+					<Switch checked={vm.preference.stableTimestampsEnabled} onCheckedChange={vm.handleStableTimestampsToggle} aria-label={m.setStable()} />
 				</SettingsRow>
-				{vm.preference.diarizeEnabled && <SettingsNote>{m.diarizeMaxSpeakersNote()}</SettingsNote>}
-				<SettingsRow label={m.enableStableTimestamps()} description={m.stableTimestampsInfo()}>
-					<Switch checked={vm.preference.stableTimestampsEnabled} onCheckedChange={vm.handleStableTimestampsToggle} />
+				<SettingsRow label={m.setWordTimes()} description={m.setWordTimesInfo()}>
+					<Switch
+						checked={Boolean(options.word_timestamps)}
+						aria-label={m.setWordTimes()}
+						onCheckedChange={(checked) => {
+							// The switch does nothing without a sentence length, so say so rather than letting it look broken.
+							if (checked && !options.max_sentence_len) void message(m.pleaseSetMaxSentenceLen())
+							vm.preference.setModelOptions({ ...options, word_timestamps: checked })
+						}}
+					/>
 				</SettingsRow>
-				{vm.preference.stableTimestampsEnabled && <SettingsNote>{m.stableTimestampsSlowNote()}</SettingsNote>}
 			</SettingsGroup>
+
+			<SettingsGroup title={m.setGroupSound()}>
+				<SettingsRow label={m.setNormalize()} description={m.setNormalizeInfo()}>
+					<Switch
+						checked={ffmpeg.normalize_loudness}
+						aria-label={m.setNormalize()}
+						onCheckedChange={(checked) => vm.preference.setFfmpegOptions({ ...ffmpeg, normalize_loudness: checked })}
+					/>
+				</SettingsRow>
+			</SettingsGroup>
+
 			<SettingsGroup>
-				<ActionRow
+				<SettingsRow
 					label={
 						<span className="flex items-center gap-2">
-							<SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-							{m.whisperOptions()}
+							{m.setWhisperLink()}
 							{customized && <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{m.tuningCustomized()}</span>}
 						</span>
 					}
-					description={m.whisperOptionsInfo()}
-					icon={<ChevronRight className="h-4 w-4 rtl:rotate-180" />}
-					activateOnClick
-					onClick={onOpenWhisper}
-				/>
-				<ActionRow
-					label={
-						<span className="flex items-center gap-2">
-							<AudioLines className="h-4 w-4 text-muted-foreground" />
-							{m.audioProcessing()}
-						</span>
-					}
-					description={m.audioProcessingInfo()}
-					icon={<ChevronRight className="h-4 w-4 rtl:rotate-180" />}
-					activateOnClick
-					onClick={onOpenAudio}
-				/>
+					description={m.setWhisperLinkInfo()}>
+					<Button variant="outline" size="sm" onClick={onOpenAdvanced}>
+						{m.setOpenAdvanced()}
+					</Button>
+				</SettingsRow>
 			</SettingsGroup>
 		</div>
 	)

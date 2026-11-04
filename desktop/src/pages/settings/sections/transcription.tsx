@@ -7,10 +7,11 @@ import { describeAutoExport } from './auto-export'
 import LanguageInput from '~/components/language-input'
 import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
+import { parseDictionary, wordsLabel } from '~/lib/tyto/dictionary'
 import { deleteAllTranscripts, listTranscripts, notifyTranscriptsChanged, TRANSCRIPTS_CHANGED_EVENT } from '~/lib/transcripts-store'
 import { ActionRow, SettingsGroup, SettingsRow, type SettingsViewModel } from './shared'
 
-/** Bulk cleanup for the projects folder: one row, one confirmation, everything Vibe saved goes. */
+/** Bulk cleanup for the projects folder: one row, one confirmation, everything Tyto saved goes. */
 function DeleteAllProjectsRow({ projectsPath }: { projectsPath: string | null }) {
 	const [count, setCount] = useState<number | null>(null)
 	const [deleting, setDeleting] = useState(false)
@@ -56,30 +57,55 @@ function DeleteAllProjectsRow({ projectsPath }: { projectsPath: string | null })
 	)
 }
 
-export function TranscriptionSection({ vm, onOpenAutoExport }: { vm: SettingsViewModel; onOpenAutoExport: () => void }) {
+export function TranscriptionSection({
+	vm,
+	onOpenAutoExport,
+	onOpenDictionary,
+}: {
+	vm: SettingsViewModel
+	onOpenAutoExport: () => void
+	onOpenDictionary: () => void
+}) {
 	const projectsPath = vm.preference.projectsPath ?? vm.defaultProjectsPath
 	const autoExport = vm.preference.autoExport
+	const words = parseDictionary(vm.preference.modelOptions.init_prompt)
 
 	return (
 		<div className="space-y-6">
-			<SettingsGroup>
-				{/* LanguageInput lives outside this page; reflow it into a settings row. */}
-				<div className="[&>div]:flex [&>div]:min-h-[56px] [&>div]:items-center [&>div]:justify-between [&>div]:gap-6 [&>div]:space-y-0 [&>div]:px-0 [&>div]:py-3 [&_label]:text-sm [&_label]:font-normal [&_button]:h-9 [&_button]:w-52 [&_button]:rounded-md">
-					<LanguageInput />
-				</div>
-				<SettingsRow label={m.autoExport()} description={autoExport.enabled ? describeAutoExport(autoExport) : m.autoExportInfo()}>
-					<div className="flex items-center gap-3">
-						<Button variant="outline" size="sm" className="rounded-lg" onClick={onOpenAutoExport}>
-							{m.autoExportChange()}
-						</Button>
-						<Switch checked={autoExport.enabled} onCheckedChange={(enabled) => vm.preference.setAutoExport({ ...autoExport, enabled })} />
+			<SettingsGroup title={m.setGroupTranscription()}>
+				<SettingsRow label={m.setDefaultLanguage()} description={m.setDefaultLanguageInfo()}>
+					<div className="w-56">
+						<LanguageInput variant="prominent" />
 					</div>
 				</SettingsRow>
-				<SettingsRow label={m.playSoundOnFinish()}>
-					<Switch checked={vm.preference.soundOnFinish} onCheckedChange={vm.preference.setSoundOnFinish} />
+				<SettingsRow label={m.setDiarize()} description={m.setDiarizeInfo()}>
+					<Switch checked={vm.preference.diarizeEnabled} onCheckedChange={vm.toggleDiarization} aria-label={m.setDiarize()} />
 				</SettingsRow>
-				<SettingsRow label={m.focusWindowOnFinish()}>
-					<Switch checked={vm.preference.focusOnFinish} onCheckedChange={vm.preference.setFocusOnFinish} />
+				<SettingsRow
+					label={m.setDictionary()}
+					description={words.length ? `${wordsLabel(words.length)}: ${m.setDictionaryWhat()}` : m.setDictionaryEmpty()}>
+					<Button variant="outline" size="sm" onClick={onOpenDictionary}>
+						{m.setDictionaryOpen()}
+					</Button>
+				</SettingsRow>
+			</SettingsGroup>
+
+			<SettingsGroup title={m.setGroupWhenDone()}>
+				<SettingsRow label={m.setSound()}>
+					<Switch checked={vm.preference.soundOnFinish} onCheckedChange={vm.preference.setSoundOnFinish} aria-label={m.setSound()} />
+				</SettingsRow>
+				<SettingsRow label={m.setFocus()}>
+					<Switch checked={vm.preference.focusOnFinish} onCheckedChange={vm.preference.setFocusOnFinish} aria-label={m.setFocus()} />
+				</SettingsRow>
+				<SettingsRow label={m.setAutoSave()} description={autoExport.enabled ? describeAutoExport(autoExport) : m.autoExportInfo()}>
+					<Button variant="outline" size="sm" onClick={onOpenAutoExport}>
+						{m.setConfigure()}
+					</Button>
+					<Switch
+						checked={autoExport.enabled}
+						onCheckedChange={(enabled) => vm.preference.setAutoExport({ ...autoExport, enabled })}
+						aria-label={m.setAutoSave()}
+					/>
 				</SettingsRow>
 			</SettingsGroup>
 
@@ -99,6 +125,9 @@ export function TranscriptionSection({ vm, onOpenAutoExport }: { vm: SettingsVie
 						{m.changeProjectsFolder()}
 					</Button>
 				</SettingsRow>
+			</SettingsGroup>
+
+			<SettingsGroup title={m.setDangerZone()}>
 				<DeleteAllProjectsRow projectsPath={vm.preference.projectsPath} />
 			</SettingsGroup>
 		</div>
