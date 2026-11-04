@@ -25,7 +25,7 @@ const COPY: Array<[string, string]> = [
 	['iPreferManualSetup', 'Указать файл модели вручную'],
 	['dropFilesHere', 'Перетащите запись встречи'],
 	['orClickToBrowse', 'Аудио или видео из Телемоста, Zoom, Битрикс24. Можно сразу несколько файлов или папку.'],
-	['noRecentTranscripts', 'Здесь будут ваши расшифровки. Начните с записи встречи справа.'],
+	['noRecentTranscripts', 'Здесь появятся ваши записи'],
 	['newTranscription', 'Новая расшифровка'],
 	['newSession', 'Новая расшифровка'],
 	['startRecord', 'Записать и расшифровать'],
