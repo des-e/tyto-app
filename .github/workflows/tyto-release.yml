@@ -75,14 +75,19 @@ jobs:
             - name: Build
               uses: tauri-apps/tauri-action@v0
               env:
-                  GITHUB_TOKEN: ${{ github.token }}
+                  # Releases go to the clean public page des-e/tyto (the updater reads
+                  # des-e/tyto/releases/latest), while the code lives here in des-e/tyto-app.
+                  # A fine-grained token with «Contents: read and write» on des-e/tyto.
+                  GITHUB_TOKEN: ${{ secrets.TYTO_RELEASE_TOKEN }}
                   # Tauri Updater (Tyto's own key)
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
               with:
+                  owner: des-e
+                  repo: tyto
                   tagName: v__VERSION__ # the action replaces __VERSION__ with the app version.
                   releaseName: "Tyto v__VERSION__"
-                  releaseBody: "Установка: https://github.com/des-e/tyto/blob/main/docs/install.md — программа не подписана, при первом запуске нужно разрешить её открыть."
+                  releaseBody: "Установка: https://github.com/des-e/tyto#установка — программа не подписана, при первом запуске нужно разрешить её открыть."
                   prerelease: true
                   args: ${{ matrix.args }} --config src-tauri/tauri.tyto.conf.json
                   projectPath: "./desktop"
