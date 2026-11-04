@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { m } from '~/paraglide/messages.js'
 import { UpdaterContext } from '~/providers/updater'
 import Layout, { SIDEBAR_STORAGE_KEY, TOGGLE_SIDEBAR_EVENT } from '~/components/layout'
@@ -83,39 +83,18 @@ function MainContent() {
 	)
 }
 
-/**
- * Sidebar visibility: user toggle everywhere; entering a multi-file (batch) session
- * closes it ONCE (its own file rail takes the space) but the toggle still reopens it.
- */
-function useShowSidebar() {
-	const sidebarVisible = useSidebarVisible()
-	const { queue } = useSession()
-	const batch = queue.jobs.length > 1
-	const wasBatch = useRef(batch)
-	const visibleRef = useRef(sidebarVisible)
-	visibleRef.current = sidebarVisible
-
-	useEffect(() => {
-		if (batch && !wasBatch.current && visibleRef.current) {
-			window.dispatchEvent(new CustomEvent(TOGGLE_SIDEBAR_EVENT))
-		}
-		wasBatch.current = batch
-	}, [batch])
-
-	return sidebarVisible
-}
-
 /** Full-width bottom player, ElevenLabs style: spans the whole window under sidebar and content. */
 function PlayerSlot() {
-	const { queue } = useSession()
+	const { queue, batchOverview } = useSession()
 	const selected = queue.selectedJob
 	// The source media exists as soon as a job does — listening while it transcribes is fine.
-	if (!selected) return null
+	// The batch overview is about all files, so it has no player (design round 4).
+	if (!selected || batchOverview) return null
 	return <PlayerBar key={selected.id} job={selected} />
 }
 
 function Shell() {
-	const showSidebar = useShowSidebar()
+	const showSidebar = useSidebarVisible()
 
 	return (
 		<Layout

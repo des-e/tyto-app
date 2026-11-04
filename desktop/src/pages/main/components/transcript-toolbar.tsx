@@ -108,21 +108,24 @@ function AiToggles({
 		if (next && job && !job.summary && canSummarize && !summarizing) void summaries.summarize(job)
 	}
 
-	const summaryOn = options.showSummary && tab === 'transcript'
-	const topicsOn = options.showTopics && tab === 'transcript'
+	// Until the text is finished there is nothing to summarise or review (design round 4).
+	const waiting = !job || job.status === 'running' || job.status === 'queued'
+	const summaryOn = options.showSummary && tab === 'transcript' && !waiting
+	const topicsOn = options.showTopics && tab === 'transcript' && !waiting
 
 	return (
 		<div className="flex items-center gap-1">
-			<button type="button" aria-pressed={summaryOn} onClick={() => show(options.setShowSummary, summaryOn)} className="tyto-toggle">
+			<button type="button" aria-pressed={summaryOn} disabled={waiting} onClick={() => show(options.setShowSummary, summaryOn)} className="tyto-toggle">
 				{summarizing && <Spinner className="h-3 w-3" />}
 				{m.summaryTab()}
 			</button>
-			<button type="button" aria-pressed={topicsOn} onClick={() => show(options.setShowTopics, topicsOn)} className="tyto-toggle">
+			<button type="button" aria-pressed={topicsOn} disabled={waiting} onClick={() => show(options.setShowTopics, topicsOn)} className="tyto-toggle">
 				{m.topicsTab()}
 			</button>
 			<button
 				type="button"
-				aria-pressed={tab === 'review'}
+				aria-pressed={tab === 'review' && !waiting}
+				disabled={waiting}
 				onClick={() => setTab(tab === 'review' ? 'transcript' : 'review')}
 				className="tyto-toggle">
 				{reviewing && <Spinner className="h-3 w-3" />}
@@ -204,7 +207,8 @@ export default function TranscriptToolbar({
 	}
 
 	const hasText = (job?.segments.length ?? 0) > 0
-	const hasExportContent = hasText || Boolean(job?.summary)
+	// A transcript still being written exports only once it is finished.
+	const hasExportContent = (hasText || Boolean(job?.summary)) && job?.status !== 'running'
 
 	return (
 		<>
@@ -245,12 +249,6 @@ export default function TranscriptToolbar({
 							exit={{ opacity: 0, y: -4 }}
 							transition={{ duration: 0.15, ease: 'easeOut' }}
 							className="flex min-w-0 flex-1 items-center justify-end gap-1">
-							{queue.running && (
-								<Button variant="ghost" size="sm" onClick={queue.cancelAll} disabled={queue.isAborting}>
-									{queue.isAborting ? m.aborting() : m.cancel()}
-								</Button>
-							)}
-
 							<Button variant="ghost" size="md" iconOnly aria-label={m.searchTranscript()} onClick={() => setSearching(true)} disabled={!hasText}>
 								<Search className="h-4 w-4" />
 							</Button>

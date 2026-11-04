@@ -51,6 +51,8 @@ export interface Job {
 	status: JobStatus
 	/** 0..100, only meaningful while running */
 	progress: number
+	/** Date.now() when this run started, for the time-left estimate. */
+	startedAt?: number
 	segments: Segment[]
 	error?: string
 	/** wall clock seconds the transcription took */
@@ -426,7 +428,7 @@ export function useTranscribeQueue(): TranscribeQueue {
 				activeIdRef.current = next.id
 				setActiveId(next.id)
 				if (!pinnedRef.current) select(next.id)
-				patch(next.id, { status: 'running', progress: 0, segments: [], error: undefined })
+				patch(next.id, { status: 'running', progress: 0, segments: [], error: undefined, startedAt: Date.now() })
 				abortCurrentRef.current = false
 
 				const startedAt = performance.now()

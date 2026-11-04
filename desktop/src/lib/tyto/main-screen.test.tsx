@@ -50,6 +50,7 @@ import TranscriptView from '~/pages/main/components/transcript-view'
 import { SpeakerLabel } from '~/pages/main/components/speaker-label'
 import { useDropTarget } from '~/pages/main/hooks/use-drop-target'
 import { EmptyScreen } from './empty-screen'
+import BatchOverview from '~/pages/main/components/batch-overview'
 import { participantsLabel } from '~/pages/main/components/participants-button'
 import { SpeakerMark } from './speaker-mark'
 
@@ -145,6 +146,14 @@ describe('расшифровка как сценарий', () => {
 			window.dispatchEvent(new CustomEvent('vibe:player-time', { detail: { seconds: 52, playing: true } }))
 		})
 		expect(rows(container).map((row) => row.getAttribute('data-active'))).toEqual(['false', 'false', 'true', 'false'])
+	})
+
+	it('пока плеер не запускали, ни одна фраза не подсвечена', () => {
+		const { container } = renderTranscript()
+		act(() => {
+			window.dispatchEvent(new CustomEvent('vibe:player-time', { detail: { seconds: 0, playing: false } }))
+		})
+		expect(rows(container).every((row) => row.getAttribute('data-active') === 'false')).toBe(true)
 	})
 
 	it('правка текста по клику по-прежнему открывает редактор', () => {
@@ -383,5 +392,47 @@ describe('long speaker names', () => {
 		expect(who).toMatch(/min-width: 0/)
 		const aside = css.match(/\n\.tyto-script-aside\s*\{([^}]*)\}/)?.[1] ?? ''
 		expect(aside).toMatch(/max-width: 40%/)
+	})
+})
+
+describe('ход расшифровки', () => {
+	it('одна запись: «Расшифровываем 64%», оценка времени, «Остановить»; кнопки ИИ ждут конца', () => {
+		h.queue.cancelCurrent = vi.fn()
+		const job = { id: 'j1', name: 'Планерка', status: 'running', progress: 64, startedAt: Date.now() - 64_000, segments: segments.slice(0, 2) }
+		render(<TranscriptView job={job as never} query="" options={{ ...options, showSummary: true, showTopics: true }} />)
+		const section = screen.getByRole('region', { name: 'Расшифровываем' })
+		expect(section.textContent).toContain('64%')
+		expect(section.textContent).toContain('осталось около 1 мин')
+		expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('64')
+		// Пока текст пишется, саммари и темы не показываются.
+		expect(screen.queryByRole('region', { name: 'Саммари' })).toBeNull()
+		expect(screen.queryByRole('complementary')).toBeNull()
+		fireEvent.click(screen.getByRole('button', { name: 'Остановить' }))
+		expect(h.queue.cancelCurrent).toHaveBeenCalled()
+	})
+})
+
+describe('несколько файлов', () => {
+	const job = (id: string, name: string, status: string, progress = 0) => ({ id, name, status, progress, startedAt: Date.now() - 30_000, segments: status === 'done' ? segments : [] })
+
+	it('обзор: «Расшифровка 3 файлов», «1 из 3 готово», состояние каждого файла; готовый открывается', () => {
+		Object.assign(h.queue, {
+			jobs: [job('a', 'Созвон с подрядчиком', 'done'), job('b', 'Планерка', 'running', 50), job('c', 'Заметка', 'queued')],
+			running: true,
+			batch: { total: 3, done: 1, startedAt: 0, secondsPerFile: 60 },
+			isAborting: false,
+			cancelAll: vi.fn(),
+		})
+		const onOpen = vi.fn()
+		render(<BatchOverview onOpen={onOpen} />)
+		expect(screen.getByRole('heading').textContent).toBe('Расшифровка 3 файлов')
+		expect(document.body.textContent).toContain('1 из 3 готово')
+		const rows = screen.getAllByRole('listitem').map((row) => row.textContent)
+		expect(rows).toEqual(['Созвон с подрядчиком1:40Готово', 'Планерка50%', 'ЗаметкаВ очереди'])
+		expect((screen.getByRole('button', { name: /Заметка/ }) as HTMLButtonElement).disabled).toBe(true)
+		fireEvent.click(screen.getByRole('button', { name: /Созвон с подрядчиком/ }))
+		expect(onOpen).toHaveBeenCalledWith('a')
+		fireEvent.click(screen.getByRole('button', { name: 'Остановить все' }))
+		expect(h.queue.cancelAll).toHaveBeenCalled()
 	})
 })

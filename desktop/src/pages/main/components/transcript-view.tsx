@@ -18,6 +18,7 @@ import { ProjectNameEditor } from './project-name-editor'
 import { ParticipantsButton } from './participants-button'
 import QuietRow from './quiet-row'
 import ReviewView from './review-view'
+import RunProgress from './run-progress'
 import { SpeakerLabel } from './speaker-label'
 import SummaryBlock from './summary-view'
 import TopicsColumn from './topics-view'
@@ -471,6 +472,8 @@ export default function TranscriptView({
 			}
 			// Past the end of a segment with a gap before the next one, nothing is being spoken.
 			if (found >= 0 && segments[found].stop && at > segments[found].stop) found = -1
+			// A player that has not started yet marks no line: the grey plate would read as a selection.
+			if (!detail.playing && detail.seconds === 0) found = -1
 			setActiveIndex((previous) => (previous === found ? previous : found))
 		}
 		window.addEventListener(PLAYER_TIME_EVENT, onTime)
@@ -615,7 +618,8 @@ export default function TranscriptView({
 	if (tab === 'review') return <ReviewView job={job} options={options} />
 
 	const date = recordingDate(job.createdAt)
-	const length = recordingLength(job.segments[job.segments.length - 1]?.stop ?? 0)
+	// While the text is still coming, the last line's end is not the recording's length.
+	const length = running ? '' : recordingLength(job.segments[job.segments.length - 1]?.stop ?? 0)
 	const hasMeta = Boolean(date || length || speakers.length)
 
 	return (
@@ -643,7 +647,11 @@ export default function TranscriptView({
 						</div>
 					)}
 
-					{options.showSummary && !canTranscribeSaved && !query && <SummaryBlock job={job} />}
+					{running && (
+						<RunProgress progress={job.progress} startedAt={job.startedAt} stopping={queue.isAborting} onStop={queue.cancelCurrent} />
+					)}
+
+					{options.showSummary && !running && !canTranscribeSaved && !query && <SummaryBlock job={job} />}
 
 					{job.status === 'error' && <p className="mb-8 text-sm text-destructive">{job.error}</p>}
 
@@ -668,7 +676,7 @@ export default function TranscriptView({
 						</div>
 					) : visible.length === 0 ? (
 						<p className="text-sm text-muted-foreground">
-							{query ? m.noMatchingLines() : running ? m.transcriptWillDisplayedShortly() : job.status === 'queued' ? m.loading() : ''}
+							{query ? m.noMatchingLines() : job.status === 'queued' ? m.progressQueued() : ''}
 						</p>
 					) : null}
 
@@ -707,7 +715,12 @@ export default function TranscriptView({
 						})}
 					</div>
 
-					{running && <div className={cn('mt-8 h-4 w-24 animate-pulse rounded-full bg-muted')} />}
+					{running && (
+						<div aria-hidden className="tyto-run-skeleton">
+							<span style={{ width: '70%' }} />
+							<span style={{ width: '42%' }} />
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -729,7 +742,7 @@ export default function TranscriptView({
 				)}
 			</AnimatePresence>
 		</div>
-		{options.showTopics && !canTranscribeSaved && <TopicsColumn job={job} />}
+		{options.showTopics && !running && !canTranscribeSaved && <TopicsColumn job={job} />}
 		</div>
 	)
 }

@@ -46,6 +46,9 @@ export interface Session {
 	collectingFolder: boolean
 	browse: () => Promise<void>
 	startNew: () => void
+	/** Several files are on their overview page (batch-overview.tsx) rather than one transcript. */
+	batchOverview: boolean
+	setBatchOverview: (value: boolean) => void
 }
 
 const SessionContext = createContext<Session | null>(null)
@@ -68,6 +71,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 	const [panel, setPanel] = useState<IdlePanel>('none')
 	const [collectingFolder, setCollectingFolder] = useState(false)
 	const [recordElapsed, setRecordElapsed] = useState(0)
+	const [overviewOpen, setBatchOverview] = useState(true)
 
 	const enqueueRef = useRef(queue.enqueue)
 	useEffect(() => {
@@ -396,6 +400,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
 	const mode: SessionMode = queue.jobs.length === 0 ? 'idle' : queue.running || queue.jobs.some((job) => job.status === 'queued') ? 'working' : 'done'
 
+	// A new batch always starts on its overview; a single file never has one.
+	const multiple = queue.jobs.length > 1
+	useEffect(() => {
+		setBatchOverview(true)
+	}, [multiple])
+	const batchOverview = multiple && overviewOpen
+
 	const value = useMemo<Session>(
 		() => ({
 			mode,
@@ -411,8 +422,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 			collectingFolder,
 			browse,
 			startNew,
+			batchOverview,
+			setBatchOverview,
 		}),
-		[mode, queue, summaries, preference, dragging, panel, recording, recordElapsed, link, collectingFolder, browse, startNew],
+		[mode, queue, summaries, preference, dragging, panel, recording, recordElapsed, link, collectingFolder, browse, startNew, batchOverview],
 	)
 
 	return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

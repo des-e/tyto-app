@@ -448,7 +448,7 @@ function RecentsList({
 }
 
 export default function RecentsSidebar() {
-	const { queue, startNew, preference } = useSession()
+	const { queue, startNew, preference, setBatchOverview } = useSession()
 	const { updateApp, availableUpdate } = useContext(UpdaterContext)
 	const { width, dragging, handleProps } = useResizableWidth()
 	useMainAreaOffset(width)
@@ -587,7 +587,11 @@ export default function RecentsSidebar() {
 					// Loading another transcript mid-run would fight the queue for the view.
 					disabled={queue.running}
 					onOpen={(entry) => void open(entry)}
-					onSelectJob={(id) => queue.selectJob(id)}
+					onSelectJob={(id) => {
+						queue.selectJob(id)
+						// A batch overview steps aside for the file picked here.
+						setBatchOverview(false)
+					}}
 					onChanged={refresh}
 				/>
 			)}

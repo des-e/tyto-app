@@ -1079,6 +1079,67 @@ svg.lucide {
 	outline-offset: 1px;
 }
 
+/* Progress of a run (run-progress.tsx, batch-overview.tsx): a 4 px bar, the done part in the text colour. */
+.tyto-run-bar {
+	position: relative;
+	height: 4px;
+	overflow: hidden;
+	border-radius: 2px;
+	background: var(--tyto-nav-selected);
+}
+
+.tyto-run-bar > span {
+	position: absolute;
+	inset-block: 0;
+	inset-inline-start: 0;
+	border-radius: 2px;
+	background: var(--foreground);
+	transition: width 300ms var(--tyto-ease);
+}
+
+.tyto-run-bar[data-size='sm'] {
+	width: 60px;
+	height: 3px;
+}
+
+/* «Остановить»: a quiet underlined word rather than a button. */
+.tyto-quiet-link {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font-size: 13px;
+	color: var(--muted-foreground);
+	text-decoration: underline;
+	text-decoration-color: var(--tyto-line2);
+	text-underline-offset: 3px;
+	cursor: pointer;
+	transition: color 150ms var(--tyto-ease);
+}
+
+.tyto-quiet-link:hover:not(:disabled) {
+	color: var(--foreground);
+}
+
+.tyto-quiet-link:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+
+/* Lines still to come under a running transcript: two pale bars. */
+.tyto-run-skeleton {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	padding-top: 18px;
+	padding-inline-start: 76px;
+}
+
+.tyto-run-skeleton > span {
+	height: 9px;
+	border-radius: 4px;
+	background: var(--tyto-line-active);
+}
+
 /* The summary at the start of the text. */
 .tyto-summary-card {
 	padding: 12px 14px;
