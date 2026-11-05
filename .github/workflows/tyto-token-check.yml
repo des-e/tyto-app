@@ -1,0 +1,23 @@
+name: Tyto Release Token Check
+
+# Checks that TYTO_RELEASE_TOKEN can publish releases to the public page des-e/tyto, without a real
+# release: it creates a draft there (drafts are not visible to visitors) and deletes it right away.
+
+on:
+    workflow_dispatch:
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Draft release in des-e/tyto, then delete it
+              env:
+                  GH_TOKEN: ${{ secrets.TYTO_RELEASE_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  test -n "$GH_TOKEN" || { echo "TYTO_RELEASE_TOKEN is empty"; exit 1; }
+                  gh api repos/des-e/tyto --jq '.full_name'
+                  id=$(gh api -X POST repos/des-e/tyto/releases -f tag_name=token-check -f name=token-check -F draft=true --jq '.id')
+                  echo "draft release created: $id"
+                  gh api -X DELETE "repos/des-e/tyto/releases/$id"
+                  echo "draft release deleted: the token can publish to des-e/tyto"
